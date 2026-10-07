@@ -1,0 +1,797 @@
+# super-bench: 57-aspect dispatcher (operon lane)
+# Every aspect returns an integer checksum; the harness prints
+# "OK <checksum> <elapsed_ms>" with elapsed measured around the dispatch.
+# Mirrors: super_py.py / super_js.js / super_rs.rs (identical algorithms).
+use std/set as st
+
+gene lcg_next(x) {
+    return (x * 48271) % 2147483647
+}
+
+# ---------------- NUM ----------------
+
+gene a_num_int_add() {
+    let acc = 0
+    for i in range(2000000) { acc = acc + i }
+    return acc
+}
+
+gene a_num_int_mixed() {
+    let acc = 0
+    for i in range(600000) {
+        let t = (acc * 3 + i) % 1000003
+        acc = (t + t // 7 + i % 13) % 1000003
+    }
+    return acc
+}
+
+gene a_num_float_add() {
+    let f = 0.0
+    for i in range(2000000) { f = f + i * 0.5 - f * 0.0000001 }
+    return floor(f)
+}
+
+gene a_num_float_math() {
+    let x = 1.0
+    let c = 0
+    for i in range(300000) {
+        x = sqrt(x * 1.7 + 0.3)
+        if x > 100.0 { x = 1.0 }
+        if x > 2.0 { c = c + 1 }
+    }
+    return c * 100000 + floor(x * 1000.0)
+}
+
+gene a_num_trialdiv() {
+    let c = 0
+    for i in range(2, 40000) {
+        let d = 2
+        let p = true
+        while d * d <= i {
+            if i % d == 0 {
+                p = false
+                break
+            }
+            d = d + 1
+        }
+        if p { c = c + 1 }
+    }
+    return c
+}
+
+gene a_num_roundtrip() {
+    let acc = 0
+    for i in range(200000) {
+        let s = str(i % 100000)
+        acc = acc + num(s)
+    }
+    return acc
+}
+
+gene a_num_parse_float() {
+    let acc = 0
+    for i in range(200000) {
+        let v = num("1234.5678")
+        acc = acc + floor(v)
+    }
+    return acc
+}
+
+gene a_num_divmod() {
+    let c3 = 0
+    let c5 = 0
+    let c15 = 0
+    for i in range(1000000) {
+        if i % 3 == 0 { c3 = c3 + 1 }
+        if i % 5 == 0 { c5 = c5 + 1 }
+        if i % 15 == 0 { c15 = c15 + 1 }
+    }
+    return c3 * 100000000 + c5 * 10000 + c15
+}
+
+# ---------------- CTRL ----------------
+
+gene a_ctl_while() {
+    let i = 1200000
+    let acc = 0
+    while i > 0 {
+        acc = acc + i % 7
+        i = i - 1
+    }
+    return acc
+}
+
+gene a_ctl_for() {
+    let acc = 0
+    for i in range(1200000) { acc = acc + 1 }
+    return acc
+}
+
+gene a_ctl_nested() {
+    let s = 0
+    for i in range(600) {
+        for j in range(600) { s = s + (i * 600 + j) % 1000 }
+    }
+    return s
+}
+
+gene add1(a) { return a + 1 }
+gene a_ctl_call() {
+    let acc = 0
+    for i in range(600000) { acc = add1(acc) }
+    return acc
+}
+
+gene fib(n) {
+    if n < 2 { return n }
+    return fib(n - 1) + fib(n - 2)
+}
+gene a_ctl_fib() {
+    let t = 0
+    for i in range(5) { t = t + fib(22) }
+    return t
+}
+
+gene down(n) {
+    if n == 0 { return 0 }
+    return 1 + down(n - 1)
+}
+gene a_ctl_deep_rec() {
+    let t = 0
+    for i in range(6) { t = t + down(5000) }
+    return t
+}
+
+gene is_even(n) {
+    if n == 0 { return true }
+    return is_odd(n - 1)
+}
+gene is_odd(n) {
+    if n == 0 { return false }
+    return is_even(n - 1)
+}
+gene a_ctl_mutual() {
+    let c = 0
+    for i in range(2000) {
+        if is_even(50) { c = c + 1 }
+    }
+    return c
+}
+
+gene a_ctl_branch() {
+    let c0 = 0
+    let c1 = 0
+    let c2 = 0
+    let c3 = 0
+    let c4 = 0
+    let c5 = 0
+    let c6 = 0
+    let c7 = 0
+    let c8 = 0
+    let c9 = 0
+    let c10 = 0
+    let c11 = 0
+    let c12 = 0
+    let c13 = 0
+    let c14 = 0
+    let c15 = 0
+    for i in range(1000000) {
+        let v = i % 16
+        if v == 0 { c0 = c0 + 1 } elif v == 1 { c1 = c1 + 1 } elif v == 2 { c2 = c2 + 1 } elif v == 3 { c3 = c3 + 1 } elif v == 4 { c4 = c4 + 1 } elif v == 5 { c5 = c5 + 1 } elif v == 6 { c6 = c6 + 1 } elif v == 7 { c7 = c7 + 1 } elif v == 8 { c8 = c8 + 1 } elif v == 9 { c9 = c9 + 1 } elif v == 10 { c10 = c10 + 1 } elif v == 11 { c11 = c11 + 1 } elif v == 12 { c12 = c12 + 1 } elif v == 13 { c13 = c13 + 1 } elif v == 14 { c14 = c14 + 1 } elif v == 15 { c15 = c15 + 1 } else { c0 = c0 + 1 }
+    }
+    return c0 + c1 * 2 + c2 * 3 + c3 * 4 + c4 * 5 + c5 * 6 + c6 * 7 + c7 * 8 + c8 * 9 + c9 * 10 + c10 * 11 + c11 * 12 + c12 * 13 + c13 * 14 + c14 * 15 + c15 * 16
+}
+
+gene a_ctl_match() {
+    let acc = 0
+    for i in range(500000) {
+        match i % 8 {
+            case 0 { acc = acc + 21 }
+            case 1 { acc = acc + 28 }
+            case 2 { acc = acc + 35 }
+            case 3 { acc = acc + 42 }
+            case 4 { acc = acc + 49 }
+            case 5 { acc = acc + 56 }
+            case 6 { acc = acc + 63 }
+            case 7 { acc = acc + 70 }
+        }
+    }
+    return acc
+}
+
+gene make_adder(k) {
+    return gene (x) => x + k
+}
+gene a_ctl_closure() {
+    let acc = 0
+    for i in range(200000) {
+        let f = make_adder(i % 10)
+        acc = acc + f(i % 1000)
+    }
+    return acc
+}
+
+# ---------------- STR ----------------
+
+gene a_str_cat() {
+    let s = ""
+    for i in range(30000) { s = s + "ab" }
+    return len(s)
+}
+
+gene a_str_join() {
+    let parts = []
+    for i in range(200000) { push(parts, str(i % 1000)) }
+    let s = parts.join(",")
+    return len(s)
+}
+
+gene a_str_slice() {
+    let base = "The quick brown fox jumps over the lazy dog"
+    let acc = 0
+    for i in range(200000) {
+        let p = base.slice(i % 30, i % 30 + 10)
+        acc = acc + len(p)
+    }
+    return acc
+}
+
+gene a_str_replace() {
+    let base = "The quick brown fox jumps over the lazy dog"
+    let acc = 0
+    for i in range(100000) {
+        let t = base.replace("o", "0").replace("e", "3")
+        acc = acc + len(t)
+    }
+    return acc
+}
+
+gene a_str_split() {
+    let w10 = "alpha beta gamma delta epsilon zeta eta theta iota kappa"
+    let line = ""
+    for i in range(10) { line = line + w10 }
+    let acc = 0
+    for i in range(20000) {
+        let ws = line.split(" ")
+        acc = acc + len(ws)
+    }
+    return acc
+}
+
+gene a_str_case() {
+    let base = "The quick brown fox jumps over the lazy dog"
+    let acc = 0
+    for i in range(60000) {
+        let u = base.upper()
+        let l = u.lower()
+        let t = ("  " + l + "  ").trim()
+        acc = acc + len(t)
+    }
+    return acc
+}
+
+gene a_str_compare() {
+    let base = "The quick brown fox jumps over the lazy dog"
+    let s2 = "The quick brown fox jumps over the lazy dof"
+    let c = 0
+    for i in range(300000) {
+        if base == s2 { c = c + 1 }
+        if base.starts("The quick") { c = c + 1 }
+        if base.ends("dog") { c = c + 1 }
+    }
+    return c
+}
+
+gene a_str_interp() {
+    let acc = 0
+    for i in range(100000) {
+        let t = "v={i},x={i % 97},y={(i * 7) % 1000}"
+        acc = acc + len(t)
+    }
+    return acc
+}
+
+gene a_str_contains() {
+    let base = "The quick brown fox jumps over the lazy dog"
+    let c = 0
+    let d = 0
+    for i in range(200000) {
+        if base.contains("quick") { c = c + 1 }
+        if base.contains("zebra") { d = d + 1 }
+    }
+    return c * 3 + d
+}
+
+gene a_str_build() {
+    let acc = 0
+    for i in range(60000) {
+        let p = "é" + str(i % 100) + "ü中"
+        let q = p.upper()
+        acc = acc + len(q)
+    }
+    return acc
+}
+
+# ---------------- LIST ----------------
+
+gene a_lst_push() {
+    let xs = []
+    for i in range(300000) { push(xs, i) }
+    let acc = 0
+    for v in xs { acc = acc + v }
+    return acc
+}
+
+gene a_lst_idx() {
+    let xs = []
+    for i in range(100000) { push(xs, i % 100000) }
+    let acc = 0
+    for i in range(600000) { acc = acc + xs[(i * 7) % 100000] }
+    return acc
+}
+
+gene a_lst_iter() {
+    let xs = []
+    for i in range(100000) { push(xs, i % 1000) }
+    let acc = 0
+    for p in range(6) {
+        for v in xs { acc = acc + v }
+    }
+    return acc
+}
+
+gene a_lst_slice() {
+    let xs = []
+    for i in range(2000) { push(xs, i) }
+    let acc = 0
+    for i in range(60000) {
+        let p = xs.slice(i % 1500, i % 1500 + 100)
+        acc = acc + len(p)
+    }
+    return acc
+}
+
+gene a_lst_sort() {
+    let x = 123456789
+    let xs = []
+    for i in range(60000) {
+        x = lcg_next(x)
+        push(xs, x % 1000000)
+    }
+    let s = xs.sort()
+    return s[0] + s[29999] + s[59999]
+}
+
+gene qs(a, lo, hi) {
+    if lo >= hi { return 0 }
+    let p = a[hi]
+    let i = lo - 1
+    for j in range(lo, hi) {
+        if a[j] <= p {
+            i = i + 1
+            let t = a[i]
+            a[i] = a[j]
+            a[j] = t
+        }
+    }
+    let t2 = a[i + 1]
+    a[i + 1] = a[hi]
+    a[hi] = t2
+    qs(a, lo, i)
+    qs(a, i + 2, hi)
+    return 0
+}
+gene a_lst_sort_lang() {
+    let x = 987654321
+    let a = []
+    for i in range(3000) {
+        x = lcg_next(x)
+        push(a, x % 100000)
+    }
+    qs(a, 0, 2999)
+    return a[0] + a[1500] + a[2999]
+}
+
+gene a_lst_comp() {
+    let xs = []
+    for i in range(200000) { push(xs, i % 1000) }
+    let a1 = for x in xs if x % 3 == 0 collect x * 2
+    let s1 = 0
+    for v in a1 { s1 = s1 + v }
+    let a2 = for x in a1 if x % 6 == 0 collect x
+    let s2 = 0
+    for v in a2 { s2 = s2 + v }
+    return s1 + s2
+}
+
+gene a_lst_search() {
+    let x = 555555555
+    let xs = []
+    for i in range(1000) {
+        x = lcg_next(x)
+        push(xs, x % 100000)
+    }
+    let found = 0
+    let scans = 0
+    for i in range(8000) {
+        let t = (i * 37) % 150000
+        let k = 0
+        while k < 1000 {
+            scans = scans + 1
+            if xs[k] == t {
+                found = found + 1
+                break
+            }
+            k = k + 1
+        }
+    }
+    return found * 100000000 + scans
+}
+
+gene a_lst_reverse() {
+    let xs = []
+    for i in range(1000) { push(xs, i) }
+    let acc = 0
+    for i in range(30000) {
+        let r = xs.reverse()
+        acc = acc + r[0]
+    }
+    return acc
+}
+
+gene a_lst_insert_del() {
+    let xs = []
+    for i in range(3000) { push(xs, i) }
+    for i in range(10000) {
+        insert(xs, i % 3000, i)
+        remove(xs, (i * 7) % 3000)
+    }
+    return xs[0] + xs[1500] + xs[2999]
+}
+
+# ---------------- MAP ----------------
+
+gene a_map_set() {
+    let m = {}
+    for i in range(300000) { m[str(i % 100000)] = i }
+    return m["0"] + m["50000"]
+}
+
+gene a_map_get() {
+    let m = {}
+    for i in range(100000) { m[str(i)] = i }
+    let acc = 0
+    for i in range(600000) { acc = acc + m[str((i * 7) % 100000)] }
+    return acc
+}
+
+gene a_map_miss() {
+    let m = {}
+    for i in range(50000) { m[str(i)] = i }
+    let c = 0
+    for i in range(300000) {
+        if has(m, "nope" + str(i % 5000)) { c = c + 1 }
+    }
+    return 300000 - c
+}
+
+gene a_map_iter() {
+    let m = {}
+    for i in range(20000) { m[str(i)] = i }
+    let acc = 0
+    for p in range(10) {
+        let ks = keys(m)
+        for k in ks { acc = acc + m[k] }
+    }
+    return acc
+}
+
+gene a_map_incr() {
+    let m = {}
+    for j in range(5000) { m["w" + str(j)] = 0 }
+    for i in range(200000) {
+        let k = "w" + str(i % 5000)
+        m[k] = m[k] + 1
+    }
+    let s = 0
+    for j in range(50) { s = s + m["w" + str(j)] }
+    return s * 100000 + len(m)
+}
+
+gene a_map_nested() {
+    let outer = {}
+    for i in range(100) {
+        let inner = {}
+        for j in range(50) { inner[str(j)] = i * j }
+        outer[str(i)] = inner
+    }
+    let acc = 0
+    for i in range(200000) {
+        acc = acc + outer[str(i % 100)][str(i % 50)]
+    }
+    return acc
+}
+
+gene a_map_del() {
+    let m = {}
+    for i in range(20000) { m[str(i)] = i }
+    for i in range(50000) {
+        let k = str((i * 7) % 20000)
+        del(m, k)
+        m[k] = i
+    }
+    return len(m) * 100000 + m["0"]
+}
+
+gene a_map_mixed() {
+    let m = {}
+    for i in range(150000) {
+        m[i % 50000] = "v" + str(i)
+        m["s" + str(i % 25000)] = i
+    }
+    return len(m)
+}
+
+# ---------------- SET ----------------
+
+gene scan_in(xs, t) {
+    for v in xs {
+        if v == t { return true }
+    }
+    return false
+}
+gene a_set_algebra() {
+    let x = 246813579
+    let xs = []
+    for i in range(16000) {
+        x = lcg_next(x)
+        push(xs, x % 8000)
+    }
+    let s = st.set_from(xs)
+    let c = 0
+    for i in range(2000) {
+        if scan_in(s, i % 9000) { c = c + 1 }
+    }
+    return len(s) * 100000 + c
+}
+
+# ---------------- ALGO ----------------
+
+gene a_alg_sieve() {
+    let n = 50000
+    let flags = []
+    for i in range(n) { push(flags, true) }
+    let c = 0
+    for i in range(2, n) {
+        if flags[i] {
+            c = c + 1
+            let j = i * i
+            while j < n {
+                flags[j] = false
+                j = j + i
+            }
+        }
+    }
+    return c
+}
+
+gene a_alg_mandel() {
+    let total = 0
+    for row in range(160) {
+        for col in range(240) {
+            let x0 = (col * 0.00875) - 2.1
+            let y0 = (row * 0.00625) - 0.5
+            let zx = 0.0
+            let zy = 0.0
+            let it = 0
+            while it < 50 {
+                let nx = zx * zx - zy * zy + x0
+                zy = 2.0 * zx * zy + y0
+                zx = nx
+                if zx * zx + zy * zy > 4.0 { break }
+                it = it + 1
+            }
+            total = total + it
+        }
+    }
+    return total
+}
+
+gene tnode_build(d) {
+    if d == 0 { return null }
+    return [1, tnode_build(d - 1), tnode_build(d - 1)]
+}
+gene tnode_count(t) {
+    if t == null { return 0 }
+    return 1 + tnode_count(t[1]) + tnode_count(t[2])
+}
+gene a_alg_trees() {
+    let t = 0
+    for i in range(3) {
+        let root = tnode_build(14)
+        t = t + tnode_count(root)
+    }
+    return t
+}
+
+gene a_alg_matrix() {
+    let n = 96
+    let a = []
+    let b = []
+    for i in range(n) {
+        let ra = []
+        let rb = []
+        for j in range(n) {
+            push(ra, (i * 7 + j) % 97)
+            push(rb, (i * 3 + j * 5) % 97)
+        }
+        push(a, ra)
+        push(b, rb)
+    }
+    let acc = 0
+    for i in range(n) {
+        for j in range(n) {
+            let s = 0
+            for k in range(n) { s = s + a[i][k] * b[k][j] }
+            acc = acc + s % 1000003
+        }
+    }
+    return acc
+}
+
+gene a_alg_wordfreq() {
+    let m = {}
+    for j in range(800) { m["w" + str(j)] = 0 }
+    for i in range(2000) {
+        let parts = []
+        for j in range(12) { push(parts, "w" + str((i * 13 + j * 7) % 800)) }
+        let line = parts.join(" ")
+        let ws = line.split(" ")
+        for w in ws { m[w] = m[w] + 1 }
+    }
+    return m["w0"] * 100000 + len(m)
+}
+
+gene a_alg_json_rt() {
+    let doc = {}
+    for i in range(120) {
+        doc["row" + str(i)] = { id: i, name: "item-" + str(i), tags: ["a", "b", "c"], score: i * 3, active: i % 2 == 0 }
+    }
+    let acc = 0
+    for i in range(150) {
+        let s = json_str(doc)
+        let back = json_parse(s)
+        acc = acc + back["row" + str(i % 120)].id + len(back["row" + str((i + 7) % 120)].tags)
+    }
+    return acc
+}
+
+gene a_alg_json_big() {
+    let doc = {}
+    for i in range(800) {
+        let tags = []
+        for j in range(5) { push(tags, "t" + str((i + j) % 32)) }
+        doc["r" + str(i)] = { id: i, kind: "k" + str(i % 9), tags: tags, w: (i * 7) % 1000, ok: i % 3 != 0, note: "n" + str(i % 64) }
+    }
+    let s = json_str(doc)
+    let acc = 0
+    for p in range(2) {
+        let back = json_parse(s)
+        for i in range(800) {
+            let r = back["r" + str(i)]
+            acc = acc + r.id + len(r.tags) + r.w
+        }
+    }
+    return acc
+}
+
+gene a_alg_deep_eq() {
+    let a = []
+    for i in range(50) {
+        let sub = [i, i + 1]
+        push(a, [i, "s" + str(i % 7), sub])
+    }
+    let b = []
+    for i in range(50) {
+        let sub = [i, i + 1]
+        push(b, [i, "s" + str(i % 7), sub])
+    }
+    let b2 = []
+    for i in range(50) {
+        let sub = [i, i + 1]
+        if i == 25 {
+            push(b2, [i, "DIFF", sub])
+        } else {
+            push(b2, [i, "s" + str(i % 7), sub])
+        }
+    }
+    let c = 0
+    for i in range(10000) {
+        if a == b { c = c + 1 }
+        if a == b2 { c = c + 1 }
+    }
+    return c
+}
+
+gene ocalc(i) {
+    if i % 3 == 0 { return err("div3") }
+    return ok((i * 7) % 1000)
+}
+gene a_alg_opt() {
+    let acc = 0
+    for i in range(200000) {
+        let r = ocalc(i)
+        acc = acc + unwrap_or(r, 1)
+    }
+    return acc
+}
+
+gene a_floor() { return 0 }
+
+# ---------------- DISPATCH ----------------
+
+main {
+    let id = argv()[0]
+    let t0 = now()
+    let chk = 0
+    if id == "num_int_add" { chk = a_num_int_add() }
+    elif id == "num_int_mixed" { chk = a_num_int_mixed() }
+    elif id == "num_float_add" { chk = a_num_float_add() }
+    elif id == "num_float_math" { chk = a_num_float_math() }
+    elif id == "num_trialdiv" { chk = a_num_trialdiv() }
+    elif id == "num_roundtrip" { chk = a_num_roundtrip() }
+    elif id == "num_parse_float" { chk = a_num_parse_float() }
+    elif id == "num_divmod" { chk = a_num_divmod() }
+    elif id == "ctl_while" { chk = a_ctl_while() }
+    elif id == "ctl_for" { chk = a_ctl_for() }
+    elif id == "ctl_nested" { chk = a_ctl_nested() }
+    elif id == "ctl_call" { chk = a_ctl_call() }
+    elif id == "ctl_fib" { chk = a_ctl_fib() }
+    elif id == "ctl_deep_rec" { chk = a_ctl_deep_rec() }
+    elif id == "ctl_mutual" { chk = a_ctl_mutual() }
+    elif id == "ctl_branch" { chk = a_ctl_branch() }
+    elif id == "ctl_match" { chk = a_ctl_match() }
+    elif id == "ctl_closure" { chk = a_ctl_closure() }
+    elif id == "str_cat" { chk = a_str_cat() }
+    elif id == "str_join" { chk = a_str_join() }
+    elif id == "str_slice" { chk = a_str_slice() }
+    elif id == "str_replace" { chk = a_str_replace() }
+    elif id == "str_split" { chk = a_str_split() }
+    elif id == "str_case" { chk = a_str_case() }
+    elif id == "str_compare" { chk = a_str_compare() }
+    elif id == "str_interp" { chk = a_str_interp() }
+    elif id == "str_contains" { chk = a_str_contains() }
+    elif id == "str_build" { chk = a_str_build() }
+    elif id == "lst_push" { chk = a_lst_push() }
+    elif id == "lst_idx" { chk = a_lst_idx() }
+    elif id == "lst_iter" { chk = a_lst_iter() }
+    elif id == "lst_slice" { chk = a_lst_slice() }
+    elif id == "lst_sort" { chk = a_lst_sort() }
+    elif id == "lst_sort_lang" { chk = a_lst_sort_lang() }
+    elif id == "lst_comp" { chk = a_lst_comp() }
+    elif id == "lst_search" { chk = a_lst_search() }
+    elif id == "lst_reverse" { chk = a_lst_reverse() }
+    elif id == "lst_insert_del" { chk = a_lst_insert_del() }
+    elif id == "map_set" { chk = a_map_set() }
+    elif id == "map_get" { chk = a_map_get() }
+    elif id == "map_miss" { chk = a_map_miss() }
+    elif id == "map_iter" { chk = a_map_iter() }
+    elif id == "map_incr" { chk = a_map_incr() }
+    elif id == "map_nested" { chk = a_map_nested() }
+    elif id == "map_del" { chk = a_map_del() }
+    elif id == "map_mixed" { chk = a_map_mixed() }
+    elif id == "set_algebra" { chk = a_set_algebra() }
+    elif id == "alg_sieve" { chk = a_alg_sieve() }
+    elif id == "alg_mandel" { chk = a_alg_mandel() }
+    elif id == "alg_trees" { chk = a_alg_trees() }
+    elif id == "alg_matrix" { chk = a_alg_matrix() }
+    elif id == "alg_wordfreq" { chk = a_alg_wordfreq() }
+    elif id == "alg_json_rt" { chk = a_alg_json_rt() }
+    elif id == "alg_json_big" { chk = a_alg_json_big() }
+    elif id == "alg_deep_eq" { chk = a_alg_deep_eq() }
+    elif id == "alg_opt" { chk = a_alg_opt() }
+    elif id == "floor" { chk = a_floor() }
+    else { chk = 0 - 1 }
+    let dt = (now() - t0) * 1000.0
+    promote("OK {chk} {dt}")
+}

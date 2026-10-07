@@ -146,6 +146,11 @@ struct Memo {
     used: usize, // live slots
     tombs: usize,
     num_numeric: usize, // Int/Float keyed items (the cross-equality class)
+    num_float: usize,   // Float-keyed items only (perf-xlang-r2: Int lookups
+                        // take the O(1) memo path unless a Float key exists;
+                        // Float lookups keep the exact scan whenever ANY
+                        // numeric key exists, which also covers the
+                        // 0.0 == -0.0 same-class crossing)
 }
 
 impl Memo {
@@ -247,11 +252,15 @@ impl Memo {
         self.used = 0;
         self.tombs = 0;
         self.num_numeric = 0;
+        self.num_float = 0;
         for (i, (k, _)) in items.iter().enumerate() {
             let (cls, h) = key_class_hash(k);
             if cls != KC_OTHER {
                 if cls == KC_INT || cls == KC_FLOAT {
                     self.num_numeric += 1;
+                }
+                if cls == KC_FLOAT {
+                    self.num_float += 1;
                 }
                 self.put(h, i);
             }
@@ -313,11 +322,18 @@ impl MapStore {
                 .take(NON_SCALAR_SCAN_CAP)
                 .position(|(k, _)| k.deep_eq(key));
         }
-        if (cls == KC_INT || cls == KC_FLOAT) && self.memo.num_numeric > 0 {
+        if (cls == KC_INT && self.memo.num_float > 0)
+            || (cls == KC_FLOAT && self.memo.num_numeric > 0)
+        {
             // The Int<->Float cross-equality class (deep_eq(Int 2, Float
             // 2.0) is true; 0.0 == -0.0): repr hashing does not cross tags,
-            // so only the exact scan is sound. Numeric-keyed maps are not
-            // the hot workload (loglens/csvstat evidence).
+            // so a lookup that could be matched by the OTHER numeric class
+            // needs the exact scan. An Int lookup on a map with ZERO Float
+            // keys can only be matched by another Int (in-class equal =>
+            // equal-hash), so the memo path + miss-trust stay sound; Float
+            // lookups keep the exact scan whenever any numeric key exists
+            // (0.0 and -0.0 are deep_eq-equal but hash apart by repr, so
+            // the float class alone cannot trust a memo miss).
             return self.items.iter().position(|(k, _)| k.deep_eq(key));
         }
         match self.memo.get(h) {
@@ -362,6 +378,9 @@ impl MapStore {
                 if cls == KC_INT || cls == KC_FLOAT {
                     self.memo.num_numeric += 1;
                 }
+                if cls == KC_FLOAT {
+                    self.memo.num_float += 1;
+                }
                 self.memo.put(h, pos);
             }
         }
@@ -382,9 +401,18 @@ impl MapStore {
                 if cls != KC_OTHER {
                     self.memo.tomb_verified(h, key, &self.items);
                 }
-                self.items.remove(i);
+                // perf-xlang-r2: removing the LAST item shifts nothing, so
+                // the O(capacity) memo walk is skipped entirely (pop-only
+                // del patterns — stacks, tail eviction — drop to O(1)).
+                if i + 1 == self.items.len() {
+                    self.items.pop();
+                } else {
+                    self.items.remove(i);
+                    if cls != KC_OTHER {
+                        self.memo.shift_positions(i);
+                    }
+                }
                 if cls != KC_OTHER {
-                    self.memo.shift_positions(i);
                     if cls == KC_INT || cls == KC_FLOAT {
                         // D2 tripwire: exact since the D1 fix (put-branch
                         // counts, rehash recounts) — a 0 here means the
@@ -394,6 +422,9 @@ impl MapStore {
                             "num_numeric underflow: numeric key removed without a counted insert"
                         );
                         self.memo.num_numeric = self.memo.num_numeric.saturating_sub(1);
+                    }
+                    if cls == KC_FLOAT {
+                        self.memo.num_float = self.memo.num_float.saturating_sub(1);
                     }
                     if self.memo.tombs > self.memo.used {
                         self.rebuild();

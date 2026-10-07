@@ -1264,9 +1264,13 @@ fn exec_gene_code_inner(
                                             "string concat exceeds the 512 MiB ceiling",
                                         ));
                                     }
-                                    crate::interp::mem_charge(
-                                        slot_s.len() as u64 + suffix.len() as u64,
-                                    )?;
+                                    // perf-xlang-r2: charge only the RETAINED
+                                    // bytes — the append is in place, so the
+                                    // old full-length charge billed O(n^2)
+                                    // for O(n) work and pushed big builder
+                                    // loops through the aggregate ceiling
+                                    // without any real allocation growth.
+                                    crate::interp::mem_charge(suffix.len() as u64)?;
                                     // AssignName position: const check
                                     if cur.is_const(&name) {
                                         return Err(Stress::new(
@@ -1962,9 +1966,9 @@ fn fiber_run_inner(interp: &mut Interp, fiber: &mut Fiber) -> Result<FiberOutcom
                                         "string concat exceeds the 512 MiB ceiling",
                                     ));
                                 }
-                                crate::interp::mem_charge(
-                                    slot_s.len() as u64 + suffix.len() as u64,
-                                )?;
+                                // perf-xlang-r2: retained-bytes charge (see
+                                // the sync arm) — same accounting both arms.
+                                crate::interp::mem_charge(suffix.len() as u64)?;
                                 // AssignName position: const check
                                 if cur.is_const(&name) {
                                     return Err(Stress::new(
