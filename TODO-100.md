@@ -387,7 +387,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
 > then **W039 → W043 → W049** (quick tooling wins), then **W037 → W041 → W042**, then
 > W051/W052, then W045/W047/W048, then the P3s.
 
-### W034, Serialization trait/interface [P2] [dev-2] [M] [partial: json/csv exist]
+### W034, Serialization trait/interface [P2] [dev-2] [M] [done: SERIALIZATION.md stage 1 + stage 2 landed (stage 2 via PR #28, 2026-09-27) — phenotype instances serialize as the canonical wire map with the reserved `"#phenotype"` identity key, `from_json` rebuilds REAL instances (class must be declared, unknown name → err, init NOT re-run — the wire is the truth), round-trip table in docs/specs/SERIALIZATION.md covers every shape incl. the exact/recursive phenotype row, proof asserts the reporting; the W04 trait hook stays spec'd as the future OVERRIDE (the convention-first path the row itself sanctioned)]
 - Goal: one `Serialize` concept (trait per W004, or duck-typed convention until then) so
   JSON/CSV/custom formats share a contract.
 - Done when: `to_json`/`from_json` honor the convention for phenotypes; docs table of
@@ -437,7 +437,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
   both); helps W037/W038 evidence; tested.
 - Files: `src/ast.rs` (Debug impls as needed), `src/main.rs`, `tests/`.
 
-### W040, IR / bytecode dump [P2] [dev-2] [S] [open]
+### W040, IR / bytecode dump [P2] [dev-2] [S] [done: delivered by the W010 lane (f19a86f) — the real dump exists (`operon ir file.op [--json]`, OIR1 four-column annotated listing, one tool for ir+disasm, SPEC §15 opcode table reconciled against the machine by a compile-breaking stability test, binary-deterministic dumps); docs truth pass 2026-10-08 closed this row whose status had gone stale after W010 absorbed the deliverable]
 - Goal: `operon bytecode file.op` dumps bytecode once W009 exists; until then the CLI stub
   returns a clear "VM not landed (M100 W009)" note instead of a silent unknown-command.
 - Done when: stub + later real dump; documented in `operon --help`.
@@ -497,7 +497,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
   defaults unchanged (back-compat).
 - Files: `src/tools.rs`, `tests/`, `SPEC.md`.
 
-### W048, `operon lint` separate from check [P2] [dev-2] [M] [open]
+### W048, `operon lint` separate from check [P2] [dev-2] [M] [done: src/lint.rs is the separate lint engine — 20+ named rules (wrong-arity, phantom-call, const-reassign, constant-condition, unreachable-code, duplicate/unreachable-match-arm, unused-binding/gene/import, dead-const, deprecated-use, cell-unknown-key, cell-type-mismatch, infinite-loop-suspect, shadowed-binding, anchor-import, type/unknown-member/arg-type-mismatch, …), suppression via `// allow: rule1, rule2` line comments + CLI `--allow rule1,rule2` layered on top (W048 marker in lint.rs), `operon lint f.op [--strict] [--json]` live; docs truth pass 2026-10-08 closed the stale [open] status]
 - Goal: `check` = language correctness (W041 contract); `lint` = code-quality rules,
   configurable, pluggable rule list in `SPEC §lint`.
 - Done when: lint command with ≥8 rules migrated/extracted from check's style side;
@@ -590,7 +590,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
 - Done when: claim matches reality in README + website copy.
 - Files: `README.md`.
 
-### W059, Windows CI becomes blocking [P2] [dev-2] [S] [open]
+### W059, Windows CI becomes blocking [P2] [dev-2] [S] [done: ci.yml windows job is REQUIRED and blocking (name: "windows (required — W59)", job-level continue-on-error removed; the only remaining step-level flag is the one-shot oracle startup probe, a diagnostic stethoscope by design, not a gate); the flip surfaced two masked failures (CRLF string-literal corruption → repo .gitattributes LF-everywhere; oracle cp1252 decode → UTF-8 harness fixes) — both fixed and documented in the workflow comment block (COMMS.md was never a file in this repo; ci.yml + this entry are the note). Docs truth pass 2026-10-08 closed the stale [open] status]
 - Goal: remove `continue-on-error: true` from the Windows job once it is stable for 14
   consecutive days (post hotfix r4). Until then, a tracking badge/comment in the workflow.
 - Done when: flag removed, Windows failures block merges, note in COMMS.
@@ -655,7 +655,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
 > survive even if sessions reset), then code in the order the audit's "fix first" implies
 > for this range.
 
-### W066, `.cell` formal schema [P1] [dev-2, CLAIMED by builder-B per canonical board; owner-arbitration pending] [M] [claimed]
+### W066, `.cell` formal schema [P1] [dev-2, CLAIMED by builder-B per canonical board; owner-arbitration pending] [M] [done: docs/specs/CELL-SCHEMA.md is the as-built contract — dual-lane validation (check lane `operon lint f.op --cell c.cell` with cell-unknown-key + cell-type-mismatch rules, parse lane src/genes.rs::parse_cell_checked with the same rule names + closest-known-key typo hints), both advisory per Total Grammar (a config problem never rejects a run), allow.* grant semantics preserved; rt_p7g_cell_garbage.cell redteam payload contained; schema source of truth lives in src/genes.rs + src/lint.rs sharing one vocabulary; docs truth pass 2026-10-08 closed the stale [claimed] status against the landed evidence]
 > sz hand-off note: full implementation spec retained below for builder-B; the L022/W022
 > manifest-validator reuse contract still holds, coordinate before landing.
 - Goal: `.cell` gets a typed, versioned, documented schema: known keys with types/ranges/
