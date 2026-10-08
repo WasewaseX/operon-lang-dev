@@ -7,7 +7,7 @@ README/SPEC/BENCH are forbidden, link here instead.
 - **Version**: 2.9.3  · SPEC Status: v2.9.3
 - **Keywords (parser reserved set)**: 60, table in [KEYWORDS.md](KEYWORDS.md)
 - **Std modules**: 34 (args, bigint, binary, bio, biocore, collections, csv, deque, env, fmt, fs, graph, hashing, heap, iter, json, logging, math, motifs, path, process, random, result, seq, serialize, set, strings, terminal, testing, time, try_numeric, typed, unicode, url)
-- **Std functions (.op-level `gene` defs)**: 360
+- **Std functions (.op-level `gene` defs)**: 362
 - **Red-team payload files**: 106
 - **Proof files**: 168 (of 3583 test .op files)
 - **Proof run / harness recount**: skipped (GEN_DOC_STATS_FAST=1), run by scripts/test.sh on every gate
@@ -51,4 +51,4 @@ README/SPEC/BENCH are forbidden, link here instead.
 | std/try_numeric | 3 |
 | std/typed | 0 |
 | std/unicode | 8 |
-| std/url | 13 |
+| std/url | 15 |

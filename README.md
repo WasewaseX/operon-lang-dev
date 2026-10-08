@@ -26,7 +26,7 @@ The mandate: *"Rust, then C, then Python, then Operon, then C++, then HTML, then
 
 | rank | language | lines | share | role |
 |---|---|---|---|---|
-| 1 | **Operon** | 430,009 | ~85% | **self-hosted stdlib (34 modules, generated inventory in [docs/STATS.md](docs/STATS.md)), proof tests, red-team suite, differential corpus, GenomeLab + the ytdl app (incl. the cross-language bench surface)** (`std/ tests/ examples/ apps/`) |
+| 1 | **Operon** | 430,093 | ~85% | **self-hosted stdlib (34 modules, generated inventory in [docs/STATS.md](docs/STATS.md)), proof tests, red-team suite, differential corpus, GenomeLab + the ytdl app (incl. the cross-language bench surface)** (`std/ tests/ examples/ apps/`) |
 | 2 | **Rust** | 60,316 | ~12% | lexer, Total Grammar parser, evaluator, capability sandbox, symbol table, HTTP/JSON, toolchain CLI, REPL, `operon-ls` LSP (`src/`) |
 | 3 | **Python** | 9,573 | ~1.9% | bootstrap: reference oracle + differential harness (`bootstrap/`), test infrastructure only, nothing shipped depends on it |
 | 4 | **Shell** | 3,329 | <1% | build/test/bench/stack/install scripts (`scripts/`) |
