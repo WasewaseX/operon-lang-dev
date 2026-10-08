@@ -4483,7 +4483,12 @@ impl Interp {
                 if b == 0.0 {
                     return Err(Stress::new("unfolded", "division by zero in '//'"));
                 }
-                let q = (a / b).floor();
+                // issue #131 (Z-131-FLOORMOD): q via CPython's
+                // float_divmod — floor(a/b) rounds through the division
+                // error (1.0 // 1e-10 was 1e10, Python says 9999999999);
+                // the remainder-derived floor is the Python law, and it
+                // keeps `//`, `%`, and divmod one consistent triple.
+                let (q, _) = crate::num_exact::divmod_f64(a, b);
                 if !q.is_finite() || q >= 9.223372036854776e18 || q <= -9.223372036854776e18 {
                     return Err(Stress::new("overflow", "int overflow in '//'"));
                 }
@@ -4515,7 +4520,12 @@ impl Interp {
                 if b == 0.0 {
                     return Err(Stress::new("unfolded", "modulo by zero"));
                 }
-                Ok(Value::Float(a.rem_euclid(b.abs()) * b.signum()))
+                // issue #131 (Z-131-FLOORMOD): floored remainder per SPEC
+                // ("sign follows divisor"), Python parity — rem_euclid*sign
+                // was a euclidean hybrid that contradicted the engine's own
+                // Int arm (5.5 % -2.0 was -1.5, not -0.5). divmod inherits
+                // this by construction (it reuses `%` for r).
+                Ok(Value::Float(crate::num_exact::mod_f64_floored(a, b)))
             }
             Eq => Ok(Value::Bool(l.deep_eq(r))),
             Neq => Ok(Value::Bool(!l.deep_eq(r))),
