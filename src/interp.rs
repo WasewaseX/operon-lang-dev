@@ -2390,6 +2390,18 @@ impl Interp {
                             .find(|(k, _)| matches!(k, Value::Str(s) if s == key))
                             .map(|(_, v)| v.clone())
                             .unwrap_or(Value::Null),
+                        // #118: phenotypes take `obj.field += 1` too — the
+                        // compound READ only matched Map, so `cur` was Null
+                        // and the op failed ("cannot add null and int")
+                        // while the plain `p.field = p.field + 1` shape
+                        // worked. Mirror the member-read semantics
+                        // (instance map, position_str).
+                        Value::Obj(_, m) => {
+                            let b = m.borrow();
+                            b.position_str(key)
+                                .and_then(|i| b.get(i).map(|e| e.1.clone()))
+                                .unwrap_or(Value::Null)
+                        }
                         _ => Value::Null,
                     };
                     val = self.apply_binop(env, *binop, &cur, &val)?;
