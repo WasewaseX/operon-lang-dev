@@ -5863,9 +5863,23 @@ class Interp:
                 return None
             if name == "sort":
                 if args and isinstance(args[0], Gene):
-                    import functools
-                    return sorted(recv, key=functools.cmp_to_key(
-                        lambda a, b: -1 if truthy(self.call_value(env, args[0], [a, b])) else 1))
+                    # #137 (Z-137-SORTSTABLE): the comparator sort is STABLE
+                    # (equal keys keep input order). This is the same walk the
+                    # engine runs (comparator_sort, args in (cur, prev) order,
+                    # one call per comparison) on a COPY — the immutable-method
+                    # contract: recv is not mutated, a new list is returned.
+                    out = list(recv)
+                    cmp = args[0]
+                    for i in range(1, len(out)):
+                        j = i
+                        while j > 0:
+                            before = truthy(self.call_value(env, cmp, [out[j], out[j - 1]]))
+                            if before:
+                                out[j - 1], out[j] = out[j], out[j - 1]
+                                j -= 1
+                            else:
+                                break
+                    return out
                 return sorted(recv, key=lambda x: (
                     (0, float(x), "") if isinstance(x, (int, float)) and not isinstance(x, bool)
                     else ((0, float(int(x)), "") if isinstance(x, bool)
@@ -7935,12 +7949,18 @@ class Interp:
                 return None
             out = list(v)
             if len(args) > 1 and isinstance(args[1], Gene):
+                # #137 (Z-137-SORTSTABLE): STABLE comparator sort — the same
+                # walk the engine's comparator_sort runs for n <= 32 (swap iff
+                # cmp(current, previous) strictly-before; ties stop the walk
+                # and keep input order). Above 32 the engine switches to a
+                # bottom-up merge with the same output for consistent
+                # comparators; the walk mirrors its output byte-for-byte.
                 cmp = args[1]
                 for i in range(1, len(out)):
                     j = i
                     while j > 0:
-                        before = truthy(self.call_value(env, cmp, [out[j - 1], out[j]]))
-                        if not before:
+                        before = truthy(self.call_value(env, cmp, [out[j], out[j - 1]]))
+                        if before:
                             out[j - 1], out[j] = out[j], out[j - 1]
                             j -= 1
                         else:

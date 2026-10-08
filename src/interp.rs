@@ -4161,20 +4161,26 @@ impl Interp {
         }
     }
 
-    /// P2 (BENCH.md §P2): the comparator-driven sort was insertion sort —
-    /// n²/4 comparator calls BY ALGORITHM (2026-10-04 audit: 15,997,582
-    /// calls at n=8k, 6.1 s vs CPython's builtin 0.9 ms). This helper keeps
-    /// the exact per-element contract (`cmp(a, b)` truthy when a belongs
-    /// BEFORE b, SPEC §sorted-order) and the exact tie semantics of the
-    /// insertion walk: a tie (cmp false both ways) swaps, so tie groups end
-    /// up REVERSED relative to the input order. Bottom-up merge with the
-    /// rule "take right iff NOT cmp(left_head, right_head)" reproduces that
-    /// byte-for-byte (derived from the walk and pinned in
-    /// tests/differential/p2p3p5_opt_pins.op), while cutting comparisons
-    /// from n²/4 to ~n log n. Inputs of ≤ 32 elements keep the original
-    /// insertion walk VERBATIM, so every small pinned program (and any
-    /// comparator with side effects at corpus scale) keeps its exact
-    /// comparator call order.
+    /// P2 (BENCH.md §P2) + #137 (Z-137-SORTSTABLE): the comparator-driven
+    /// sort keeps the P2 shape (insertion walk ≤ 32, bottom-up merge above,
+    /// cutting comparisons from n²/4 to ~n log n) with the per-element
+    /// contract `cmp(a, b)` truthy when a belongs BEFORE b (SPEC
+    /// §sorted-order) — and, as of the #137 amendment (2026-10-09), it is
+    /// STABLE: elements the comparator orders equally (cmp false both ways)
+    /// keep their input order, matching the default sort and the oracle, so
+    /// multi-key sorts (`sort(cmpA); sort(cmpB)`) compose. The pre-#137
+    /// walk swapped on `!cmp(prev, cur)`, which reversed every tie group;
+    /// the rule is now "move the current element past its predecessor iff
+    /// the comparator says it strictly belongs before it" (`cmp(cur, prev)`,
+    /// one call per comparison). The merge takes the right head iff
+    /// `cmp(right_head, left_head)` is strictly true, else the left — ties
+    /// take the left head, reproducing the stable walk's output byte-for-
+    /// byte (pinned in tests/differential/p2p3p5_opt_pins.op and
+    /// tests/differential/sort_stability_pin.op). Inputs of ≤ 32 elements
+    /// keep the insertion walk so small pinned programs keep their exact
+    /// comparator call sequence (args now in (cur, prev) order — the stable
+    /// rule must ask about the pair from the current element's side); the
+    /// oracle mirrors the same walk.
     fn comparator_sort(
         &mut self,
         env: &Rc<Env>,
@@ -4186,14 +4192,15 @@ impl Interp {
             return Ok(());
         }
         if n <= 32 {
-            // the original insertion walk, verbatim
+            // stable insertion walk (#137): swap iff the current element
+            // strictly belongs before the previous one
             for i in 1..n {
                 let mut j = i;
                 while j > 0 {
-                    let a = v[j - 1].clone();
-                    let b = v[j].clone();
-                    let before = self.call_value(env, cmp, vec![a, b])?.truthy();
-                    if !before {
+                    let cur = v[j].clone();
+                    let prev = v[j - 1].clone();
+                    let before = self.call_value(env, cmp, vec![cur, prev])?.truthy();
+                    if before {
                         v.swap(j - 1, j);
                         j -= 1;
                     } else {
@@ -4218,17 +4225,18 @@ impl Interp {
                 let (mut a, mut b) = (i, mid);
                 buf.clear();
                 while a < mid && b < end {
-                    // the tie rule: take right unless the left head
-                    // explicitly belongs before it
+                    // the stable tie rule (#137): take the right head only
+                    // when it strictly belongs before the left head; ties
+                    // take the left head, preserving input order
                     let before = self
-                        .call_value(env, cmp, vec![v[a].clone(), v[b].clone()])?
+                        .call_value(env, cmp, vec![v[b].clone(), v[a].clone()])?
                         .truthy();
                     if before {
-                        buf.push(v[a].clone());
-                        a += 1;
-                    } else {
                         buf.push(v[b].clone());
                         b += 1;
+                    } else {
+                        buf.push(v[a].clone());
+                        a += 1;
                     }
                 }
                 buf.extend_from_slice(&v[a..mid]);
