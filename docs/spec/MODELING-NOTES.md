@@ -336,3 +336,8 @@ In-repo companions:
 
 A PR mixing the tracks must label which hunks are which; reviewers enforce the boundary
 at lane check (CONTRIBUTING §8b).
+
+**R0.9 pointer:** the abstraction class and lowering rule for every mechanism
+keyed here is normative in [LOWERING.md](LOWERING.md) (roadmap R0.9) — §2
+classifies each surface, and its checker composes with check_docs_sync's
+marker discipline (a key renamed here must be renamed there in the same PR).
