@@ -30,6 +30,33 @@ gene main() {
     print(u.url_decode("%E4xyz") == chr(228) + "xyz")
     print(u.url_decode("a%E4%B8%ADb%zz"))
 
+    # UTF-8 boundary law (url-utf8-boundaries): runs that satisfy the
+    # continuation test but violate the second-byte boundary are NOT valid
+    # UTF-8 and fall back byte-per-octet — overlong forms (E0 80..9F,
+    # F0 80..8F), surrogate scalars (ED A0..BF), above-U+10FFFF (F4 90..BF).
+    # Decode never assembles an invalid scalar, so output is deterministic
+    # on every core (was: chr() of an invalid scalar, engine-dependent).
+    print(u.url_decode("%E0%80%80") == chr(224) + chr(128) + chr(128))
+    print(u.url_decode("%E0%9F%BF") == chr(224) + chr(159) + chr(191))
+    print(u.url_decode("%ED%A0%80") == chr(237) + chr(160) + chr(128))
+    print(u.url_decode("%ED%BF%BF") == chr(237) + chr(191) + chr(191))
+    print(u.url_decode("%F0%80%80%80") == chr(240) + chr(128) + chr(128) + chr(128))
+    print(u.url_decode("%F4%90%80%80") == chr(244) + chr(144) + chr(128) + chr(128))
+
+    # boundary-exact VALID scalars still reassemble into one character
+    print(u.url_decode("%E0%A0%80") == chr(2048))
+    print(u.url_decode("%ED%9F%BF") == chr(55295))
+    print(u.url_decode("%F0%90%80%80") == chr(65536))
+    print(u.url_decode("%F4%8F%BF%BF") == chr(1114111))
+
+    # valid and boundary-invalid runs side by side in one string
+    print(u.url_decode("x%E0%A0%80y%E0%9F%BFz") == "x" + chr(2048) + "y" + chr(224) + chr(159) + chr(191) + "z")
+
+    # url_encode emits only well-formed runs, so the round-trip law holds
+    # for scalars sitting exactly on every UTF-8 boundary
+    let edges = chr(2047) + chr(2048) + chr(55295) + chr(65535) + chr(65536) + chr(1114111)
+    print(u.url_decode(u.url_encode(edges)) == edges)
+
     # pre-existing lenient contract still holds verbatim
     print(u.url_decode("%4"), u.url_decode("%"), u.url_decode("a%2"))
 
