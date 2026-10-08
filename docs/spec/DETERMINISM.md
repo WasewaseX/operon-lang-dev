@@ -84,6 +84,26 @@ release says otherwise (compat policy: W63).
 5. **GRN/repressilator note**: all kinetics use only the promised operations (mul/add/max/
    clamps), so biological simulations are bit-reproducible across the release matrix
    (linux x64/arm64, macos, windows), this is what makes `repressi_params.op` meaningful.
+6. **Numeric laws and the referee pattern (R0.4 completion, sweep-3 2026-10)**: the exact
+   cross-representation arithmetic laws live in ONE shared module — `src/num_exact.rs`
+   (`div_i64_i64_exact`, `cmp_i64_f64_exact`, `mod_f64_floored`, `divmod_f64`) — and the
+   VM's constant folding MUST byte-match the runtime on every law (the Z-129-FOLDSEM
+   contract: interpreted-vs-compiled divergence is a soundness bug, not a benchmark —
+   the old fold silently produced wrong constants under `--opt`). The referee for every
+   numeric change is a GENERATED Python ground-truth table, bit-exact: the 6,506-row
+   CPython division/ordering table in `tests/num_exact.rs` (issue #130, PR #165) and the
+   3,028-row mod + 1,905-row divmod tables in `tests/num_exact_mod.rs` (issue #131,
+   PR #167). A numeric change that cannot survive its table does not land; this table
+   pattern is the house style for all future numeric work (#133, #132 inherit it).
+   Semantics fixed by the sweep, restated as policy: Int `/` Int is TRUE division and
+   ALWAYS yields `Float` (SPEC; the Z-129-FOLDSEM fold fix, PR #143), Int `%` Int is the
+   Python-parity FLOORED remainder (`7 % -3 == -2`), float `%`/`divmod` follow the
+   CPython fmod+adjust floored law with the zero-sign copysign rule (`divmod(-1.0,-2.0)
+   == (+0.0, -1.0)`). Platform law: NaN payloads are implementation-defined (MSVC's
+   software fmod returns the +NaN payload where glibc raises the x86 default QNaN); the
+   contract is payload-blind — repr `nan` on both, all payload comparisons false on both
+   (hardened in 8abef0c). `i64::MIN % -1` and division overflow stress remain part of
+   the contract via the runtime's checked paths (the stress IS the contract).
 
 ## 6. Build reproducibility (W088)
 
