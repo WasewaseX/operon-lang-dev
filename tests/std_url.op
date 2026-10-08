@@ -58,5 +58,23 @@ frame proof {
     assert(u.url_decode("%E4xyz") == chr(228) + "xyz")
     assert(u.url_decode("a%E4%B8%ADb%zz") == "a中b%zz")
 
+    # utf-8 boundary law: continuation-passing runs that violate the
+    # second-byte boundary fall back byte-per-octet (never an invalid scalar)
+    assert(u.url_decode("%E0%80%80") == chr(224) + chr(128) + chr(128))
+    assert(u.url_decode("%E0%9F%BF") == chr(224) + chr(159) + chr(191))
+    assert(u.url_decode("%ED%A0%80") == chr(237) + chr(160) + chr(128))
+    assert(u.url_decode("%ED%BF%BF") == chr(237) + chr(191) + chr(191))
+    assert(u.url_decode("%F0%80%80%80") == chr(240) + chr(128) + chr(128) + chr(128))
+    assert(u.url_decode("%F4%90%80%80") == chr(244) + chr(144) + chr(128) + chr(128))
+
+    # boundary-exact valid scalars still reassemble
+    assert(u.url_decode("%E0%A0%80") == chr(2048))
+    assert(u.url_decode("%ED%9F%BF") == chr(55295))
+    assert(u.url_decode("%F0%90%80%80") == chr(65536))
+    assert(u.url_decode("%F4%8F%BF%BF") == chr(1114111))
+    assert(u.url_decode("x%E0%A0%80y%E0%9F%BFz") == "x" + chr(2048) + "y" + chr(224) + chr(159) + chr(191) + "z")
+    let edges = chr(2047) + chr(2048) + chr(55295) + chr(65535) + chr(65536) + chr(1114111)
+    assert(u.url_decode(u.url_encode(edges)) == edges)
+
     promote("url: all asserts green")
 }

@@ -12,8 +12,10 @@ one byte; scalars >= 128 emit 2/3/4 escapes).
 
 Decode %XX (and "+" as space, the query form); a malformed escape keeps
 its raw characters. Valid UTF-8 multi-byte sequences reassemble into one
-character; a lead byte without its full continuation run falls back to
-byte-per-character output. Lenient by contract, never fails.
+character; a lead byte whose continuation run is truncated OR violates
+the second-byte boundary law (overlong / surrogate / above U+10FFFF)
+falls back to byte-per-character output. Lenient by contract, never
+fails, and never assembles an invalid scalar.
 
 ## `gene url_parse(u)`
 
@@ -51,6 +53,21 @@ of range, does not start with '%', or the hex digits are invalid.
 
 UTF-8 continuation-byte test (0x80..0xBF) on an octet value; -1 inputs
 (malformed position) simply fail the range test.
+
+## `gene url_lead3_ok(lead, b1)`
+
+Second-byte boundary law for 3-byte leads (0xE0..0xEF), per the UTF-8
+table: E0 must be followed by A0..BF (80..9F would make the run an
+overlong encoding of a 1- or 2-byte scalar) and ED must be followed by
+80..9F (A0..BF would make it a UTF-16 surrogate scalar). Every other
+lead in the range pairs with the plain continuation range.
+
+## `gene url_lead4_ok(lead, b1)`
+
+Second-byte boundary law for 4-byte leads (0xF0..0xF4): F0 requires
+90..BF (80..8F would be overlong) and F4 requires 80..8F (90..BF would
+assemble to a scalar above U+10FFFF, beyond Unicode's maximum). Every
+other lead in the range pairs with the plain continuation range.
 
 ## `gene url_hex_digit(v)`
 

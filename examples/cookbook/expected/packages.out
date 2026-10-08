@@ -17,7 +17,7 @@ $ cat operon.toml
 [package]
 name = "myapp"
 version = "0.1.0"
-operon-version = "2.7.0"
+operon-version = "2.9.3"
 
 [deps]
 
