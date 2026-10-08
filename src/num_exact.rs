@@ -79,6 +79,82 @@ pub fn div_i64_i64_exact(a: i64, b: i64) -> f64 {
     sign * cand as f64 * 2f64.powi(exp)
 }
 
+/// Floored float remainder (Python `%` for floats, issue #131,
+/// Z-131-FLOORMOD): CPython's own `float_rem` algorithm — C fmod
+/// (truncated remainder, sign follows the DIVIDEND) adjusted into the
+/// divisor's sign class. The previous engine formula
+/// `a.rem_euclid(b.abs()) * b.signum()` looked like the floored law but
+/// computes a euclidean-magnitude x divisor-sign hybrid: 5.5 % -2.0 was
+/// -1.5 where the SPEC (and Python, and the engine's own Int `%`) say
+/// -0.5.
+///
+/// The issue's suggested `a - (a/b).floor()*b` is ALSO wrong at the IEEE
+/// edges: for b = +/-inf it produces NaN where Python propagates the
+/// fmod image (5.5 % -inf = -inf, 5.5 % inf = 5.5), and for a = inf it
+/// NaNs where Python also NaNs (inf % finite = NaN) — only the fmod+adjust
+/// form matches Python on every edge: NaN in -> NaN, -0.0 dividend
+/// preserved (m != 0.0 is false for -0.0, so no adjustment touches it).
+///
+/// The caller owns the zero-divisor stress ("modulo by zero"), exactly
+/// as for the Int arm; divmod inherits this law by construction (it
+/// reuses the `%` operator for r).
+pub fn mod_f64_floored(a: f64, b: f64) -> f64 {
+    let m = a % b; // Rust f64 Rem == C fmod
+    if m != 0.0 {
+        if (m < 0.0) != (b < 0.0) {
+            m + b
+        } else {
+            m
+        }
+    } else {
+        // CPython's zero law: the zero remainder takes the DIVISOR's
+        // sign (0.0 % -2.0 is -0.0, -0.0 % 2.0 is 0.0) — floored law
+        // carried into the zeros, exactly like the Copysign branch of
+        // CPython's float_rem.
+        m.copysign(b)
+    }
+}
+
+/// Python's complete `float_divmod` (CPython algorithm, issue #131
+/// follow-through): the q half is NOT `floor(a / b)` — that rounds
+/// through the division's rounding error and lands on the wrong integer
+/// whenever a/b sits on a boundary (1.0 // 1e-10 must be 9999999999,
+/// but floor(1.0/1e-10) = 1e10 because the division rounded up).
+/// CPython derives q from the EXACT remainder: `div = (a - r) / b`,
+/// floored, then a > 0.5 fixup against the corrected-remainder
+/// quotient. r is the [`mod_f64_floored`] law bit-for-bit, so the
+/// `//` operator, the `%` operator, and `divmod` are one consistent
+/// Python-parity triple by construction.
+///
+/// Zero divisors never reach here (both operator arms stress first,
+/// preserving the exact Stress kind/message).
+pub fn divmod_f64(a: f64, b: f64) -> (f64, f64) {
+    let mut m = a % b; // raw fmod, sign follows the dividend
+    let div = (a - m) / b; // raw (unfloored) quotient
+    let mut q = div.floor();
+    if div - q > 0.5 {
+        q += 1.0;
+    }
+    if m != 0.0 {
+        if (m < 0.0) != (b < 0.0) {
+            m += b;
+            q -= 1.0;
+        }
+    } else {
+        m = m.copysign(b);
+    }
+    // Zero-quotient sign law: a zero q takes the sign of the true
+    // quotient a/b (|true q| < 1 preserves it; the IEEE (a - m)
+    // subtraction loses it — x - x = +0.0 even for -0.0 dividends, and
+    // a m-adjustment that lands q on zero inherits the sign of the
+    // pre-adjustment (a - m), not of a/b). Python: divmod(-1.0, -2.0)
+    // = (+0.0, -1.0), divmod(0.0, -1.0) = (-0.0, 0.0).
+    if q == 0.0 {
+        q = 0.0_f64.copysign(a / b);
+    }
+    (q, m)
+}
+
 /// Exact three-way comparison of an i64 against an f64 (L2).
 ///
 /// Python `float_richcompare` law: decompose the double into its exact

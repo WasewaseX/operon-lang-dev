@@ -4655,6 +4655,23 @@ class Interp:
                     return q
                 if r == 0:
                     raise Stress("unfolded", "modulo by zero")
+                if isinstance(l, float) or isinstance(r, float):
+                    # Z-131-FLOORMOD: CPython's float_rem law — fmod
+                    # (sign follows the dividend) adjusted into the
+                    # divisor's sign class, and the zero remainder takes
+                    # the DIVISOR's sign (copysign law; the SPEC's
+                    # "sign follows divisor" carried into the zeros).
+                    # Mirrors num_exact::mod_f64_floored bit-for-bit.
+                    # The old float path ran the int mirror formula,
+                    # whose l - q*r subtraction always yields +0.0 on
+                    # exact multiples (4.0 % -2.0 printed 0.0, not -0.0).
+                    m = math.fmod(l, r)
+                    if m:
+                        if (m < 0) != (r < 0):
+                            m += r
+                    else:
+                        m = math.copysign(0.0, r)
+                    return m
                 if l == -(2**63) and r == -1:
                     # i64 corner: the quotient 2**63 does not fit, so the
                     # Rust core raises before ever materializing the

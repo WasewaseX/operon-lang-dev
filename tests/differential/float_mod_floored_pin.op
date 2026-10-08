@@ -1,0 +1,55 @@
+# Float floored-remainder pin (2026-10-08): regression gate for issue #131
+# (Z-131-FLOORMOD). Float `%` (and `divmod`, which inherits both halves)
+# used `a.rem_euclid(b.abs()) * b.signum()` — a euclidean-magnitude x
+# divisor-sign hybrid that contradicted the SPEC's floored law ("sign
+# follows divisor"), the oracle, AND the engine's own Int `%` arm:
+#   5.5 % -2.0  was -1.5, floored law says -0.5
+#   -5.5 % -2.0 was -0.5, floored law says -1.5
+#   7.0 % -3.0  was -1.0, floored law says -2.0
+#   divmod(7.5, -2.0) r was -1.5, floored law says -0.5
+# Fixed in src/num_exact.rs: mod_f64_floored = CPython's float_rem
+# (fmod + divisor-sign adjust + the zero-sign copysign law) and
+# divmod_f64 = CPython's float_divmod q (remainder-derived floor with
+# the 0.5 fixup — NOT floor(a/b), which rounds across the boundary:
+# 1.0 // 1e-10 must be 9999999999, floor(1.0/1e-10) says 1e10).
+# The // operator routes through the same divmod_f64, so `//`, `%` and
+# divmod are one consistent Python-parity triple.
+# Rows avoid 1e308-scale operands until the oracle's extreme-float
+# containment lands (see the oracle-robustness issue filed alongside).
+# Expected output is byte-pinned across all engines (differential lanes).
+main {
+    # --- 1. the issue's filing table ------------------------------------
+    print("i1", 5.5 % -2.0)
+    print("i2", -5.5 % -2.0)
+    print("i3", 7.0 % -3.0)
+    print("i4", divmod(7.5, -2.0))
+    # --- 2. sign matrix: dividend x divisor signs ------------------------
+    print("s1", 7.0 % 3.0)
+    print("s2", -7.0 % 3.0)
+    print("s3", 7.0 % -3.0)
+    print("s4", -7.0 % -3.0)
+    print("s5", 5.5 % 2.0)
+    print("s6", -5.5 % 2.0)
+    print("s7", 0.5 % -0.25)
+    print("s8", -0.5 % 0.25)
+    # --- 3. consistency with the engine's own Int arm --------------------
+    print("c1", 7.0 % -3.0 == 7 % -3)
+    print("c2", -7.0 % 3.0 == -7 % 3)
+    print("c3", 7.5 % -2.0 == 7 % -3)
+    # --- 4. floored // (the divmod q half) --------------------------------
+    print("f1", 1.0 // 1e-10)
+    print("f2", 7.5 // -2.0)
+    print("f3", -7.5 // 2.0)
+    print("f4", (7.5 // -2.0) * -2.0 + 7.5 % -2.0)
+    # --- 5. divmod pairs (q, r) consistency -------------------------------
+    print("d1", divmod(-7.5, 2.0))
+    print("d2", divmod(7.5, 2.0))
+    print("d3", divmod(-1.0, -2.0))
+    print("d4", divmod(1.0, -2.0))
+    print("d5", divmod(0.0, -1.0))
+    # --- 6. exact-multiple zeros (the copysign law) -----------------------
+    print("z1", 4.0 % -2.0)
+    print("z2", -4.0 % 2.0)
+    print("z3", 4.0 % 2.0)
+    print("z4", divmod(4.0, -2.0))
+}
