@@ -380,9 +380,23 @@ pub fn load_file(file: &str, opts: &Opts) -> Result<Loaded, String> {
     // frame selection: --frame name runs that named frame instead of entry
     if let Some(fname) = &opts.frame {
         if let Some((_, body)) = prog.named_frames.iter().find(|(n, _)| n == fname) {
-            let _ = interp.exec_block(&genv, body);
+            // #122: `let _ =` DROPPED every frame-body error — a failed
+            // assert inside a named frame exited 0, making `--frame` smoke
+            // gates a false-green machine (the same body under `operon
+            // test` correctly fails rc 1). A frame error is an uncaught
+            // stress: rc 1, the standard one-line stress shape.
+            if let Err(s) = interp.exec_block(&genv, body) {
+                eprintln!("[fatal] stress [{}] {}", s.kind, s.message);
+                // ast-grep-ignore: no-std-process-exit-in-core
+                std::process::exit(1);
+            }
         } else {
+            // #122: an explicitly requested missing frame was a stderr-only
+            // rung-4 note with exit 0 — a false green. rc 1 + stderr line.
             interp.note(0, 4, format!("frame '{}' not declared", fname));
+            eprintln!("error[E1002]: frame '{}' not declared", fname);
+            // ast-grep-ignore: no-std-process-exit-in-core
+            std::process::exit(1);
         }
     }
 

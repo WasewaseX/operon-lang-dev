@@ -1,0 +1,2 @@
+print("MODULE BODY RAN ONCE")
+let counter = 1
