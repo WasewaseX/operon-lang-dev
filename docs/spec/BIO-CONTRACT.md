@@ -97,3 +97,8 @@ says what a user may conclude from watching levels/telemetry.
 - Constructs: `tests/mechanisms.op`, `tests/methylate_api.op`, `tests/spawn_regulation.op`, `tests/worker_seed_pin.op`
 - App-layer demo: `apps/genomelab/genomelab.op`
 - History: reg-bio (1b9785d), reg-bio-2 (749ba68/9d614f5), reg-bio-3 (16eebae), loop-9 waves A/B1–B5, loop-10 waves R/R-b/R-c (commit subjects carry F-numbers)
+
+**R0.9 pointer:** the class + lowering rule for every graded mechanism above
+is normative in [LOWERING.md](LOWERING.md) (roadmap R0.9, §2); its checker
+enforces that this file's label vocabulary is the only vocabulary the
+lowering contract cites.
