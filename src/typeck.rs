@@ -43,6 +43,11 @@ pub struct Checker {
     genes: HashMap<String, GeneSig>,
     /// statement line hints, threaded for findings (best effort, A13 spans)
     findings: Vec<Finding>,
+    /// W45-v3: when armed, every un-annotated binding records its inferred
+    /// type at bind time, for the LSP inlay-hint surface (additive editor
+    /// surface, never a second diagnostic stream).
+    record_hints: bool,
+    hints: Vec<BindingTy>,
 }
 
 impl Default for Checker {
@@ -57,6 +62,8 @@ impl Checker {
             phenos: Vec::new(),
             genes: HashMap::new(),
             findings: Vec::new(),
+            record_hints: false,
+            hints: Vec::new(),
         }
     }
 
@@ -433,13 +440,34 @@ impl Checker {
             Stmt::Let(name, e) => {
                 let hint = expr_line_deep(e).unwrap_or(line_hint);
                 let ty = self.infer(e, env, hint);
-                env.bind(name.clone(), ty);
+                env.bind(name.clone(), ty.clone());
+                if self.record_hints {
+                    // W45-v3: the hint position needs the STATEMENT's start
+                    // line, and expr_line_deep is blind to the parser's At
+                    // position marker (top-level `let n = 42` would record
+                    // line 0). expr_first_line reads the marker; the finding
+                    // hint above keeps its established best-effort behavior.
+                    let line = crate::ast::expr_first_line(e).unwrap_or(hint);
+                    self.hints.push(BindingTy {
+                        line,
+                        name: name.clone(),
+                        ty,
+                    });
+                }
                 hint
             }
             Stmt::LetConst(name, e) => {
                 let hint = expr_line_deep(e).unwrap_or(line_hint);
                 let ty = self.infer(e, env, hint);
-                env.bind(name.clone(), ty);
+                env.bind(name.clone(), ty.clone());
+                if self.record_hints {
+                    let line = crate::ast::expr_first_line(e).unwrap_or(hint);
+                    self.hints.push(BindingTy {
+                        line,
+                        name: name.clone(),
+                        ty,
+                    });
+                }
                 hint
             }
             Stmt::LetAnn(name, ann, e) => {
@@ -1288,6 +1316,33 @@ pub fn check_program(prog: &Program) -> Vec<Finding> {
     let mut out = c.findings;
     out.sort_by_key(|f| f.line);
     out
+}
+
+/// W45-v3: one recorded binding type — the statement's 1-based line (the
+/// same hint class findings thread), the binding name, and the checker's
+/// inferred type at bind time. Only UN-ANNOTATED bindings record
+/// (`let x: Str` already displays its annotation in source; nothing to
+/// add), and destructuring patterns bind several names per statement —
+/// their shapes are covered by the pattern text, so they stay out too.
+pub struct BindingTy {
+    pub line: usize,
+    pub name: String,
+    pub ty: Ty,
+}
+
+/// W45-v3: binding type hints for the LSP inlay-hint surface. Runs the
+/// same three inference passes as `check_program` with recording armed;
+/// findings are DISCARDED — hints are additive editor surface, never a
+/// second diagnostic stream. Consumers apply the honest-visibility law
+/// themselves: `any`/`never` are the dynamic escape hatches carrying no
+/// information, so they must emit no hint.
+pub fn binding_types(prog: &Program) -> Vec<BindingTy> {
+    let mut c = Checker::new();
+    c.record_hints = true;
+    c.collect_program(prog);
+    c.infer_gene_bodies(prog);
+    c.check_toplevel(prog);
+    c.hints
 }
 
 // ================================================================= env

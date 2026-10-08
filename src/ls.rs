@@ -15,7 +15,6 @@ use crate::tools::check_source;
 use crate::value::Value;
 use std::cell::RefCell;
 use std::rc::Rc;
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct Diagnostic {
     /// 0-based line.
@@ -75,11 +74,25 @@ pub struct SpliceInfo {
     pub variants: Vec<String>,
 }
 
+/// W45-v3: one precomputed inlay hint — the checker's inferred type for an
+/// un-annotated binding, positioned right after the binding name. Line/col
+/// are LSP-style 0-based coordinates (this file's convention).
+#[derive(Debug)]
+pub struct InlayHint {
+    pub line0: usize,
+    pub col0: usize,
+    pub label: String,
+}
+
 #[derive(Debug, Default)]
 pub struct LsDoc {
     pub genes: Vec<GeneInfo>,
     pub splices: Vec<SpliceInfo>,
     pub diagnostics: Vec<Diagnostic>,
+    /// W45-v3: inferred-type hints for un-annotated bindings, computed once
+    /// per document version (the same analyze pass that fills diagnostics)
+    /// and filtered by range at request time — a request never re-derives.
+    pub hints: Vec<InlayHint>,
 }
 
 fn note_severity(rung: u8) -> u8 {
@@ -379,8 +392,98 @@ pub fn analyze_doc(src: &str, base_dir: Option<&str>) -> LsDoc {
         }
         doc.diagnostics.push(diag);
     }
+
+    // W45-v3: inlay hints — the checker's concrete inferred types for
+    // un-annotated bindings, positioned just past the binding name. Honest
+    // visibility law: `any`/`never` are the dynamic escape hatches carrying
+    // no information, so they emit NO hint (never a wrong or vacuous hint);
+    // a binding whose name cannot be located on (or right under) the
+    // reported line is dropped, never repositioned by guesswork. Findings
+    // from the same pass are discarded — hints are additive surface, not
+    // diagnostics.
+    for b in crate::typeck::binding_types(&prog) {
+        if matches!(b.ty, crate::types::Ty::Any | crate::types::Ty::Never) {
+            continue;
+        }
+        let lines: Vec<&str> = src.lines().collect();
+        let mut placed = None;
+        if b.line > 0 && b.line <= lines.len() + 1 {
+            // the statement's own line first, then the next two (multi-line
+            // spelling where the recorded hint trails the `let` keyword)
+            let start = b.line - 1;
+            let end = lines.len().min(b.line + 2);
+            placed = lines[start..end]
+                .iter()
+                .enumerate()
+                .find_map(|(off, l)| binding_hint_col(l, &b.name).map(|col| (start + off, col)));
+        }
+        if let Some((line0, col)) = placed {
+            doc.hints.push(InlayHint {
+                line0,
+                col0: col,
+                label: format!(": {}", b.ty.render()),
+            });
+        }
+    }
+
     doc.diagnostics.sort_by_key(|d| (d.line, d.col));
     doc
+}
+
+/// W45-v3: the column just past a `let`/`const` binding's `name` on `line`
+/// (word-boundary match immediately after the keyword), so the hint renders
+/// right after the name the way editors expect. String-aware (a `let x`
+/// inside a string literal is not a binding). None when this line does not
+/// bind `name` — the caller drops the hint, never guesses a position.
+fn binding_hint_col(line: &str, name: &str) -> Option<usize> {
+    let is_id = |c: char| c.is_ascii_alphanumeric() || c == '_';
+    let chars: Vec<char> = line.chars().collect();
+    let name_chars: Vec<char> = name.chars().collect();
+    let mut i = 0usize;
+    let mut in_str = false;
+    while i < chars.len() {
+        let c = chars[i];
+        if in_str {
+            if c == '\\' {
+                i += 2; // skip the escape and the escaped char
+                continue;
+            }
+            if c == '"' {
+                in_str = false;
+            }
+            i += 1;
+            continue;
+        }
+        if c == '"' {
+            in_str = true;
+            i += 1;
+            continue;
+        }
+        for kw in ["let", "const"] {
+            let kw_chars: Vec<char> = kw.chars().collect();
+            let kw_end = i + kw_chars.len();
+            if kw_end < chars.len()
+                && chars[i..kw_end] == kw_chars[..]
+                && (i == 0 || !is_id(chars[i - 1]))
+                && !is_id(chars[kw_end])
+            {
+                // keyword: the name must start after the whitespace run
+                let mut j = kw_end;
+                while j < chars.len() && chars[j] == ' ' {
+                    j += 1;
+                }
+                let name_end = j + name_chars.len();
+                if name_end <= chars.len()
+                    && chars[j..name_end] == name_chars[..]
+                    && (name_end == chars.len() || !is_id(chars[name_end]))
+                {
+                    return Some(name_end);
+                }
+            }
+        }
+        i += 1;
+    }
+    None
 }
 
 /// W46: the repair provenance covering (line0, col0), if any, a diagnostic
@@ -924,6 +1027,37 @@ pub fn semantic_tokens(src: &str, doc: &LsDoc) -> Value {
         }
     }
     Value::List(Rc::new(RefCell::new(data)))
+}
+
+/// lsp-r1: textDocument/documentSymbol, the file's callable inventory
+/// (genes, sequences, splices) as LSP DocumentSymbol values. Data the
+/// analyze() pass already collects; no second parse.
+/// W45-v3: the `textDocument/inlayHint` result for one document version,
+/// filtered to the 0-based `[start_line, end_line]` window (editors request
+/// their visible range; we filter the precomputed hints, never re-derive).
+/// `kind: 1` is LSP InlayHintKind.Type; the label renders right after the
+/// binding name (`: int` class). An empty window or a doc with no concrete
+/// bindings yields an empty array — an honest no-hint answer.
+pub fn inlay_hints(doc: &LsDoc, start_line: usize, end_line: usize) -> Value {
+    let items: Vec<Value> = doc
+        .hints
+        .iter()
+        .filter(|h| h.line0 >= start_line && h.line0 <= end_line)
+        .map(|h| {
+            mapv(vec![
+                (
+                    "position",
+                    mapv(vec![
+                        ("line", Value::Int(h.line0 as i64)),
+                        ("character", Value::Int(h.col0 as i64)),
+                    ]),
+                ),
+                ("label", Value::Str(h.label.clone())),
+                ("kind", Value::Int(1)), // InlayHintKind.Type
+            ])
+        })
+        .collect();
+    Value::List(Rc::new(RefCell::new(items)))
 }
 
 /// lsp-r1: textDocument/documentSymbol, the file's callable inventory

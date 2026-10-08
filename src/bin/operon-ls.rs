@@ -24,7 +24,7 @@
 
 use operon::interp::{json_parse, json_stringify};
 use operon::ls::{
-    analyze_doc, completions, definition, document_symbols, format_text, hover, mapv,
+    analyze_doc, completions, definition, document_symbols, format_text, hover, inlay_hints, mapv,
     prepare_rename, publish_params, range_value, references, rename, semantic_tokens,
     signature_help, LsDoc, SEMANTIC_TOKEN_TYPES,
 };
@@ -49,13 +49,14 @@ const LSP_VERSION: u32 = 1;
 /// W62: the feature list echoed in the initialize handshake. Must stay in
 /// lockstep with the capabilities map below and with lsp_smoke's assertions
 /// (the smoke fails the build if they drift).
-const LSP_FEATURES: [&str; 10] = [
+const LSP_FEATURES: [&str; 11] = [
     "diagnostics",
     "hover",
     "definition",
     "references",     // W45
     "semanticTokens", // W45
     "rename",         // W45-v2: prepareRename + rename, W67 discipline
+    "inlayHints",     // W45-v3: inferred types on un-annotated bindings
     "documentSymbol",
     "completion",
     "formatting",
@@ -212,6 +213,10 @@ fn main() {
                             ),
                             ("documentSymbolProvider", Value::Bool(true)),
                             ("documentFormattingProvider", Value::Bool(true)),
+                            // W45-v3: inferred-type hints for un-annotated
+                            // bindings; additive capability, old editors that
+                            // never ask are unaffected (handshake law)
+                            ("inlayHintProvider", Value::Bool(true)),
                             (
                                 // W44: signatures fire on the call open and on
                                 // every argument comma (Neovim/VSCode recipes)
@@ -420,6 +425,35 @@ fn main() {
                 let response = docs
                     .get(&doc_uri(&params))
                     .map(|e| mapv(vec![("data", semantic_tokens(&e.src, &e.analyzed))]));
+                send(&mut stdout, id.unwrap_or(Value::Null), response, &None);
+            }
+            // W45-v3: inlay hints — precomputed per document version in the
+            // analyze pass; the request only filters by the visible range.
+            // A missing/absent range means the whole document (editors that
+            // send range-less hints want everything we have).
+            "textDocument/inlayHint" => {
+                let (start_line, end_line) = params
+                    .as_ref()
+                    .and_then(|p| get(p, "range"))
+                    .map(|r| {
+                        let line = |o: Option<Value>| -> usize {
+                            o.and_then(|v| get(&v, "line"))
+                                .and_then(|v| as_int(&v))
+                                .map(|n| n.max(0) as usize)
+                                .unwrap_or(0)
+                        };
+                        (line(get(&r, "start")), line(get(&r, "end")))
+                    })
+                    .unwrap_or((0, usize::MAX));
+                let response = match docs.get(&doc_uri(&params)) {
+                    Some(e) => Some(inlay_hints(&e.analyzed, start_line, end_line)),
+                    // an unknown document is an honest empty answer, not an
+                    // error — editors race didOpen/didClose against
+                    // visible-range requests, and null would make them crash
+                    None => Some(Value::List(std::rc::Rc::new(std::cell::RefCell::new(
+                        Vec::new(),
+                    )))),
+                };
                 send(&mut stdout, id.unwrap_or(Value::Null), response, &None);
             }
             // W44: signature help — the innermost unclosed call left of the
