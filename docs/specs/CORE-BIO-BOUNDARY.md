@@ -150,3 +150,10 @@ impossible for it. No exceptions in silence. The track record so far: every
 post-2.2 amendment (match v2, soft annotations, traits, const bindings, `::`
 sugar, bytes) is programmer vocabulary, and zero biology keywords have been
 added since the freeze; the hatch has never been used.
+
+**R0.9 pointer:** the growth ladder this inventory feeds is normative in
+[../spec/LOWERING.md](../spec/LOWERING.md) (roadmap R0.9 §3) — libraries
+first, `.cell` second, marks with a lowering note, kernels with a measured
+hot path, never new reserved grammar; `check_lowering.py` enforces that the
+frozen bio keywords and contextual spellings inventoried here all carry a
+lowering row.
