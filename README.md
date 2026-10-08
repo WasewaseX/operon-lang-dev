@@ -271,7 +271,7 @@ operon profile f.op [--chrome trace.json]         # per-gene calls, exclusive se
 operon crispr f.op  (--knockout gene | --matrix) [--json]
 operon bench f.op   [--iters n]
 operon disasm f.op                                # bytecode listing of compiled gene bodies
-operon-ls                                         # stdio LSP: diagnostics, hover, definition, symbols, completion, formatting (SPEC §15)
+operon-ls                                         # stdio LSP: diagnostics, hover, definition, references, rename, semantic tokens, inlay hints, symbols, completion, formatting (SPEC §15)
 operon version                                    # Operon 2.9.3-vm (rust-core, cpp-kernel), banner matches SPEC 2.7.0; -vm = the bytecode machine is the run default (W09 A6)
 ```
 
@@ -343,6 +343,10 @@ itself reaches machines).
 - **Diagnostics on open/change**, parse notes per Total Grammar rung (canonical → hint, synonym → info, wobble → warning, fallback → error) plus phantom-call detection that resolves `use`d modules **independently of the launch directory** (document-relative → CWD → `std/` → exe-relative `std/`).
 - **Hover**, gene/seq signatures with regulation marks (`@acetylate`, `@methylate`, `@m6a`, `enhance`), splice variant tables, builtin signatures.
 - **Go-to-definition** for genes, sequences, and splice roots.
+- **Find references**, word-boundary occurrences that skip strings and comments, declaration included.
+- **Rename** (LSP 3.17-style via prepareRename), all-or-nothing: invalid, reserved, or already-taken names refuse the whole rename with a clear error.
+- **Semantic tokens**, a fixed six-type legend (keyword/function/variable/string/number/comment).
+- **Inlay hints**, the checker's inferred types on un-annotated `let`/`const` bindings (concrete types only — a dynamic `any` binding stays hint-free by design).
 - **Document symbols**, the file's callable inventory in the outline view.
 - **Completion**, in-file genes with signatures, builtins, keywords, top-level bindings.
 - **Formatting**, the same canonical formatter as `operon fmt`.

@@ -28,8 +28,8 @@ The `initialize` result carries the contract next to the standard fields:
 ```json
 {
   "operonLsp": { "version": 1, "features": ["diagnostics", "hover",
-      "definition", "references", "semanticTokens", "rename", "documentSymbol",
-      "completion", "formatting", "signatureHelp"] },
+      "definition", "references", "semanticTokens", "rename", "inlayHints",
+      "documentSymbol", "completion", "formatting", "signatureHelp"] },
   "capabilities": { ... standard LSP capability map ... },
   "serverInfo": { "name": "operon-ls", "version": "..." }
 }
@@ -47,14 +47,29 @@ The `initialize` result carries the contract next to the standard fields:
 | VS Code (generic LSP client extension) | 1 | same surface via `operon-ls` command; no official extension published yet, this table updates with the extension |
 | any LSP 3.17-capable client | 1 | stdio framing (Content-Length), full-text document sync (ranged edits ignored by contract, the server advertises sync=1) |
 
-The honest scope line: lsp v1 advertises exactly the ten features above
-(W45 added `references` + `semanticTokens` and W45-v2 added `rename`, all
-additively, no bump, per rule 1). Repair provenance (W46) rides the
-EXISTING `diagnostics` and `hover` features: publishDiagnostics may carry
-`relatedInformation` and hover may append the repair note, both additive
-fields on advertised features, covered by the same rule. `--explain FILE`
-is a CLI door (not an LSP method), outside the contract. Inlay-hints remain
-unclaimed.
+The honest scope line: lsp v1 advertises exactly the eleven features above
+(W45 added `references` + `semanticTokens`, W45-v2 added `rename`, W45-v3
+added `inlayHints`, all additively, no bump, per rule 1). Repair provenance
+(W46) rides the EXISTING `diagnostics` and `hover` features:
+publishDiagnostics may carry `relatedInformation` and hover may append the
+repair note, both additive fields on advertised features, covered by the
+same rule. `--explain FILE` is a CLI door (not an LSP method), outside the
+contract.
+
+### W45-v3 inlay-hint semantics (part of the lsp 1 contract)
+
+`textDocument/inlayHint` answers the checker's inferred types for
+UN-annotated `let`/`const` bindings in the requested line range
+(`kind: 1` = Type, label `: <ty>` positioned right past the binding name).
+The honest-visibility law: `any`/`never` never hint (the dynamic escape
+hatches carry no information), annotated bindings never hint (the source
+already shows the type), destructuring patterns never hint (the pattern text
+shows the shape), and an unknown document answers `[]` (editors race
+didOpen/didClose against visible-range requests; null would crash them).
+Hints are computed once per document version inside the SAME analyze pass
+that produces diagnostics — a request filters, never re-derives — so a
+server upgrade that changes inference only changes hint text, never the
+diagnostic stream.
 
 ### W45-v2 rename semantics (part of the lsp 1 contract)
 
