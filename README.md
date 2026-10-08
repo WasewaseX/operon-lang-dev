@@ -22,12 +22,12 @@ The mandate: *"Rust, then C, then Python, then Operon, then C++, then HTML, then
 - Python as bootstrap (not implementation) is the right reduction from v1's 100%-Python mistake.
 - One point withheld: **Operon below Python is a snapshot, not a destiny.** Mainstream languages converge on self-hosting (Rust in Rust, Go in Go, TypeScript in TypeScript). Operon's share must grow release over release, the stdlib is already pure `.op`.
 
-### Measured composition (main @ 28e373e, `bash scripts/stack_report.sh`)
+### Measured composition (main @ e169463, `bash scripts/stack_report.sh`)
 
 | rank | language | lines | share | role |
 |---|---|---|---|---|
-| 1 | **Operon** | 435,381 | ~85% | **self-hosted stdlib (35 modules, generated inventory in [docs/STATS.md](docs/STATS.md)), proof tests, red-team suite, differential corpus, GenomeLab + the ytdl app (incl. the cross-language bench surface)** (`std/ tests/ examples/ apps/`) |
-| 2 | **Rust** | 60,667 | ~12% | lexer, Total Grammar parser, evaluator, capability sandbox, symbol table, HTTP/JSON, toolchain CLI, REPL, `operon-ls` LSP (`src/`) |
+| 1 | **Operon** | 434,351 | ~85% | **self-hosted stdlib (34 modules, generated inventory in [docs/STATS.md](docs/STATS.md)), proof tests, red-team suite, differential corpus, GenomeLab + the ytdl app (incl. the cross-language bench surface)** (`std/ tests/ examples/ apps/`) |
+| 2 | **Rust** | 60,638 | ~12% | lexer, Total Grammar parser, evaluator, capability sandbox, symbol table, HTTP/JSON, toolchain CLI, REPL, `operon-ls` LSP (`src/`) |
 | 3 | **Python** | 9,725 | ~1.9% | bootstrap: reference oracle + differential harness (`bootstrap/`), test infrastructure only, nothing shipped depends on it |
 | 4 | **Shell** | 3,329 | <1% | build/test/bench/stack/install scripts (`scripts/`) |
 | 5 | **JavaScript** | 2,062 | ~0.4% | browser playground subset interpreter (`web/playground/app.js`) |
@@ -426,7 +426,7 @@ Requires: rustc (≥1.70), gcc, g++ (builds the C++ codon kernel). Zero runtime 
 - **Traits**: `trait Show { gene display() }` + `phenotype User implements Show` (W04/SPEC §8b), required methods (contract-checked at construction, notes never fatal) and default methods with virtual dispatch; composes with `from` inheritance.
 - **Errors**: a four-tier hierarchy (SPEC §9), null+note (soft miss) → **Option/Result values** (`some/none/ok/err`, `?!` propagation, `unwrap_or` defaults) → catchable `Stress{kind, message}`, `unfolded | missing | overflow | burned | interference | unwrap | frozen`, plus Total-Grammar runtime notes. Expected failures stay values; Stress is for contract violations. A program never crashes; worst case it narrates what it repaired.
 - **Concurrency**: `spawn(gene, args)` / `join(id)`, real OS threads with value serialization; sequences run on worker cells; timed repressilator threads.
-- **Modules**: `use std/bio;`, TAD-insulated, anchor-controlled exports, module cache, cycle-tolerant. 35 stdlib modules today (generated per-module inventory: [docs/STATS.md](docs/STATS.md)): `args`, `arrays`, `bigint`, `binary`, `bio`, `biocore`, `collections`, `csv`, `deque`, `env`, `fmt`, `fs`, `graph`, `hashing`, `heap`, `iter`, `json`, `logging`, `math`, `motifs`, `path`, `process`, `random`, `result`, `seq`, `serialize`, `set`, `strings`, `try_numeric`, `typed`, `terminal`, `testing`, `time`, `unicode`, `url`, plus the capability-gated `py()` bridge for the scientific-Python deep end. `std/bigint` is the sanctioned escape past the i64 no-wrap overflow contract: exact arbitrary-precision arithmetic over digit lists (20! fits i64, 21! does not, `bigint.big_fact` answers both exactly).
+- **Modules**: `use std/bio;`, TAD-insulated, anchor-controlled exports, module cache, cycle-tolerant. 34 stdlib modules today (generated per-module inventory: [docs/STATS.md](docs/STATS.md)): `args`, `bigint`, `binary`, `bio`, `biocore`, `collections`, `csv`, `deque`, `env`, `fmt`, `fs`, `graph`, `hashing`, `heap`, `iter`, `json`, `logging`, `math`, `motifs`, `path`, `process`, `random`, `result`, `seq`, `serialize`, `set`, `strings`, `try_numeric`, `typed`, `terminal`, `testing`, `time`, `unicode`, `url`, plus the capability-gated `py()` bridge for the scientific-Python deep end. `std/bigint` is the sanctioned escape past the i64 no-wrap overflow contract: exact arbitrary-precision arithmetic over digit lists (20! fits i64, 21! does not, `bigint.big_fact` answers both exactly).
 
 ## Repository layout
 
