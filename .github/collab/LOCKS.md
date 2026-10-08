@@ -1,3 +1,10 @@
+# CI MIRROR of the R0.10 lock ledger — DO NOT EDIT DIRECTLY
+# Canonical: project-vault/collab/LOCKS.md (builder-F, roadmap §23, syncs this
+# file in the same session as any ledger change; chatroom posts record both SHAs).
+# Parsed by scripts/collision_guard.py (roadmap §24.4).
+
+---
+
 # OPERON LOCKS — active path ownership (R0.10, APPROVED 2026-10-04)
 
 **What this is:** the mechanical half of multi-agent collision prevention —
