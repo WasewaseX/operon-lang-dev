@@ -21,6 +21,20 @@ fn bits(h: &str) -> f64 {
     f64::from_bits(u64::from_str_radix(h, 16).unwrap())
 }
 
+/// Bit equality with a NaN-payload exemption: the C standard leaves the
+/// fmod NaN payload implementation-defined (glibc raises the x86 default
+/// QNaN 0xfff8..., MSVC's software fmod returns 0x7ff8...), while the
+/// PYTHON contract is payload-blind — repr is "nan" on both and every
+/// comparison is false on both. The windows CI leg caught the platform
+/// split; the language-level behavior is identical, so NaN == NaN-payload
+/// is a pass here.
+fn bits_eq(got: f64, want: f64) -> bool {
+    if got.is_nan() && want.is_nan() {
+        return true;
+    }
+    got.to_bits() == want.to_bits()
+}
+
 #[test]
 fn float_mod_matches_python_bit_exact() {
     const MOD: &[(&str, &str, &str)] = &[
@@ -3057,9 +3071,8 @@ fn float_mod_matches_python_bit_exact() {
         let (a, b) = (bits(ah), bits(bh));
         let got = mod_f64_floored(a, b);
         let want = bits(want);
-        assert_eq!(
-            got.to_bits(),
-            want.to_bits(),
+        assert!(
+            bits_eq(got, want),
             "mod {:e} % {:e}: got {:e} ({:#x}), want {:e} ({:#x})",
             a,
             b,
@@ -14509,9 +14522,8 @@ fn float_divmod_pair_matches_python() {
         let (a, b) = (bits(ah), bits(bh));
         let got_r = mod_f64_floored(a, b);
         let want_r = bits(rh);
-        assert_eq!(
-            got_r.to_bits(),
-            want_r.to_bits(),
+        assert!(
+            bits_eq(got_r, want_r),
             "divmod r {:e}, {:e}: got {:e}, want {:e}",
             a,
             b,
@@ -14522,9 +14534,8 @@ fn float_divmod_pair_matches_python() {
         // divmod_f64 (CPython's remainder-derived floor, NOT floor(a/b))
         let got_q = divmod_f64(a, b).0;
         let want_q = bits(qh);
-        assert_eq!(
-            got_q.to_bits(),
-            want_q.to_bits(),
+        assert!(
+            bits_eq(got_q, want_q),
             "divmod q {:e}, {:e}: got {:e}, want {:e}",
             a,
             b,
