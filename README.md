@@ -22,12 +22,12 @@ The mandate: *"Rust, then C, then Python, then Operon, then C++, then HTML, then
 - Python as bootstrap (not implementation) is the right reduction from v1's 100%-Python mistake.
 - One point withheld: **Operon below Python is a snapshot, not a destiny.** Mainstream languages converge on self-hosting (Rust in Rust, Go in Go, TypeScript in TypeScript). Operon's share must grow release over release, the stdlib is already pure `.op`.
 
-### Measured composition (main @ eaf089b, `bash scripts/stack_report.sh`)
+### Measured composition (main @ 948ec8b, `bash scripts/stack_report.sh`)
 
 | rank | language | lines | share | role |
 |---|---|---|---|---|
-| 1 | **Operon** | 429,533 | ~85% | **self-hosted stdlib (33 modules, generated inventory in [docs/STATS.md](docs/STATS.md)), proof tests, red-team suite, differential corpus, GenomeLab + the ytdl app (incl. the cross-language bench surface)** (`std/ tests/ examples/ apps/`) |
-| 2 | **Rust** | 60,093 | ~12% | lexer, Total Grammar parser, evaluator, capability sandbox, symbol table, HTTP/JSON, toolchain CLI, REPL, `operon-ls` LSP seed (`src/`) |
+| 1 | **Operon** | 430,009 | ~85% | **self-hosted stdlib (34 modules, generated inventory in [docs/STATS.md](docs/STATS.md)), proof tests, red-team suite, differential corpus, GenomeLab + the ytdl app (incl. the cross-language bench surface)** (`std/ tests/ examples/ apps/`) |
+| 2 | **Rust** | 60,316 | ~12% | lexer, Total Grammar parser, evaluator, capability sandbox, symbol table, HTTP/JSON, toolchain CLI, REPL, `operon-ls` LSP (`src/`) |
 | 3 | **Python** | 9,573 | ~1.9% | bootstrap: reference oracle + differential harness (`bootstrap/`), test infrastructure only, nothing shipped depends on it |
 | 4 | **Shell** | 3,329 | <1% | build/test/bench/stack/install scripts (`scripts/`) |
 | 5 | **JavaScript** | 2,062 | ~0.4% | browser playground subset interpreter (`web/playground/app.js`) |
@@ -271,7 +271,7 @@ operon profile f.op [--chrome trace.json]         # per-gene calls, exclusive se
 operon crispr f.op  (--knockout gene | --matrix) [--json]
 operon bench f.op   [--iters n]
 operon disasm f.op                                # bytecode listing of compiled gene bodies
-operon-ls                                         # stdio LSP: diagnostics, hover, definition, symbols, completion, formatting (SPEC §15)
+operon-ls                                         # stdio LSP: diagnostics, hover, definition, references, rename, semantic tokens, inlay hints, symbols, completion, formatting (SPEC §15)
 operon version                                    # Operon 2.9.3-vm (rust-core, cpp-kernel), banner matches SPEC 2.7.0; -vm = the bytecode machine is the run default (W09 A6)
 ```
 
@@ -343,6 +343,10 @@ itself reaches machines).
 - **Diagnostics on open/change**, parse notes per Total Grammar rung (canonical → hint, synonym → info, wobble → warning, fallback → error) plus phantom-call detection that resolves `use`d modules **independently of the launch directory** (document-relative → CWD → `std/` → exe-relative `std/`).
 - **Hover**, gene/seq signatures with regulation marks (`@acetylate`, `@methylate`, `@m6a`, `enhance`), splice variant tables, builtin signatures.
 - **Go-to-definition** for genes, sequences, and splice roots.
+- **Find references**, word-boundary occurrences that skip strings and comments, declaration included.
+- **Rename** (via prepareRename), all-or-nothing: invalid, reserved, or already-taken names refuse the whole rename with a clear error.
+- **Semantic tokens**, a fixed six-type legend (keyword/function/variable/string/number/comment).
+- **Inlay hints**, the checker's inferred types on un-annotated `let`/`const` bindings (concrete types only — a dynamic `any` binding stays hint-free by design).
 - **Document symbols**, the file's callable inventory in the outline view.
 - **Completion**, in-file genes with signatures, builtins, keywords, top-level bindings.
 - **Formatting**, the same canonical formatter as `operon fmt`.
@@ -422,7 +426,7 @@ Requires: rustc (≥1.70), gcc, g++ (builds the C++ codon kernel). Zero runtime 
 - **Traits**: `trait Show { gene display() }` + `phenotype User implements Show` (W04/SPEC §8b), required methods (contract-checked at construction, notes never fatal) and default methods with virtual dispatch; composes with `from` inheritance.
 - **Errors**: a four-tier hierarchy (SPEC §9), null+note (soft miss) → **Option/Result values** (`some/none/ok/err`, `?!` propagation, `unwrap_or` defaults) → catchable `Stress{kind, message}`, `unfolded | missing | overflow | burned | interference | unwrap | frozen`, plus Total-Grammar runtime notes. Expected failures stay values; Stress is for contract violations. A program never crashes; worst case it narrates what it repaired.
 - **Concurrency**: `spawn(gene, args)` / `join(id)`, real OS threads with value serialization; sequences run on worker cells; timed repressilator threads.
-- **Modules**: `use std/bio;`, TAD-insulated, anchor-controlled exports, module cache, cycle-tolerant. 33 stdlib modules today (generated per-module inventory: [docs/STATS.md](docs/STATS.md)): `args`, `bigint`, `binary`, `bio`, `collections`, `csv`, `deque`, `env`, `fmt`, `fs`, `graph`, `hashing`, `heap`, `iter`, `json`, `logging`, `math`, `motifs`, `path`, `process`, `random`, `result`, `seq`, `serialize`, `set`, `strings`, `try_numeric`, `typed`, `terminal`, `testing`, `time`, `unicode`, `url`, plus the capability-gated `py()` bridge for the scientific-Python deep end. `std/bigint` is the sanctioned escape past the i64 no-wrap overflow contract: exact arbitrary-precision arithmetic over digit lists (20! fits i64, 21! does not, `bigint.big_fact` answers both exactly).
+- **Modules**: `use std/bio;`, TAD-insulated, anchor-controlled exports, module cache, cycle-tolerant. 34 stdlib modules today (generated per-module inventory: [docs/STATS.md](docs/STATS.md)): `args`, `bigint`, `binary`, `bio`, `biocore`, `collections`, `csv`, `deque`, `env`, `fmt`, `fs`, `graph`, `hashing`, `heap`, `iter`, `json`, `logging`, `math`, `motifs`, `path`, `process`, `random`, `result`, `seq`, `serialize`, `set`, `strings`, `try_numeric`, `typed`, `terminal`, `testing`, `time`, `unicode`, `url`, plus the capability-gated `py()` bridge for the scientific-Python deep end. `std/bigint` is the sanctioned escape past the i64 no-wrap overflow contract: exact arbitrary-precision arithmetic over digit lists (20! fits i64, 21! does not, `bigint.big_fact` answers both exactly).
 
 ## Repository layout
 
