@@ -1,0 +1,109 @@
+# sort stability pin (2026-10-09, issue #137 / Z-137-SORTSTABLE): comparator
+# sorts are STABLE — elements the comparator orders equally (cmp false both
+# ways) keep their input order on every surface (VM, tree-walk, --opt 1/2,
+# oracle), so multi-key sorts (`sort(cmpA); sort(cmpB)`) compose.
+# Pre-fix state this pin forecloses: the engine walk swapped on
+# `!cmp(prev, cur)` (reversing every tie group) and the oracle builtin
+# mirrored that walk while the oracle method path (cmp_to_key) was
+# Python-stable — so the SAME program sorted differently across lanes on
+# tie rows. Post-fix, one stable rule: move the current element past its
+# predecessor iff cmp(current, previous) is strictly true; the n>32 merge
+# takes the right head iff cmp(right, left) is strictly true (ties take the
+# left head). Expected values are ground truth (stability = input order),
+# printed as boolean assertions AND raw values.
+gene by_n(a, b) { return a.n < b.n }
+gene by_k(a, b) { return a.k < b.k }
+gene by_t(a, b) { return a.t < b.t }
+gene lt(a, b) { return a < b }
+gene by_float(a, b) { return a + 0.0 < b + 0.0 }
+
+gene main() {
+    # --- the issue's repro: dup-key records, method AND builtin forms -----
+    let recs = [{n: 1, t: "a"}, {n: 1, t: "b"}, {n: 0, t: "c"}]
+    print("method_dupkeys", recs.sort(by_n))
+    print("builtin_dupkeys", sorted(recs, by_n))
+
+    # --- immutable-method contract: .sort(cmp) does NOT mutate ------------
+    print("recv_untouched", recs)
+
+    # --- multi-key trick: sort by secondary THEN primary ------------------
+    # requires stability: equal n keep the by_t order
+    let multi = [{n: 2, t: "x"}, {n: 1, t: "y"}, {n: 2, t: "w"}, {n: 1, t: "z"}]
+    let pass1 = multi.sort(by_t)
+    print("multikey", pass1.sort(by_n))
+
+    # --- tie group across the regime boundary: n <= 32 (walk) -------------
+    let small = []
+    for i in range(12) {
+        push(small, {k: i % 3, tag: i})
+    }
+    let ss = sorted(small, by_k)
+    let ok_small = true
+    for i in range(1, 12) {
+        if ss[i].k == ss[i - 1].k {
+            if ss[i].tag < ss[i - 1].tag {
+                ok_small = false
+            }
+        }
+    }
+    print("stable_walk_12", ok_small)
+    print("stable_walk_head", ss[0].k, ss[0].tag, ss[1].k, ss[1].tag, ss[2].k, ss[2].tag)
+
+    # --- tie group above the boundary: n > 32 (merge) ----------------------
+    let big = []
+    for i in range(50) {
+        push(big, {k: i % 5, tag: i})
+    }
+    let sb = sorted(big, by_k)
+    let ok_big = true
+    for i in range(1, 50) {
+        if sb[i].k == sb[i - 1].k {
+            if sb[i].tag < sb[i - 1].tag {
+                ok_big = false
+            }
+        }
+    }
+    print("stable_merge_50", ok_big)
+    print("stable_merge_group0", sb[0].tag, sb[1].tag, sb[2].tag, sb[3].tag, sb[4].tag)
+
+    # --- method form hits the same merge above 32 --------------------------
+    let big2 = []
+    for i in range(50) {
+        push(big2, {k: (49 - i) % 5, tag: i})
+    }
+    let sb2 = big2.sort(by_k)
+    let ok_m = true
+    for i in range(1, 50) {
+        if sb2[i].k == sb2[i - 1].k {
+            if sb2[i].tag < sb2[i - 1].tag {
+                ok_m = false
+            }
+        }
+    }
+    print("stable_merge_method", ok_m)
+
+    # --- side-effect comparator: call sequence stays lane-identical --------
+    let calls = 0
+    gene cmp_count(a, b) {
+        calls = calls + 1
+        return a < b
+    }
+    let cs = []
+    for i in range(20) {
+        push(cs, (i * 7) % 5)
+    }
+    print("calls_sorted", sorted(cs, cmp_count))
+    print("calls:" + str(calls))
+
+    # --- f64-collapse tie: distinct i64s equal under float coercion --------
+    # 2^53+1 and 2^53 coerce to the same float, so the comparator sees a
+    # tie; stability keeps the input order (pre-fix this pair reversed)
+    print("collapse_tie", sorted([9007199254740993, 9007199254740992], by_float))
+
+    # --- default-sort controls (already stable, one ordering contract) -----
+    print("default_ctrl", [2, 1, 2, 1].sort())
+
+    # --- strings with duplicate keys ---------------------------------------
+    let words = ["bb", "aa", "b", "a", "bb", "aa"]
+    print("dup_strings", sorted(words, lt))
+}
