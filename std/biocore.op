@@ -1,0 +1,308 @@
+# std/biocore, the Bio-Core IR proof-of-concept (R0.1).
+#
+# A shared state/transition/reaction/interaction substrate in pure .op:
+# named species carry numeric levels, declared reactions move them under
+# guards evaluated on the tick-start snapshot, signed interactions feed
+# edge-driven laws, and every applied effect appends to a replayable event
+# log. This is the R0.1 minimal prototype: the vocabulary the bio layer
+# lowers onto, small enough to read in one sitting, with the semantic
+# invariants (INV1..INV5, docs/spec/BIO-CORE-IR.md §3) enforced in code.
+# Zero engine delta by design (class C4): every law here is ordinary .op
+# arithmetic over the mirrored deterministic stream, so both engines run
+# it byte-identically and the differential pin is just the trace.
+#
+# Honesty: this module does NOT reimplement the builtin biology (regulate,
+# @methylate, telegraph stay engine-native per their lowering classes);
+# it demonstrates the substrate new mechanisms lower onto, and the
+# mapping table in BIO-CORE-IR.md §4 cites what already exists.
+
+# ---------------------------------------------------------------- shape
+#
+# A core is a map:
+#   {
+#     "species":      { name: number, ... },
+#     "reactions":    [ reaction, ... ],     # declaration order = application order
+#     "interactions": [ edge, ... ],
+#     "events":       [ event, ... ],        # append-only (INV5)
+#     "t":            int                    # ticks applied so far
+#   }
+# reaction: { "name", "law", "species", "reads", "writes", "guard", "rate", "weight" }
+#   law      one of the closed vocabulary (BIO-CORE-IR.md §2); unknown refused
+#   species  the reaction's target species
+#   reads    species names the guard/law reads (snapshot values)
+#   writes   species names the law may write (INV4, enforced at add time)
+#   guard    null (always fires) or { "lhs", "op", "rhs" } over the snapshot
+#   rate     decay fraction / produce step / stochastic probability
+#   weight   activate/inhibit gain / stoch_produce increment
+# edge:   { "from", "to", "sign": 1 | -1, "weight" }  (sign is documentation
+#         for now; activate/inhibit reactions carry the dynamics)
+# event:  { "t", "reaction", "species", "before", "after" }
+
+gene __bc_copy(m) {
+    # shallow map copy (species levels are numbers; reactions/edges are
+    # shared but never mutated in place — every add returns a new core)
+    let out = {}
+    for k in keys(m) {
+        out[k] = m[k]
+    }
+    return out
+}
+
+gene biocore_laws() {
+    # the closed law vocabulary (L1: a mechanism whose lowering is not
+    # stated here does not enter — unknown laws are refused at add time)
+    return ["decay", "produce", "activate", "inhibit", "stoch_produce"]
+}
+
+gene biocore_new(species) {
+    # species: { name: initial_level, ... }; levels must be numbers
+    for k in keys(species) {
+        let v = species[k]
+        let tn = type(v)
+        if tn != "int" && tn != "float" {
+            return err("species '" + k + "' must start at a number, got " + tn)
+        }
+    }
+    return ok({
+        "species": __bc_copy(species),
+        "reactions": [],
+        "interactions": [],
+        "events": [],
+        "t": 0,
+    })
+}
+
+# ------------------------------------------------------------- validation
+
+gene biocore_validate(core) {
+    # full static check: every reaction names a known law, targets an
+    # existing species, reads/writes only declared species (INV4), and
+    # every interaction's endpoints exist. ok(core) or err(first violation).
+    let sp = core["species"]
+    let names = keys(sp)
+    let laws = biocore_laws()
+    for r in core["reactions"] {
+        if !laws.contains(r["law"]) {
+            return err("reaction '" + r["name"] + "' uses unknown law '" + r["law"] + "'")
+        }
+        if !names.contains(r["species"]) {
+            return err("reaction '" + r["name"] + "' targets unknown species '" + r["species"] + "'")
+        }
+        for need in r["reads"] {
+            if !names.contains(need) {
+                return err("reaction '" + r["name"] + "' reads undeclared species '" + need + "'")
+            }
+        }
+        for w in r["writes"] {
+            if !names.contains(w) {
+                return err("reaction '" + r["name"] + "' writes undeclared species '" + w + "' (INV4)")
+            }
+        }
+    }
+    for e in core["interactions"] {
+        if !names.contains(e["from"]) {
+            return err("interaction from unknown species '" + e["from"] + "'")
+        }
+        if !names.contains(e["to"]) {
+            return err("interaction to unknown species '" + e["to"] + "'")
+        }
+    }
+    return ok(core)
+}
+
+gene biocore_add_reaction(core, r) {
+    # declares one reaction; INV4 enforced EAGERLY — a read/write outside
+    # the declared species set is refused here, not discovered at tick time
+    let names = keys(core["species"])
+    if !biocore_laws().contains(r["law"]) {
+        return err("reaction '" + r["name"] + "' uses unknown law '" + r["law"] + "'")
+    }
+    if !names.contains(r["species"]) {
+        return err("reaction '" + r["name"] + "' targets unknown species '" + r["species"] + "'")
+    }
+    for need in r["reads"] {
+        if !names.contains(need) {
+            return err("reaction '" + r["name"] + "' reads undeclared species '" + need + "'")
+        }
+    }
+    for w in r["writes"] {
+        if !names.contains(w) {
+            return err("reaction '" + r["name"] + "' writes undeclared species '" + w + "' (INV4)")
+        }
+    }
+    let out = __bc_copy(core)
+    push(out["reactions"], r)
+    return ok(out)
+}
+
+gene biocore_add_interaction(core, e) {
+    let names = keys(core["species"])
+    for end in [e["from"], e["to"]] {
+        if !names.contains(end) {
+            return err("interaction endpoint '" + end + "' is not a declared species")
+        }
+    }
+    let out = __bc_copy(core)
+    push(out["interactions"], e)
+    return ok(out)
+}
+
+# ------------------------------------------------------------ evaluation
+
+gene biocore_guard_holds(g, snap) {
+    # guards read the tick-START snapshot (INV2), never a mid-tick write
+    if g == null {
+        return true
+    }
+    let lhs = snap[g["lhs"]]
+    let rhs = g["rhs"]
+    if g["op"] == ">" {
+        return lhs > rhs
+    }
+    if g["op"] == ">=" {
+        return lhs >= rhs
+    }
+    if g["op"] == "<" {
+        return lhs < rhs
+    }
+    if g["op"] == "<=" {
+        return lhs <= rhs
+    }
+    if g["op"] == "==" {
+        return lhs == rhs
+    }
+    if g["op"] == "!=" {
+        return lhs != rhs
+    }
+    return false
+}
+
+gene biocore_edge_from(core, to_name) {
+    # the (first) interaction feeding `to_name`, or null
+    for e in core["interactions"] {
+        if e["to"] == to_name {
+            return e
+        }
+    }
+    return null
+}
+
+gene biocore_tick(core) {
+    # one scheduler pass: snapshot -> candidacy on the snapshot (INV2) ->
+    # effects applied to a working copy in DECLARED order (INV3) -> events
+    # appended (INV5). Returns a NEW core; the input is never mutated
+    # (the stdlib copy law, rand_shuffle precedent).
+    let snap = __bc_copy(core["species"])
+    let work = __bc_copy(core["species"])
+    let events = []
+    let t = core["t"]
+    for r in core["reactions"] {
+        if !biocore_guard_holds(r["guard"], snap) {
+            continue
+        }
+        __bc_apply(r, core, snap, work, t, events)
+    }
+    return {
+        "species": work,
+        "reactions": core["reactions"],
+        "interactions": core["interactions"],
+        "events": core["events"] + events,
+        "t": t + 1,
+    }
+}
+# Applies ONE candidate reaction against the working copy. Every law's
+# arithmetic is stated exactly once (L1); events append to the shared log
+# (INV5). Returns nothing — the mutation IS the effect, in declared order.
+gene __bc_apply(r, core, snap, work, t, events) {
+    if r["law"] == "decay" {
+        # level = level - rate * snapshot_level, floored at zero:
+        # exponential dilution/degradation, the MN-regulate decay half
+        let before = work[r["species"]]
+        let after = before - r["rate"] * snap[r["species"]]
+        if after < 0.0 {
+            after = 0.0
+        }
+        work[r["species"]] = after
+        push(events, {"t": t, "reaction": r["name"], "species": r["species"], "before": before, "after": after})
+        return
+    }
+    if r["law"] == "produce" {
+        # level = level + rate: constant-flux production
+        let before = work[r["species"]]
+        let after = before + r["rate"]
+        work[r["species"]] = after
+        push(events, {"t": t, "reaction": r["name"], "species": r["species"], "before": before, "after": after})
+        return
+    }
+    if r["law"] == "activate" {
+        # to += weight * snapshot(from): positive edge, snapshot read
+        let edge = biocore_edge_from(core, r["species"])
+        if edge != null {
+            let before = work[r["species"]]
+            let after = before + edge["weight"] * snap[edge["from"]]
+            work[r["species"]] = after
+            push(events, {"t": t, "reaction": r["name"], "species": r["species"], "before": before, "after": after})
+        }
+        return
+    }
+    if r["law"] == "inhibit" {
+        # to = max(0, to - weight * snapshot(from)): negative edge
+        let edge = biocore_edge_from(core, r["species"])
+        if edge != null {
+            let before = work[r["species"]]
+            let after = before - edge["weight"] * snap[edge["from"]]
+            if after < 0.0 {
+                after = 0.0
+            }
+            work[r["species"]] = after
+            push(events, {"t": t, "reaction": r["name"], "species": r["species"], "before": before, "after": after})
+        }
+        return
+    }
+    if r["law"] == "stoch_produce" {
+        # seeded stochastic: one draw on the shared mirrored stream per
+        # CANDIDATE (guard passed); same seed, same trace (INV1) — the
+        # telegraph precedent, the C5 seeded-reaction law. rate is the
+        # per-tick probability, weight the increment.
+        if random() < r["rate"] {
+            let before = work[r["species"]]
+            let after = before + r["weight"]
+            work[r["species"]] = after
+            push(events, {"t": t, "reaction": r["name"], "species": r["species"], "before": before, "after": after})
+        }
+        return
+    }
+}
+
+gene biocore_run(core, n) {
+    # n scheduler passes; n <= 0 returns the core unchanged.
+    # NOTE: plain assignment, not `let` — a let inside the loop body would
+    # shadow per block-scope and tick the ORIGINAL every iteration.
+    let out = core
+    let i = 0
+    while i < n {
+        out = biocore_tick(out)
+        i = i + 1
+    }
+    return out
+}
+
+# --------------------------------------------------------------- reading
+
+gene biocore_species(core, name) {
+    return core["species"][name]
+}
+
+gene biocore_trace(core) {
+    # the event log: the parity artifact (INV5 — replayable, append-only)
+    return core["events"]
+}
+
+gene biocore_render(core) {
+    # deterministic one-line-per-event rendering for pins and diffs
+    let lines = []
+    for e in core["events"] {
+        push(lines, "t=" + str(e["t"]) + " " + e["reaction"] + " " + e["species"] + " " + str(e["before"]) + "->" + str(e["after"]))
+    }
+    return lines.join("\n")
+}

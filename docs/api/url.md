@@ -4,12 +4,16 @@
 
 ## `gene url_encode(s)`
 
-Percent-encode: every byte outside the unreserved set becomes %XX.
+Percent-encode: every BYTE outside the unreserved set becomes %XX,
+where the bytes are the UTF-8 encoding of the character (ASCII stays
+one byte; scalars >= 128 emit 2/3/4 escapes).
 
 ## `gene url_decode(s)`
 
 Decode %XX (and "+" as space, the query form); a malformed escape keeps
-its raw characters. Lenient by contract, never fails.
+its raw characters. Valid UTF-8 multi-byte sequences reassemble into one
+character; a lead byte without its full continuation run falls back to
+byte-per-character output. Lenient by contract, never fails.
 
 ## `gene url_parse(u)`
 
@@ -28,8 +32,25 @@ The RFC 3986 unreserved set, one character at a time.
 
 ## `gene url_hex_escape(cp)`
 
-Uppercase two-digit hex for one code point (// keeps the digits integer;
-a float into chr degrades to empty on both cores).
+Uppercase two-digit hex for one BYTE (0..255; // keeps the digits
+integer; a float into chr degrades to empty on both cores).
+
+## `gene url_escape_char(c)`
+
+One character -> its percent-encoded UTF-8 bytes. ASCII (or any scalar
+already < 128) is a single %XX; larger scalars emit one %XX per UTF-8
+byte so the wire form is honest RFC 3986 (was: raw codepoint hex, which
+produced invalid escapes with garbage digits for cp >= 256).
+
+## `gene url_octet_at(s, i, n)`
+
+One %XX octet at index i in s (length n); -1 when the position is out
+of range, does not start with '%', or the hex digits are invalid.
+
+## `gene url_is_cont(b)`
+
+UTF-8 continuation-byte test (0x80..0xBF) on an octet value; -1 inputs
+(malformed position) simply fail the range test.
 
 ## `gene url_hex_digit(v)`
 

@@ -1,0 +1,49 @@
+# biocore pin (2026-10-08): R0.1 Bio-Core IR substrate, byte-identical
+# across vm / tree-walk / oracle. Deterministic laws (decay multiplicative
+# on the snapshot, produce additive, activate/inhibit edge-driven, guards
+# on the tick-start snapshot, declared-order effects, append-only event
+# log) PLUS the seeded stoch_produce replay — the stochastic half rides
+# the mirrored random() stream, so same seed = same trace on every engine
+# (the telegraph precedent). Values printed raw AND as boolean assertions
+# so the byte-pin carries the truth. Expected values computed by hand over
+# exactly 4 ticks (snapshots are tick-start values; effects apply to the
+# working copy in declared order):
+#   a (decay 0.25): 8 -> 6 -> 4.5 -> 3.375 -> 2.53125
+#   b (produce 3):  0 -> 3 -> 6 -> 9 -> 12
+#   c: feed = +0.5 * snapshot(b) = +1.5, +3, +4.5, +6; overflow fires on
+#      tick 3 (snapshot c = 4.5 >= 4) and applies AFTER feed on the
+#      working copy: 4.5 +4.5 = 9 -> 9 + 10 = 19
+#   events: 3 + 3 + 3 + 4 = 13 (overflow joins on the last tick)
+use std/biocore;
+gene main() {
+    let core = unwrap(biocore_new({"a": 8.0, "b": 0.0, "c": 0.0}))
+    let c1 = unwrap(biocore_add_reaction(core, {"name": "d1", "law": "decay", "species": "a", "reads": [], "writes": ["a"], "guard": null, "rate": 0.25, "weight": 0}))
+    let c2 = unwrap(biocore_add_reaction(c1, {"name": "p1", "law": "produce", "species": "b", "reads": [], "writes": ["b"], "guard": null, "rate": 3, "weight": 0}))
+    let c3 = unwrap(biocore_add_interaction(c2, {"from": "b", "to": "c", "sign": 1, "weight": 0.5}))
+    let c4 = unwrap(biocore_add_reaction(c3, {"name": "feed", "law": "activate", "species": "c", "reads": ["b"], "writes": ["c"], "guard": null, "rate": 0, "weight": 0}))
+    let c5 = unwrap(biocore_add_reaction(c4, {"name": "overflow", "law": "produce", "species": "c", "reads": ["c"], "writes": ["c"], "guard": {"lhs": "c", "op": ">=", "rhs": 4}, "rate": 10, "weight": 0}))
+    print("-- deterministic 4 ticks --")
+    let out = biocore_run(c5, 4)
+    print(biocore_species(out, "a"))
+    print(biocore_species(out, "b"))
+    print(biocore_species(out, "c"))
+    print(biocore_render(out))
+    # hand-checks (raw values pinned above carry the truth; these keep the
+    # file a self-proving artifact)
+    print(biocore_species(out, "a") == 2.53125)
+    print(biocore_species(out, "b") == 12)
+    print(biocore_species(out, "c") == 19.0)
+    print(len(biocore_trace(out)) == 13)
+    print("-- seeded stochastic replay (INV1) --")
+    randomize(42)
+    let s0 = unwrap(biocore_new({"pulse": 0.0}))
+    let s1 = unwrap(biocore_add_reaction(s0, {"name": "fire", "law": "stoch_produce", "species": "pulse", "reads": [], "writes": ["pulse"], "guard": null, "rate": 0.5, "weight": 1}))
+    let sa = biocore_render(biocore_run(s1, 10))
+    randomize(42)
+    let sb = biocore_render(biocore_run(s1, 10))
+    print(sa)
+    print(sa == sb)
+    print("-- input immutability (the copy law) --")
+    print(biocore_species(c5, "a"))
+    print(len(biocore_trace(c5)))
+}
