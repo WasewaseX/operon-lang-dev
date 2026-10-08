@@ -1,0 +1,150 @@
+# std/arrays, R0.2 proof: the typed numeric array substrate's laws, exercised
+# as executable assertions. Law numbering matches docs/spec/NUMERIC-ARRAYS.md:
+#   A1 type law       — stored elements match the declared dtype exactly;
+#                       construction is the one Int->Float promoter
+#   A2 shape law      — identical shapes for element-wise ops, (m x k)(k x n)
+#                       for matmul, same size for reshape; exact refusals
+#   A3 host mirror    — element-wise arithmetic IS the host's arithmetic:
+#                       int stays int, division is always true division
+#                       (Float), div-by-zero refused eagerly (a numarr
+#                       never stores null)
+#   A4 order law      — one sequential left-to-right pass; int sums stay
+#                       EXACT; float sums pin the host's f64 accumulation
+#   A5 stability law  — argmin/argmax return the FIRST occurrence
+#   A6 copy law       — mutators return new arrays; inputs untouched
+# Plus matmul/transpose/reshape exactness against hand-computed values and
+# the deterministic render contract.
+use std/arrays as ar;
+
+frame proof {
+    # --- A1: construction, promotion, refusals ---------------------------
+    let v = unwrap(ar.arr_from_list([1, 2, 3, 4], "int"))
+    assert(ar.arr_dtype(v) == "int", "dtype honored as declared")
+    let f = unwrap(ar.arr_from_list([1, 2.5, 3], "float"))
+    assert(ar.arr_dtype(f) == "float", "float dtype declared")
+    assert(unwrap(ar.arr_get(f, [0])) == 1.0 && type(unwrap(ar.arr_get(f, [0]))) == "float", "Int->Float promotion at construction (A1)")
+    assert(is_err(ar.arr_from_list([1, "a"], "int")), "str element refused")
+    assert(is_err(ar.arr_from_list([1.5], "int")), "float into int refused (lossy)")
+    assert(is_err(ar.arr_from_list([], "int")), "empty vectors refused (every dim >= 1)")
+    assert(is_err(ar.arr_new([3], 1, "rational")), "unknown dtype refused")
+    assert(is_err(ar.arr_new([0], 1, "int")), "zero dim refused")
+    assert(is_err(ar.arr_new([2, 2, 2], 1, "int")), "rank 3 refused in v1")
+    let bad = {"tag": "numarr", "dtype": "int", "shape": [2], "data": [1, 2.5]}
+    assert(is_err(ar.arr_validate(bad)), "validate walks EVERY element (deep A1)")
+    assert(is_err(ar.arr_validate({"tag": "vector", "dtype": "int", "shape": [1], "data": [1]})), "tag law enforced")
+
+    # --- A1: set conforms exactly; A6: copy-on-write ----------------------
+    let m = unwrap(ar.arr_new([2, 2], 0.0, "float"))
+    let m2 = unwrap(ar.arr_set(m, [1, 1], 9.5))
+    assert(unwrap(ar.arr_get(m2, [1, 1])) == 9.5, "set lands at the index")
+    assert(unwrap(ar.arr_get(m, [1, 1])) == 0.0, "A6: original untouched (copy-on-write)")
+    assert(is_err(ar.arr_set(m, [0, 0], 1)), "A1: set refuses int into float (convert explicitly)")
+    assert(is_err(ar.arr_set(m, [0, 0], "x")), "set refuses non-numbers")
+    assert(is_err(ar.arr_set(m, [0], 1.0)), "index rank must match array rank")
+    assert(is_err(ar.arr_get(m, [2, 0])), "A2: out-of-bounds refused")
+    assert(is_err(ar.arr_get(m, [-1, 0])), "negative indices refused (no hidden wrap)")
+
+    # --- A3: host mirror arithmetic ---------------------------------------
+    let a = unwrap(ar.arr_from_list([1, 2, 3], "int"))
+    let b = unwrap(ar.arr_from_list([10, 20, 30], "int"))
+    let s = unwrap(ar.arr_add(a, b))
+    assert(ar.arr_dtype(s) == "int", "int + int stays int (A3)")
+    assert(unwrap(ar.arr_get(s, [0])) == 11, "exact element-wise sum")
+    let d = unwrap(ar.arr_div(a, b))
+    assert(ar.arr_dtype(d) == "float", "A3: division is ALWAYS true division -> float")
+    assert(unwrap(ar.arr_get(d, [1])) == 0.1, "2/20 == 0.1 exact float")
+    let mixed = unwrap(ar.arr_add(a, 2.5))
+    assert(ar.arr_dtype(mixed) == "float", "int array + float scalar promotes (host law)")
+    assert(unwrap(ar.arr_get(mixed, [2])) == 5.5, "scalar broadcast exact")
+    assert(is_err(ar.arr_div(a, 0)), "A3: scalar zero divisor refused eagerly")
+    assert(is_err(ar.arr_div(a, unwrap(ar.arr_from_list([1, 0, 3], "int")))), "A3: zero element divisor refused eagerly")
+    match ar.arr_div(a, unwrap(ar.arr_from_list([1, 0, 3], "int"))) {
+        case Err(msg) {
+            assert(msg == "division by zero at flat index 1 (A3: refused, a numarr never stores null)", "refusal names the flat index")
+        }
+        case Ok(x) {
+            assert(false, "div-by-zero must be Err")
+        }
+    }
+    # --- A2: shape law refusals -------------------------------------------
+    let b21 = unwrap(ar.arr_reshape(unwrap(ar.arr_from_list([1, 2, 3, 4, 5, 6], "int")), [2, 3]))
+    let b12 = unwrap(ar.arr_reshape(unwrap(ar.arr_from_list([1, 2, 3, 4, 5, 6], "int")), [3, 2]))
+    assert(is_err(ar.arr_add(b21, b12)), "A2: [2,3] vs [3,2] refused")
+    assert(is_err(ar.arr_matmul(b21, b21)), "A2: matmul inner dims [2,3]x[2,3] refused")
+    assert(is_err(ar.arr_reshape(a, [2, 2])), "A2: reshape size mismatch refused")
+    match ar.arr_add(b21, b12) {
+        case Err(msg) {
+            assert(msg == "shape mismatch: [2, 3] vs [3, 2] (A2)", "refusal names both shapes")
+        }
+        case Ok(x) {
+            assert(false, "shape mismatch must be Err")
+        }
+    }
+    assert(is_err(ar.arr_dot(a, unwrap(ar.arr_from_list([1, 2], "int")))), "dot length mismatch refused")
+    assert(is_err(ar.arr_matmul(a, a)), "matmul requires rank 2")
+    assert(is_err(ar.arr_transpose(a)), "transpose requires rank 2")
+
+    # --- linear algebra: exact hand-computed values ------------------------
+    let m22 = unwrap(ar.arr_reshape(unwrap(ar.arr_from_list([1, 2, 3, 4], "int")), [2, 2]))
+    let mm = unwrap(ar.arr_matmul(m22, m22))
+    assert(unwrap(ar.arr_get(mm, [0, 0])) == 7 && unwrap(ar.arr_get(mm, [0, 1])) == 10, "int matmul row 0 exact: [7, 10]")
+    assert(unwrap(ar.arr_get(mm, [1, 1])) == 22, "int matmul exact: 3*2+4*4=22, stays int")
+    assert(ar.arr_dtype(mm) == "int", "int x int matmul stays int (A3)")
+    let mf = unwrap(ar.arr_reshape(unwrap(ar.arr_from_list([1.5, 2.0, 0.5, 1.0, 2.0, 1.0], "float")), [2, 3]))
+    let mft = unwrap(ar.arr_transpose(mf))
+    let mmf = unwrap(ar.arr_matmul(mf, mft))
+    assert(unwrap(ar.arr_get(mmf, [0, 0])) == 6.5 && unwrap(ar.arr_get(mmf, [0, 1])) == 6.0, "float matmul exact vs hand: [[6.5, 6.0], [6.0, 6.0]]")
+    assert(ar.arr_dtype(unwrap(ar.arr_matmul(mf, unwrap(ar.arr_ones([3, 2], "int"))))) == "float", "float x int matmul promotes (A3)")
+    let tp = unwrap(ar.arr_transpose(m22))
+    assert(unwrap(ar.arr_get(tp, [0, 1])) == 3 && unwrap(ar.arr_get(tp, [1, 0])) == 2, "transpose exact: [1,3][2,4]")
+
+    # --- A4: reductions, order + exactness ---------------------------------
+    assert(unwrap(ar.arr_sum(a)) == 6, "int sum exact")
+    let big = unwrap(ar.arr_from_list([4611686018427387904, 1, 1], "int"))
+    assert(unwrap(ar.arr_sum(big)) == 4611686018427387906, "A4: int sums stay EXACT (no float collapse at 2^62)")
+    let tiny = unwrap(ar.arr_from_list([0.1, 0.2, 0.3], "float"))
+    assert(str(unwrap(ar.arr_sum(tiny))) == "0.6000000000000001", "A4: float sum pins sequential f64 accumulation (host parity)")
+    assert(unwrap(ar.arr_min(tiny)) == 0.1 && unwrap(ar.arr_max(tiny)) == 0.3, "min/max exact")
+    assert(unwrap(ar.arr_mean(a)) == 2.0, "mean of ints is true-division float")
+    assert(str(unwrap(ar.arr_mean(unwrap(ar.arr_from_list([1, 2, 4], "int"))))) == "2.3333333333333335", "mean repr is CPython parity (7/3)")
+    assert(type(unwrap(ar.arr_mean(a))) == "float", "mean is ALWAYS float")
+    assert(unwrap(ar.arr_dot(a, b)) == 140, "dot exact: 10+40+90")
+
+    # --- A5: first-occurrence stability -------------------------------------
+    let dup = unwrap(ar.arr_from_list([5, 9, 9, 2], "int"))
+    assert(unwrap(ar.arr_argmax(dup)) == 1, "A5: argmax returns FIRST occurrence")
+    assert(unwrap(ar.arr_argmin(unwrap(ar.arr_from_list([1.5, 1.5, 2.0], "float")))) == 0, "A5: argmin first occurrence across dtype")
+
+    # --- A6: readers return copies ------------------------------------------
+    let sh = ar.arr_shape(m22)
+    push(sh, 99)
+    assert(len(ar.arr_shape(m22)) == 2, "A6: mutating the returned shape list cannot reach the array")
+    let dl = ar.arr_to_list(a)
+    push(dl, 99)
+    assert(len(ar.arr_to_list(a)) == 3, "A6: mutating the returned data list cannot reach the array")
+
+    # --- negate/abs dtype-preserving + reshape reindex -----------------------
+    let ng = unwrap(ar.arr_neg(m22))
+    assert(unwrap(ar.arr_get(ng, [1, 0])) == -3, "neg exact, dtype kept")
+    assert(ar.arr_dtype(ng) == "int", "neg preserves int dtype")
+    let ab = unwrap(ar.arr_abs(ng))
+    assert(unwrap(ar.arr_get(ab, [1, 0])) == 3, "abs exact")
+    let rs = unwrap(ar.arr_reshape(unwrap(ar.arr_from_list([1, 2, 3, 4, 5, 6], "int")), [3, 2]))
+    assert(unwrap(ar.arr_get(rs, [2, 1])) == 6, "reshape is row-major reindex")
+
+    # --- render contract -----------------------------------------------------
+    assert(ar.arr_render(m22) == "numarr<int shape=[2, 2]> [1, 2] [3, 4]", "render: exact matrix form")
+    assert(ar.arr_render(a) == "numarr<int shape=[3]> [1, 2, 3]", "render: exact vector form")
+    assert(ar.arr_render(unwrap(ar.arr_ones([2], "float"))) == "numarr<float shape=[2]> [1.0, 1.0]", "render: float repr via host str law")
+
+    # --- infer ----------------------------------------------------------------
+    assert(ar.arr_dtype(unwrap(ar.arr_infer([1, 2, 3]))) == "int", "infer: all int -> int")
+    assert(ar.arr_dtype(unwrap(ar.arr_infer([1, 2.0]))) == "float", "infer: any float -> float")
+    assert(is_err(ar.arr_infer([1, "x"])), "infer refuses non-numbers")
+
+    # --- zeros/ones ------------------------------------------------------------
+    let z = unwrap(ar.arr_zeros([2, 3], "float"))
+    assert(unwrap(ar.arr_get(z, [1, 2])) == 0.0, "zeros promoted to 0.0 for float dtype")
+    let o = unwrap(ar.arr_ones([3], "int"))
+    assert(unwrap(ar.arr_sum(o)) == 3, "ones int exact")
+}

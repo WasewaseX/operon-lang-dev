@@ -115,7 +115,7 @@
   "methylate",
   "riboswitch"
  ],
- "proof_files": 168,
+ "proof_files": 169,
  "proof_totals": {
   "asserts": null,
   "files": null,
@@ -127,12 +127,16 @@
   "h1": "# Operon, Language Specification",
   "status": "v2.9.3"
  },
- "std_function_count": 362,
- "std_module_count": 34,
+ "std_function_count": 399,
+ "std_module_count": 35,
  "std_modules": [
   {
    "functions": 9,
    "module": "args"
+  },
+  {
+   "functions": 37,
+   "module": "arrays"
   },
   {
    "functions": 20,
@@ -267,6 +271,6 @@
    "module": "url"
   }
  ],
- "test_op_files": 3587,
+ "test_op_files": 3592,
  "version": "2.9.3"
 }
