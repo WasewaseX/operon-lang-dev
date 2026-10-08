@@ -690,7 +690,20 @@ pub fn deps_cache_dir() -> Option<PathBuf> {
 }
 
 pub fn cache_dir_for(name: &str, rev: &str) -> Option<PathBuf> {
-    deps_cache_dir().map(|d| d.join(format!("{}-{}", name, &rev[..rev.len().min(12)])))
+    // #114 (S0 security): `name` lands in `d.join(...)` — an unsanitized
+    // name let `../` traverse OUT of the deps cache and an absolute path
+    // REPLACE the base entirely, and both callers then remove_dir_all(dest)
+    // + plant a checkout there (arbitrary rmtree/planting from a hostile
+    // vendored operon.toml transitive dep). Every name flow (remote
+    // registry entries, vendored transitive deps, manifest [deps] keys,
+    // --as NAME) funnels through HERE, so one gate closes all four.
+    if !valid_pkg_name(name) {
+        die_pkg(&format!(
+            "invalid package name '{}' (must match [a-z_][a-z0-9_-]*, max 64 chars) — refusing to build a cache path",
+            name
+        ));
+    }
+    deps_cache_dir().map(|d| d.join(format!("{}-{}", name, byte_prefix(rev, 12))))
 }
 
 /// Content digest of a vendored checkout: sha256 over the sorted
@@ -1101,8 +1114,8 @@ fn resolve_registry_dep(
                         src,
                         reg_name,
                         req.raw_str(),
-                        &pick.rev[..pick.rev.len().min(12)],
-                        &p[..p.len().min(12)],
+                        byte_prefix(pick.rev.as_str(), 12),
+                        byte_prefix(p, 12),
                         reg_name,
                         req.raw_str()
                     ));
@@ -1181,7 +1194,7 @@ fn resolve_registry_dep(
 /// verified by re-checksumming the destination.
 fn resolve_dir_dep(name: &str, dir: &Path) -> LockEntry {
     let checksum = checkout_checksum(dir);
-    let rev = format!("content-{}", &checksum[..checksum.len().min(16)]);
+    let rev = format!("content-{}", byte_prefix(&checksum, 16));
     let dest = cache_dir_for(name, &rev).unwrap_or_else(|| die_pkg("cannot locate the deps cache"));
     let _ = std::fs::remove_dir_all(&dest);
     if let Some(parent) = dest.parent() {
@@ -1461,7 +1474,7 @@ pub fn mod_command(rest: &[String]) -> ! {
                         entry.version,
                         src,
                         source_note,
-                        &entry.sha256[..entry.sha256.len().min(12)]
+                        byte_prefix(&entry.sha256, 12)
                     );
                 } else {
                     // name: derived from the URL's basename, or --as NAME
@@ -2113,6 +2126,17 @@ fn registry_source(explicit: Option<&str>) -> String {
 /// note, §9 for the hosted tier).
 fn registry_read(src: &str) -> String {
     if src.starts_with("http://") || src.starts_with("https://") {
+        // #114 (S0 security): the source is a curl ARGUMENT — a checked-in
+        // operon.toml with `[registry] path = "-K./curlcfg"` made curl parse
+        // a repo-shipped config (arbitrary url/output -> arbitrary file
+        // write/read as the user). Reject every option-shaped source; a
+        // registry URL can never begin with '-'.
+        if src.starts_with('-') {
+            die_pkg(&format!(
+                "registry '{}' is option-shaped — refusing to pass it as a curl argument",
+                src
+            ));
+        }
         let mut cmd = std::process::Command::new("curl");
         cmd.args(["-sSL", "--max-time", "30", src]);
         // ai/ecosystem-r3 (item 10 hardening): private-CA registries. curl
@@ -2155,6 +2179,19 @@ fn registry_read(src: &str) -> String {
 
 /// True when `name` is a legal package name (lowercase ident-ish: the
 /// same character class operon.toml's name field accepts).
+/// #114: char-boundary-safe prefix — `s[..n]` panics ("byte index N is
+/// not a char boundary") on multibyte strings, and lockfile/registry
+/// strings are HOSTILE input (a corrupt `rev = "aaaaaéééé"` panicked
+/// every `operon run` through apply_lock). Snap the end back to a
+/// boundary; hex digests are unaffected, multibyte junk truncates safely.
+fn byte_prefix(s: &str, n: usize) -> &str {
+    let mut end = n.min(s.len());
+    while end > 0 && !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    &s[..end]
+}
+
 fn valid_pkg_name(name: &str) -> bool {
     if name.is_empty() || name.len() > 64 {
         return false;
@@ -2538,6 +2575,31 @@ mod tests {
         assert!(SemVer::parse("1.2.3-rc1").is_err()); // pre-release rejected loudly
         assert!(v("2.0.0") < v("10.0.0"));
         assert!(v("1.2.3") < v("1.10.0")); // numeric, not lexicographic
+    }
+
+    // ---- #114 (S0 security): name gating + char-boundary truncation ----
+
+    #[test]
+    fn byte_prefix_snaps_to_char_boundary() {
+        // hex digests are unaffected
+        assert_eq!(byte_prefix("abcdef1234567890", 12), "abcdef123456");
+        // a multibyte rev used to panic: "byte index N is not a char boundary"
+        let hostile = "aaaaa\u{e9}\u{e9}\u{e9}\u{e9}"; // 5 ascii + 4 x 2-byte = 13 bytes
+                                                       // byte 12 lands inside the last e-acute: snap back to 11
+        assert_eq!(byte_prefix(hostile, 12).len(), 11);
+        assert_eq!(byte_prefix(hostile, 12), "aaaaa\u{e9}\u{e9}\u{e9}");
+    }
+
+    #[test]
+    fn valid_pkg_name_rejects_traversal_shapes() {
+        assert!(valid_pkg_name("json"));
+        assert!(valid_pkg_name("_ok-name"));
+        assert!(!valid_pkg_name("../evil"));
+        assert!(!valid_pkg_name("../../.config/systemd/user/evil"));
+        assert!(!valid_pkg_name("/absolute/path"));
+        assert!(!valid_pkg_name(""));
+        assert!(!valid_pkg_name("UPPER"));
+        assert!(!valid_pkg_name("a b"));
     }
 
     #[test]
