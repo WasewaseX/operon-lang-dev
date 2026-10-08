@@ -4161,20 +4161,25 @@ impl Interp {
         }
     }
 
-    /// P2 (BENCH.md §P2): the comparator-driven sort was insertion sort —
-    /// n²/4 comparator calls BY ALGORITHM (2026-10-04 audit: 15,997,582
-    /// calls at n=8k, 6.1 s vs CPython's builtin 0.9 ms). This helper keeps
-    /// the exact per-element contract (`cmp(a, b)` truthy when a belongs
-    /// BEFORE b, SPEC §sorted-order) and the exact tie semantics of the
-    /// insertion walk: a tie (cmp false both ways) swaps, so tie groups end
-    /// up REVERSED relative to the input order. Bottom-up merge with the
-    /// rule "take right iff NOT cmp(left_head, right_head)" reproduces that
-    /// byte-for-byte (derived from the walk and pinned in
-    /// tests/differential/p2p3p5_opt_pins.op), while cutting comparisons
-    /// from n²/4 to ~n log n. Inputs of ≤ 32 elements keep the original
+    /// Z-137-SORTSTABLE (issue #137): the comparator-driven sort is STABLE —
+    /// equal-key elements keep their input order, a tie (cmp false both
+    /// ways) NEVER reorders. The law lives at this shared choke point for
+    /// every surface (VM, tree-walk, --opt) and both size regimes; the
+    /// oracle mirrors it byte-for-byte (bootstrap/oracle.py
+    /// _comparator_sort_walk), including the comparator call direction:
+    /// every step invokes `cmp(second, first)` and swaps/takes the right
+    /// element IFF it STRICTLY belongs before the left one. History: P2
+    /// (BENCH.md §P2) replaced the n²/4 insertion walk (2026-10-04 audit:
+    /// 15,997,582 calls at n=8k, 6.1 s vs CPython's builtin 0.9 ms) with a
+    /// bottom-up merge (~n log n) above n=32; the pre-Z-137 tie rule swapped
+    /// on ties, so tie groups came out REVERSED and the method-form ties
+    /// diverged from the oracle's Python-stable path (issue #137). The
+    /// per-element contract is unchanged (`cmp(a, b)` truthy when a belongs
+    /// BEFORE b, SPEC §sorted-order). Inputs of ≤ 32 elements keep the
     /// insertion walk VERBATIM, so every small pinned program (and any
-    /// comparator with side effects at corpus scale) keeps its exact
-    /// comparator call order.
+    /// comparator with side effects at corpus scale) keeps a per-step
+    /// one-call order; both stable regimes produce the same final order by
+    /// construction, pinned in tests/differential/sort_stability_pin.op.
     fn comparator_sort(
         &mut self,
         env: &Rc<Env>,
@@ -4186,14 +4191,18 @@ impl Interp {
             return Ok(());
         }
         if n <= 32 {
-            // the original insertion walk, verbatim
+            // the insertion walk, verbatim in shape — with the Z-137 stable
+            // tie law: each step calls cmp(second, first) and swaps IFF the
+            // right element STRICTLY belongs before the left one; a tie
+            // (cmp false both ways) stops the walk, so equal keys keep
+            // their input order
             for i in 1..n {
                 let mut j = i;
                 while j > 0 {
-                    let a = v[j - 1].clone();
-                    let b = v[j].clone();
-                    let before = self.call_value(env, cmp, vec![a, b])?.truthy();
-                    if !before {
+                    let a = v[j].clone();
+                    let b = v[j - 1].clone();
+                    let strictly_before = self.call_value(env, cmp, vec![a, b])?.truthy();
+                    if strictly_before {
                         v.swap(j - 1, j);
                         j -= 1;
                     } else {
@@ -4218,17 +4227,19 @@ impl Interp {
                 let (mut a, mut b) = (i, mid);
                 buf.clear();
                 while a < mid && b < end {
-                    // the tie rule: take right unless the left head
-                    // explicitly belongs before it
-                    let before = self
-                        .call_value(env, cmp, vec![v[a].clone(), v[b].clone()])?
+                    // the Z-137 stable tie rule: take the right head IFF it
+                    // STRICTLY belongs before the left head; a tie takes the
+                    // left, so equal keys keep their input order (stable
+                    // merge = stable insertion, identical final order)
+                    let strictly_before = self
+                        .call_value(env, cmp, vec![v[b].clone(), v[a].clone()])?
                         .truthy();
-                    if before {
-                        buf.push(v[a].clone());
-                        a += 1;
-                    } else {
+                    if strictly_before {
                         buf.push(v[b].clone());
                         b += 1;
+                    } else {
+                        buf.push(v[a].clone());
+                        a += 1;
                     }
                 }
                 buf.extend_from_slice(&v[a..mid]);
@@ -7955,9 +7966,10 @@ impl Interp {
                         Some(Value::Gene(_, _)) => {
                             // ast-grep-ignore: no-unwrap-in-src
                             let cmp = args.get(1).unwrap().clone();
-                            // P2: shared comparator sort (insertion walk ≤ 32,
-                            // tie-exact merge above) — the exact `.sort()`
-                            // contract, non-mutating output. See comparator_sort.
+                            // P2 + Z-137: shared comparator sort (stable
+                            // insertion ≤ 32, stable bottom-up merge above) —
+                            // the exact `.sort()` contract, non-mutating
+                            // output, ties keep input order. See comparator_sort.
                             self.comparator_sort(env, &mut v, &cmp)?;
                         }
                         _ => {
@@ -12059,8 +12071,8 @@ impl Interp {
                     let cmp = args.first().cloned().unwrap_or(Value::Null);
                     let mut v = l.borrow().clone();
                     if let Value::Gene(_, _) = &cmp {
-                        // P2: shared comparator sort (insertion walk ≤ 32,
-                        // tie-exact merge above) — see comparator_sort
+                        // P2 + Z-137: shared comparator sort (stable insertion
+                        // ≤ 32, stable bottom-up merge above) — see comparator_sort
                         self.comparator_sort(env, &mut v, &cmp)?;
                     } else {
                         // default: numbers and strings ascending, mixed-type

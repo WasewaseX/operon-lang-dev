@@ -1,0 +1,71 @@
+# Z-137-SORTSTABLE differential pin (issue #137): the comparator sort is
+# STABLE on every surface — equal-key elements keep their input order, a
+# tie (cmp false both ways) never swaps — byte-identical across the VM,
+# the tree-walk, --opt and the oracle, in BOTH size regimes (insertion
+# <= 32, bottom-up merge > 32) and both forms (the sorted() builtin and
+# the .sort() method share one walk, one call order). Because of this law
+# the two-pass multi-key idiom (sort by secondary, then by primary) groups
+# correctly. Companion to p2p3p5_opt_pins.op (which pins the performance
+# walk); this file pins the ORDER law.
+print("== S1: the issue repro, dup-key records ==")
+print([{n:1,t:"a"},{n:1,t:"b"},{n:0,t:"c"}].sort(gene (a,b){ a.n < b.n }))
+print("== S2: stability, insertion regime (n <= 32), method form ==")
+gene by_len(a, b) { return len(a) < len(b) }
+let words = ["pear", "fig", "apple", "fig2", "kiwi", "apple2", "plum", "fig3"]
+print(words.sort(by_len).join("|"))
+print("== S3: stability, merge regime (n > 32), method form ==")
+let recs = []
+for i in range(40) {
+    push(recs, {k: i % 5, tag: "r" + str(i)})
+}
+let ranked = recs.sort(gene (a, b) { return a.k < b.k })
+let sig = ""
+for i in range(40) {
+    sig = sig + str(ranked[i].k) + ":" + ranked[i].tag + " "
+}
+print(sig)
+print("== S4: two-pass multi-key idiom (secondary first, then primary) ==")
+let rows = []
+for i in range(24) {
+    push(rows, {dept: i % 4, score: (i * 7) % 10, name: "e" + str(i)})
+}
+rows = rows.sort(gene (a, b) { return a.score < b.score })
+rows = rows.sort(gene (a, b) { return a.dept < b.dept })
+let msig = ""
+for i in range(24) {
+    msig = msig + str(rows[i].dept) + "/" + str(rows[i].score) + " "
+}
+print(msig)
+print("== S5: comparator call count is a pinned observable (insertion) ==")
+let calls = 0
+gene probe(a, b) {
+    calls = calls + 1
+    return a < b
+}
+let cs = []
+for i in range(12) {
+    push(cs, (i * 5) % 3)
+}
+print(cs.sort(probe).join(","))
+print("calls:" + str(calls))
+print("== S6: comparator call count (merge regime) ==")
+let calls2 = 0
+gene probe2(a, b) {
+    calls2 = calls2 + 1
+    return a < b
+}
+let big = []
+for i in range(40) {
+    push(big, (i * 11) % 7)
+}
+print(big.sort(probe2).join(","))
+print("calls2:" + str(calls2))
+print("== S7: builtin and method forms agree byte-for-byte ==")
+let src = []
+for i in range(18) {
+    push(src, (i * 3) % 8)
+}
+print(sorted(src, probe).join(","))
+print("calls3:" + str(calls))
+print(src.sort(probe).join(","))
+print("calls4:" + str(calls))

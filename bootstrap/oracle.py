@@ -5738,9 +5738,11 @@ class Interp:
                 return None
             if name == "sort":
                 if args and isinstance(args[0], Gene):
-                    import functools
-                    return sorted(recv, key=functools.cmp_to_key(
-                        lambda a, b: -1 if truthy(self.call_value(env, args[0], [a, b])) else 1))
+                    # Z-137-SORTSTABLE: the comparator form mirrors the
+                    # engines' stable walk byte-for-byte (was: Python
+                    # cmp_to_key — stable output but a different tie walk
+                    # and call order; now identical on every surface)
+                    return self._comparator_sort_walk(env, list(recv), args[0])
                 return sorted(recv, key=lambda x: (
                     (0, float(x), "") if isinstance(x, (int, float)) and not isinstance(x, bool)
                     else ((0, float(int(x)), "") if isinstance(x, bool)
@@ -5984,6 +5986,58 @@ class Interp:
         return False
 
     # ---- builtins
+    def _comparator_sort_walk(self, env, out, cmp):
+        # Z-137-SORTSTABLE (issue #137): byte-for-byte mirror of
+        # Interp::comparator_sort (src/interp.rs) — same dual regime, same
+        # stable tie law, same comparator call order: every step invokes
+        # cmp(second, first) and swaps/takes the right element IFF it
+        # STRICTLY belongs before the left one; a tie (cmp false both ways)
+        # never reorders, so equal-key elements keep their input order on
+        # every surface. Builtin sorted() and the .sort() method share this
+        # one walk (the old split — unstable-mirroring builtin vs
+        # Python-stable cmp_to_key method — was the divergence issue #137).
+        n = len(out)
+        if n < 2:
+            return out
+        if n <= 32:
+            for i in range(1, n):
+                j = i
+                while j > 0:
+                    strictly_before = truthy(self.call_value(env, cmp, [out[j], out[j - 1]]))
+                    if strictly_before:
+                        out[j - 1], out[j] = out[j], out[j - 1]
+                        j -= 1
+                    else:
+                        break
+            return out
+        buf = []
+        width = 1
+        while width < n:
+            i = 0
+            while i < n:
+                mid = min(i + width, n)
+                end = min(i + 2 * width, n)
+                if mid == end:
+                    buf.extend(out[i:end])
+                    i = end
+                    continue
+                a, b = i, mid
+                del buf[:]
+                while a < mid and b < end:
+                    strictly_before = truthy(self.call_value(env, cmp, [out[b], out[a]]))
+                    if strictly_before:
+                        buf.append(out[b])
+                        b += 1
+                    else:
+                        buf.append(out[a])
+                        a += 1
+                buf.extend(out[a:mid])
+                buf.extend(out[b:end])
+                out[i:end] = buf
+                i = end
+            width *= 2
+        return out
+
     def builtin(self, env, name, args):
         if name == "promote":
             print(" ".join(v_display(a) for a in args))
@@ -7810,16 +7864,10 @@ class Interp:
                 return None
             out = list(v)
             if len(args) > 1 and isinstance(args[1], Gene):
-                cmp = args[1]
-                for i in range(1, len(out)):
-                    j = i
-                    while j > 0:
-                        before = truthy(self.call_value(env, cmp, [out[j - 1], out[j]]))
-                        if not before:
-                            out[j - 1], out[j] = out[j], out[j - 1]
-                            j -= 1
-                        else:
-                            break
+                # Z-137-SORTSTABLE: the shared stable walk (mirror of the
+                # engines' comparator_sort) — same rule for builtin and
+                # method forms, ties keep input order
+                self._comparator_sort_walk(env, out, args[1])
             else:
                 # identical key to the .sort() method, one ordering contract
                 out.sort(key=lambda x: (

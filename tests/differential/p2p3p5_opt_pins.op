@@ -1,7 +1,10 @@
 # P2+P3+P5 differential pin: the optimization wave (2026-10-06, builder-A),
 # byte-identical on both engines. P2 — comparator sort replaced by a
-# tie-exact bottom-up merge above n=32 (the oracle keeps the insertion
-# walk, so this file IS the tie-rule proof); P3 — `for i in range(...)`
+# bottom-up merge above n=32; Z-137-SORTSTABLE (2026-10-09) made the whole
+# walk STABLE — swap/take-right iff cmp(second, first) strictly-before,
+# ties keep input order, the oracle mirrors the same walk byte-for-byte
+# (this file's call-count row re-proves the unified call order under the
+# stable law); P3 — `for i in range(...)`
 # iterates bounds directly (O(1) memory) with the builtin's exact
 # observables; P5 — `s += x` / `s = s + <pure x>` append in place with the
 # Add arm's exact ceiling/charge surfaces.
