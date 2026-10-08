@@ -771,9 +771,13 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
                 target.clear();
                 target.extend(exports);
             }
-            interp.modules.get(&rc_resolved).cloned().unwrap_or_else(|| {
-                Value::Map(Rc::new(RefCell::new(crate::value::MapStore::default())))
-            })
+            interp
+                .modules
+                .get(&rc_resolved)
+                .cloned()
+                .unwrap_or_else(|| {
+                    Value::Map(Rc::new(RefCell::new(crate::value::MapStore::default())))
+                })
         } else {
             let mv = Value::Map(Rc::new(RefCell::new(crate::value::MapStore::from_vec(
                 exports,
