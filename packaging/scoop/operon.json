@@ -6,13 +6,13 @@
     "notes": [
         "W61 COMMUNITY DRAFT - not CI-validated; the sha256 below is pinned",
         "from the v2.9.3 release's companion .sha256 sidecar (asset hash,",
-        "verified in release run 37146021197). Re-pin on every bump.",
+        "verified in release run 37711796207). Re-pin on every bump.",
         "Ships operon, operon-ls, and the self-hosted std/ directory."
     ],
     "architecture": {
         "64bit": {
             "url": "https://github.com/WasewaseX/operon-lang-dev/releases/download/v2.9.3/operon-2.9.3-x86_64-pc-windows-msvc.zip",
-            "hash": "dad3130add6a70ebd9677768009ad3a1f65f146b52ae77e346d07ec5d34acf0c"
+            "hash": "7e6b71af8e633a7f12b005bdbed015b85f8da31ff5e3a34bc6d20766543c9a23"
         }
     },
     "extract_dir": "operon-2.9.3",
