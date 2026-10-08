@@ -90,8 +90,10 @@ fn law1_fix_never_changes_canonical_meaning_corpus_wide() {
     // when that lands. Precedent: vm_parity rt_p4b_threadbomb_join runs
     // containment-checked rather than byte-checked.
     const CONTAINED_DEPTH_PINS: &[&str] = &[
-        "tests/differential/parser_depth_leak_pin.op",
-        "tests/differential/parser_depth_calls_pin.op",
+        // file-name matching: Windows paths use backslashes, so path-suffix
+        // matching would silently miss on the windows CI legs
+        "parser_depth_leak_pin.op",
+        "parser_depth_calls_pin.op",
     ];
     for path in corpus() {
         let src = match std::fs::read_to_string(&path) {
