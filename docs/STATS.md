@@ -6,13 +6,13 @@ README/SPEC/BENCH are forbidden, link here instead.
 
 - **Version**: 2.9.3  · SPEC Status: v2.9.3
 - **Keywords (parser reserved set)**: 60, table in [KEYWORDS.md](KEYWORDS.md)
-- **Std modules**: 33 (args, bigint, binary, bio, collections, csv, deque, env, fmt, fs, graph, hashing, heap, iter, json, logging, math, motifs, path, process, random, result, seq, serialize, set, strings, terminal, testing, time, try_numeric, typed, unicode, url)
-- **Std functions (.op-level `gene` defs)**: 346
+- **Std modules**: 34 (args, bigint, binary, bio, biocore, collections, csv, deque, env, fmt, fs, graph, hashing, heap, iter, json, logging, math, motifs, path, process, random, result, seq, serialize, set, strings, terminal, testing, time, try_numeric, typed, unicode, url)
+- **Std functions (.op-level `gene` defs)**: 360
 - **Red-team payload files**: 106
-- **Proof files**: 167 (of 3581 test .op files)
+- **Proof files**: 168 (of 3583 test .op files)
 - **Proof run / harness recount**: skipped (GEN_DOC_STATS_FAST=1), run by scripts/test.sh on every gate
 - **CLI subcommands**: ast, bench, build, check, crispr, dap, disasm, doc, explain, fix, fmt, graph, ir, keywords, lint, profile, repl, rna, test, version, watch
-- **LSP methods**: initialize, shutdown, textDocument/completion, textDocument/definition, textDocument/didChange, textDocument/didClose, textDocument/didOpen, textDocument/documentSymbol, textDocument/formatting, textDocument/hover, textDocument/prepareRename, textDocument/publishDiagnostics, textDocument/references, textDocument/rename, textDocument/semanticTokens, textDocument/signatureHelp
+- **LSP methods**: initialize, shutdown, textDocument/completion, textDocument/definition, textDocument/didChange, textDocument/didClose, textDocument/didOpen, textDocument/documentSymbol, textDocument/formatting, textDocument/hover, textDocument/inlayHint, textDocument/prepareRename, textDocument/publishDiagnostics, textDocument/references, textDocument/rename, textDocument/semanticTokens, textDocument/signatureHelp
 
 ## Std module inventory
 
@@ -22,6 +22,7 @@ README/SPEC/BENCH are forbidden, link here instead.
 | std/bigint | 20 |
 | std/binary | 17 |
 | std/bio | 4 |
+| std/biocore | 14 |
 | std/collections | 6 |
 | std/csv | 8 |
 | std/deque | 12 |

@@ -8,71 +8,56 @@ honestly, not defended.
 
 ## Layer 1: Rust line/region coverage (cargo llvm-cov)
 
-Status: measured. `scripts/coverage.sh` runs `cargo llvm-cov
---summary-only --ignore-filename-regex
-'(target|tests|examples|std|bootstrap)/'` over every cargo test
-target (lib unit tests plus the tests/*.rs integration tests).
-Test harness sources and the interpreted .op tree are excluded
-from instrumentation by the ignore filter; .op-level
-reachability is layer 2. The TOTAL row is the headline.
-
-```
-Filename                      Regions    Missed Regions     Cover   Functions  Missed Functions  Executed       Lines      Missed Lines     Cover    Branches   Missed Branches     Cover
------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-ast.rs                             30                12    60.00%           3                 1    66.67%          19                 8    57.89%           0                 0         -
-bin/operon-ls.rs                  910               850     6.59%          62                58     6.45%         510               475     6.86%           0                 0         -
-ffi.rs                            198                13    93.43%          23                 6    73.91%         109                 7    93.58%           0                 0         -
-genes.rs                         2434               859    64.71%         121                54    55.37%        1386               465    66.45%           0                 0         -
-graph.rs                          253                11    95.65%          14                 1    92.86%         140                 5    96.43%           0                 0         -
-interp.rs                       13292              3970    70.13%         496               159    67.94%        7583              2412    68.19%           0                 0         -
-lexer.rs                          844               225    73.34%           8                 0   100.00%         679               201    70.40%           0                 0         -
-lib.rs                              3                 3     0.00%           1                 1     0.00%           3                 3     0.00%           0                 0         -
-lint.rs                           911               355    61.03%          46                 5    89.13%         533               192    63.98%           0                 0         -
-ls.rs                            2327               405    82.60%         123                15    87.80%        1337               245    81.68%           0                 0         -
-main.rs                          2557              1802    29.53%          80                66    17.50%        1622              1104    31.94%           0                 0         -
-parser.rs                        5211              1653    68.28%          76                 6    92.11%        3127              1027    67.16%           0                 0         -
-pkg.rs                           1498              1481     1.13%          79                78     1.27%         853               843     1.17%           0                 0         -
-pybridge.rs                       497                65    86.92%          32                 4    87.50%         300                37    87.67%           0                 0         -
-rna2.rs                          1494               588    60.64%          80                17    78.75%        1020               365    64.22%           0                 0         -
-tools.rs                         5307              2738    48.41%         150                69    54.00%        2614              1181    54.82%           0                 0         -
-value.rs                          651               116    82.18%          45                 4    91.11%         381                56    85.30%           0                 0         -
-vm.rs                            1198               812    32.22%          31                 9    70.97%         648               424    34.57%           0                 0         -
------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-TOTAL                           39615             15958    59.72%        1470               553    62.38%       22864              9050    60.42%           0                 0         -
-```
+Status: unavailable. `cargo-llvm-cov` was not installed or the
+run failed in the environment that last generated this file, and
+no number was invented in its place. Install with
+`cargo install cargo-llvm-cov && rustup component add
+llvm-tools-preview`, then re-run `scripts/coverage.sh`.
 
 ## Layer 2: std call-site coverage of the .op proof corpus
 
 Status: measured. Static analysis of the corpus, not execution
 coverage; the exact rules and limits are in the methodology below.
-Scope: `tests/*.op`, `tests/differential/*.op`, `tests/granted/*.op` (163 files scanned, 29 of them import std).
+Scope: `tests/*.op`, `tests/differential/*.op`, `tests/granted/*.op` (235 files scanned, 56 of them import std).
 
 | module | defined | referenced | referenced names |
 |---|---|---|---|
-| std/args | 8 | 8 | `args_flag`, `args_get`, `args_has`, `args_norm`, `args_number`, `args_positional`, `args_subcommand`, `args_value` |
-| std/bigint | 20 | 13 | `big_add`, `big_cmp`, `big_fact`, `big_from_int`, `big_from_str`, `big_is_zero`, `big_mul`, `big_neg`, `big_pow`, `big_sub`, `big_to_int`, `big_to_str`, `big_zero` |
+| std/args | 9 | 8 | `args_flag`, `args_get`, `args_has`, `args_norm`, `args_number`, `args_positional`, `args_subcommand`, `args_value` |
+| std/bigint | 20 | 14 | `big_abs`, `big_add`, `big_cmp`, `big_fact`, `big_from_int`, `big_from_str`, `big_is_zero`, `big_mul`, `big_neg`, `big_pow`, `big_sub`, `big_to_int`, `big_to_str`, `big_zero` |
+| std/binary | 17 | 13 | `bin_hex_decode`, `bin_hex_encode`, `bin_i64le`, `bin_read_i64le`, `bin_read_u16be`, `bin_read_u16le`, `bin_read_u32be`, `bin_read_u32le`, `bin_size`, `bin_u16be`, `bin_u16le`, `bin_u32be`, `bin_u32le` |
 | std/bio | 4 | 4 | `codon_usage`, `gc_skew`, `is_palindromic_site`, `melting_point` |
+| std/biocore | 14 | 8 | `biocore_add_interaction`, `biocore_add_reaction`, `biocore_new`, `biocore_render`, `biocore_run`, `biocore_species`, `biocore_tick`, `biocore_trace` |
 | std/collections | 6 | 6 | `chunk`, `count`, `flatten`, `group_by`, `take`, `zip` |
-| std/csv | 7 | 7 | `csv_column`, `csv_count_fields`, `csv_escape`, `csv_parse`, `csv_parse_line`, `csv_records`, `csv_row` |
+| std/csv | 8 | 8 | `csv_column`, `csv_count_fields`, `csv_escape`, `csv_parse`, `csv_parse_line`, `csv_parse_machine`, `csv_records`, `csv_row` |
 | std/deque | 12 | 11 | `deque_from`, `deque_peek_back`, `deque_peek_front`, `deque_pop_back`, `deque_pop_front`, `deque_push_back`, `deque_push_front`, `queue_len`, `queue_new`, `queue_pop`, `queue_push` |
+| std/env | 6 | 6 | `env_fetch`, `env_get`, `env_get_or`, `env_granted`, `env_has`, `env_require` |
 | std/fmt | 8 | 6 | `fmt_bool`, `fmt_bytes`, `fmt_fixed`, `fmt_pct`, `fmt_table`, `fmt_thousands` |
 | std/fs | 12 | 12 | `fs_append_line`, `fs_lines`, `fs_lines_or`, `fs_list_dir_or`, `fs_read`, `fs_read_json_or`, `fs_read_or`, `fs_size_or`, `fs_write_json`, `fs_write_lines`, `fs_write_text`, `strings_lines` |
+| std/graph | 23 | 19 | `graph_add_edge`, `graph_add_node`, `graph_bfs`, `graph_dfs`, `graph_edge_count`, `graph_edges`, `graph_has_edge`, `graph_has_node`, `graph_mst_weight`, `graph_neighbors`, `graph_new`, `graph_node_count`, `graph_nodes`, `graph_reachable`, `graph_remove_edge`, `graph_remove_node`, `graph_shortest_path`, `graph_topo`, `graph_weight` |
+| std/hashing | 11 | 7 | `hash_adler32`, `hash_crc32`, `hash_djb2`, `hash_fnv1a32`, `hash_sdbm`, `sha256`, `sha256_hex` |
 | std/heap | 10 | 6 | `heap_from`, `heap_len`, `heap_peek`, `heap_pop`, `heap_push`, `heap_sorted` |
-| std/iter | 23 | 22 | `all`, `any`, `chunk`, `concat_all`, `drain`, `drop_while`, `enumerate_pairs`, `filter`, `find_first`, `flatten`, `fold`, `index_of`, `intersperse`, `map`, `range_step`, `reversed`, `scan`, `sliding`, `sort_by_key`, `take_while`, `unique`, `zip` |
-| std/json | 11 | 10 | `json_compact`, `json_flatten`, `json_get`, `json_get_or`, `json_is_array`, `json_is_object`, `json_merge`, `json_omit`, `json_pick`, `json_type` |
+| std/iter | 23 | 23 | `all`, `any`, `chunk`, `concat_all`, `drain`, `drop_while`, `enumerate_pairs`, `filter`, `find_first`, `flatten`, `fold`, `index_of`, `intersperse`, `map`, `range_step`, `reversed`, `scan`, `sliding`, `sort_by_key`, `take`, `take_while`, `unique`, `zip` |
+| std/json | 12 | 10 | `json_compact`, `json_flatten`, `json_get`, `json_get_or`, `json_is_array`, `json_is_object`, `json_merge`, `json_omit`, `json_pick`, `json_type` |
+| std/logging | 6 | 6 | `log_level`, `log_level_name`, `log_line`, `log_stamp`, `make_logger`, `make_logger_named` |
 | std/math | 18 | 18 | `clamp`, `digits`, `divmod`, `factorial`, `gcd`, `hill`, `isqrt`, `lcm`, `lerp`, `mean`, `median`, `round`, `round_to`, `sigmoid`, `sign`, `stddev`, `variance`, `wrap` |
 | std/motifs | 12 | 11 | `ar`, `fc`, `motif_autoreg`, `motif_ffl`, `motif_flip`, `motif_hill`, `motif_install`, `motif_pulse`, `motif_states`, `tx`, `ty` |
 | std/path | 9 | 7 | `path_base`, `path_dir`, `path_ext`, `path_is_abs`, `path_join`, `path_norm`, `path_split_ext` |
+| std/process | 8 | 8 | `process_code`, `process_lines_or`, `process_ok`, `process_output`, `process_output_or`, `process_run`, `process_run_or`, `process_succeeded` |
 | std/random | 6 | 6 | `rand_below`, `rand_chance`, `rand_int`, `rand_pick`, `rand_shuffle`, `rand_weighted` |
+| std/result | 8 | 8 | `and_then`, `is_err_and`, `is_ok_and`, `map`, `map_err`, `ok_to_some`, `or_else`, `unwrap_or_else` |
 | std/seq | 0 | 0 | (no top-level gene defs; sequence exports) |
-| std/serialize | 8 | 7 | `deserialize`, `from_csv_rows`, `from_json`, `roundtrip`, `serialize`, `supported_formats`, `to_csv_rows` |
-| std/set | 11 | 11 | `set_add`, `set_count`, `set_del`, `set_diff`, `set_eq`, `set_from`, `set_has`, `set_intersect`, `set_subset`, `set_symdiff`, `set_union` |
+| std/serialize | 10 | 8 | `deserialize`, `from_csv_rows`, `from_json`, `roundtrip`, `serialize`, `supported_formats`, `to_csv_rows`, `to_json` |
+| std/set | 12 | 11 | `set_add`, `set_count`, `set_del`, `set_diff`, `set_eq`, `set_from`, `set_has`, `set_intersect`, `set_subset`, `set_symdiff`, `set_union` |
 | std/strings | 17 | 17 | `capital`, `chars`, `ellipsis`, `is_blank`, `lines`, `pad`, `pad_left`, `pad_right`, `starts_any`, `strip_prefix`, `strip_suffix`, `title_case`, `to_camel`, `to_kebab`, `to_snake`, `unquote`, `words` |
+| std/terminal | 16 | 9 | `t_bg`, `t_bold`, `t_dim`, `t_fg`, `t_fg256`, `t_has_ansi`, `t_reset`, `t_strip_ansi`, `t_truncate_width` |
 | std/testing | 6 | 6 | `expect_eq`, `expect_false`, `expect_near`, `expect_throws`, `expect_true`, `test_summary` |
 | std/time | 13 | 10 | `dur_hms`, `dur_human`, `time_add`, `time_date_only`, `time_days_between`, `time_days_in_month`, `time_diff`, `time_is_leap`, `time_midnight`, `time_parse_iso` |
-| std/unicode | 8 | 7 | `byte_width`, `char_codes`, `from_char_codes`, `is_alpha`, `is_digit`, `is_lower`, `is_upper` |
+| std/try_numeric | 3 | 3 | `try_ceil`, `try_floor`, `try_sqrt` |
+| std/typed | 0 | 0 | (no top-level gene defs; sequence exports) |
+| std/unicode | 8 | 8 | `byte_width`, `char_codes`, `from_char_codes`, `is_alpha`, `is_digit`, `is_lower`, `is_upper`, `upper` |
+| std/url | 13 | 4 | `url_decode`, `url_encode`, `url_parse`, `url_query_encode` |
 
-Total: **205 of 229** defined std functions referenced by the corpus (**89.5%** call-site coverage) across 22 modules; 24 functions uncovered. Qualified-namespace calls alone reach 205 of 229 (89.5%); the bare-name rule adds nothing today, it stays in as the disclosed over-count surface.
+Total: **301 of 360** defined std functions referenced by the corpus (**83.6%** call-site coverage) across 34 modules; 59 functions uncovered. Qualified-namespace calls alone reach 301 of 360 (83.6%); the bare-name rule adds nothing today, it stays in as the disclosed over-count surface.
 
 ### Methodology (call-site coverage, static analysis of the corpus)
 
@@ -106,22 +91,32 @@ Total: **205 of 229** defined std functions referenced by the corpus (**89.5%** 
 
 ## Top-20 uncovered std functions (next targets, pick from evidence)
 
-The uncovered public surface is smaller than 20; all 8 are listed.
-
-Public names only, ranked by module, then name; the full uncovered set is 24
+Public names only, ranked by module, then name; the full uncovered set is 59
 functions.
 
 | # | module | function |
 |---|---|---|
-| 1 | std/bigint | `big_abs` |
-| 2 | std/fmt | `fmt_cell` |
-| 3 | std/fmt | `fmt_pad_cell` |
-| 4 | std/iter | `take` |
-| 5 | std/json | `json_flatten_into` |
-| 6 | std/motifs | `ic` |
-| 7 | std/serialize | `to_json` |
-| 8 | std/unicode | `upper` |
+| 1 | std/binary | `bin_bytes_of` |
+| 2 | std/biocore | `biocore_edge_from` |
+| 3 | std/biocore | `biocore_guard_holds` |
+| 4 | std/biocore | `biocore_laws` |
+| 5 | std/biocore | `biocore_validate` |
+| 6 | std/fmt | `fmt_cell` |
+| 7 | std/fmt | `fmt_pad_cell` |
+| 8 | std/hashing | `hash_bytes_of` |
+| 9 | std/json | `json_compact_value` |
+| 10 | std/json | `json_flatten_into` |
+| 11 | std/motifs | `ic` |
+| 12 | std/terminal | `t_bg_code` |
+| 13 | std/terminal | `t_fg_code` |
+| 14 | std/terminal | `t_has_ansi_at` |
+| 15 | std/terminal | `t_plain_digit` |
+| 16 | std/terminal | `t_print_width` |
+| 17 | std/terminal | `t_starts_with` |
+| 18 | std/terminal | `t_underline` |
+| 19 | std/url | `url_escape_char` |
+| 20 | std/url | `url_hex_digit` |
 
-Std-internal helpers (the __ prefix) are 16 further names the corpus never
+Std-internal helpers (the __ prefix) are 32 further names the corpus never
 reaches; the corpus cannot call them directly by design, so they are not
-targets, and this is not a dead-code claim: `__add_mag`, `__all_digits`, `__cmp_mag`, `__digit`, `__norm_limbs`, `__sub_mag`, `__dq_copy`, `__heap_less`, `__heap_sift_down`, `__heap_sift_up`, `__hp_copy`, `__rfind`, `__trim_trailing`, `__days_from_civil`, `__is_digits`, `__p2`.
+targets, and this is not a dead-code claim: `__args_num_ok`, `__add_mag`, `__all_digits`, `__cmp_mag`, `__digit`, `__norm_limbs`, `__sub_mag`, `__bin_hex_byte`, `__bin_hex_digit`, `__bin_hex_val`, `__bc_apply`, `__bc_copy`, `__dq_copy`, `__gr_copy`, `__gr_less`, `__gr_pair_edges`, `__gr_row`, `__hash_hex_byte`, `__hash_hex_digit`, `__hash_rotr32`, `__heap_less`, `__heap_sift_down`, `__heap_sift_up`, `__hp_copy`, `__rfind`, `__trim_trailing`, `__from_wire`, `__to_wire`, `__set_canon`, `__days_from_civil`, `__is_digits`, `__p2`.

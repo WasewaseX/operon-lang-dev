@@ -98,6 +98,7 @@
   "textDocument/documentSymbol",
   "textDocument/formatting",
   "textDocument/hover",
+  "textDocument/inlayHint",
   "textDocument/prepareRename",
   "textDocument/publishDiagnostics",
   "textDocument/references",
@@ -114,7 +115,7 @@
   "methylate",
   "riboswitch"
  ],
- "proof_files": 167,
+ "proof_files": 168,
  "proof_totals": {
   "asserts": null,
   "files": null,
@@ -126,8 +127,8 @@
   "h1": "# Operon, Language Specification",
   "status": "v2.9.3"
  },
- "std_function_count": 346,
- "std_module_count": 33,
+ "std_function_count": 360,
+ "std_module_count": 34,
  "std_modules": [
   {
    "functions": 9,
@@ -144,6 +145,10 @@
   {
    "functions": 4,
    "module": "bio"
+  },
+  {
+   "functions": 14,
+   "module": "biocore"
   },
   {
    "functions": 6,
@@ -262,6 +267,6 @@
    "module": "url"
   }
  ],
- "test_op_files": 3581,
+ "test_op_files": 3583,
  "version": "2.9.3"
 }
