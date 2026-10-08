@@ -1,0 +1,9 @@
+# differential: #123 — the module cache is keyed by the CANONICAL path.
+# `use "helper.op"` + `use "./helper.op"` used to execute the module
+# body TWICE (duplicated side effects, drifting module state).
+use "helper.op"
+use "./helper.op"
+gene main() {
+    print("main ran")
+    return 0
+}

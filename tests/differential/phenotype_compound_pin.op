@@ -1,0 +1,16 @@
+# differential: #118 — phenotype compound member assignment. The
+# compound READ only matched Map, so `obj.field += 1` raised
+# "cannot add null and int" and the store never happened while
+# `obj.field = obj.field + 1` worked. Timestamp-free lines only.
+phenotype P {
+    let field = 1
+    gene init() { self.field = 5 }
+}
+let p = new P()
+p.field += 1
+print(p.field)
+p.field += 10
+print(p.field)
+let q = new P()
+q.field = q.field + 1
+print(q.field)

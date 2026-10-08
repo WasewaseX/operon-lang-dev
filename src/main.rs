@@ -80,7 +80,10 @@ fn real_main() {
     // dx-r5 (audit D-4): rustc/go/tsc answer --help; operon used to say
     // "unknown command". Same usage as the no-args case, exit 0.
     if cmd == "--help" || cmd == "-h" || cmd == "help" {
-        usage();
+        // dx-r5: rustc/go/tsc answer --help with exit 0. usage() exits 2
+        // (error-path contract), so the help path prints the same text
+        // itself instead of dying inside usage() before reaching exit(0).
+        println!("{}", usage_string());
         // ast-grep-ignore: no-std-process-exit-in-core
         std::process::exit(0);
     }
@@ -210,7 +213,10 @@ fn real_main() {
         match a.as_str() {
             "--entry" => {
                 i += 1;
-                opts.entry = rest.get(i).cloned();
+                match rest.get(i) {
+                    Some(v) if !v.starts_with("--") => opts.entry = Some(v.clone()),
+                    _ => die("--entry needs a gene name argument"),
+                }
             }
             "--allow-read" => {
                 i += 1;
@@ -296,11 +302,17 @@ fn real_main() {
             "--matrix" => matrix = true,
             "--variant" => {
                 i += 1;
-                opts.variant = rest.get(i).cloned();
+                match rest.get(i) {
+                    Some(v) if !v.starts_with("--") => opts.variant = Some(v.clone()),
+                    _ => die("--variant needs a value argument"),
+                }
             }
             "--cell" => {
                 i += 1;
-                opts.cell = rest.get(i).cloned();
+                match rest.get(i) {
+                    Some(v) if !v.starts_with("--") => opts.cell = Some(v.clone()),
+                    _ => die("--cell needs a value argument"),
+                }
             }
             // W48: file-wide lint suppression, `--allow unused-gene,dead-const`
             // (repeatable). Rule names or stable codes. Line-local suppression
@@ -325,11 +337,17 @@ fn real_main() {
             "--style" => check_style = true,
             "--rna" => {
                 i += 1;
-                opts.rna = rest.get(i).cloned();
+                match rest.get(i) {
+                    Some(v) if !v.starts_with("--") => opts.rna = Some(v.clone()),
+                    _ => die("--rna needs a value argument"),
+                }
             }
             "--frame" => {
                 i += 1;
-                opts.frame = rest.get(i).cloned();
+                match rest.get(i) {
+                    Some(v) if !v.starts_with("--") => opts.frame = Some(v.clone()),
+                    _ => die("--frame needs a value argument"),
+                }
             }
             "--knockout" => {
                 i += 1;
@@ -344,7 +362,10 @@ fn real_main() {
             }
             "-o" | "--out" => {
                 i += 1;
-                outfile = rest.get(i).cloned().unwrap_or_default();
+                match rest.get(i) {
+                    Some(v) if !v.starts_with("--") => outfile = v.clone(),
+                    _ => die("--out needs a path argument"),
+                }
             }
             "--ires" => opts.use_ires = true,
             "--json" => json = true,
@@ -718,6 +739,10 @@ fn real_main() {
                         "  --strict verdict: FAIL ({} wobble(s), {} fallback(s))",
                         w, fb
                     );
+                    // #122: a printed FAIL with exit 0 was a false pass for
+                    // CI gating on explain's rc (check --strict exits 3).
+                    // ast-grep-ignore: no-std-process-exit-in-core
+                    std::process::exit(3);
                 } else {
                     println!("  --strict verdict: PASS");
                 }
@@ -974,7 +999,12 @@ fn real_main() {
                     file, debug_breaks
                 );
             }
-            if opts.frame.is_none() {
+            // #122: the W101 entry-existence validation used to sit inside
+            // `if opts.frame.is_none()`, so `--entry mian --frame x`
+            // silently ran NOTHING with exit 0 — re-opening the exact
+            // silent no-op disaster W101 closed. Validation now runs
+            // regardless of --frame; only the EXECUTION stays gated.
+            {
                 // W101 slice 6: a typo'd --entry used to wobble-repair to the
                 // nearest builtin and exit 0 having run NOTHING (the silent
                 // no-op disaster). An explicitly requested entry gene that
@@ -2967,8 +2997,8 @@ fn print_diag(
     );
 }
 
-fn usage() {
-    eprintln!(
+fn usage_string() -> String {
+    format!(
         "Operon {}, the gene-expression language (Total Grammar)
 usage:
   operon run f.op [--entry g] [--variant v] [--cell c] [--rna r] [--frame name] [--ires] [--strict] [--quiet]
@@ -3034,7 +3064,11 @@ usage:
   operon run f.op --opt-passes fold,dce   W011: run exactly these passes
   operon version",
         env!("CARGO_PKG_VERSION")
-    );
+    )
+}
+
+fn usage() {
+    eprint!("{}", usage_string());
     // ast-grep-ignore: no-std-process-exit-in-core
     std::process::exit(2);
 }

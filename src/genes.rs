@@ -564,6 +564,11 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
     let rc_resolved = std::fs::canonicalize(&resolved)
         .map(|p| p.to_string_lossy().replace('\\', "/"))
         .unwrap_or_else(|_| resolved.replace('\\', "/"));
+    // #123: canonical key cache check — the same module imported via two
+    // spellings (`use "lib.op"` + `use "./lib.op"`) must load ONCE.
+    if let Some(v) = interp.modules.get(&rc_resolved) {
+        return Ok(v.clone());
+    }
     let cwd = std::env::current_dir()
         .ok()
         .map(|p| p.to_string_lossy().replace('\\', "/"));
@@ -664,10 +669,10 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
     // register the placeholder map BEFORE the body runs: cyclic re-entry
     // receives this exact Rc and sees it filled when loading completes
     interp.modules.insert(
-        path.to_string(),
+        rc_resolved.clone(),
         Value::Map(Rc::new(RefCell::new(crate::value::MapStore::default()))),
     );
-    interp.loading.push(path.to_string());
+    interp.loading.push(rc_resolved.clone());
     let prog = crate::parser::parse(&src);
     for n in prog.notes {
         interp.notes.push(Note {
@@ -760,20 +765,20 @@ pub fn load_module(interp: &mut Interp, path: &str) -> Result<Value, String> {
     let modv = {
         // fill the placeholder registered before the body ran, same Rc,
         // so cyclic importers holding it observe the completed data
-        if let Some(Value::Map(m)) = interp.modules.get(path) {
+        if let Some(Value::Map(m)) = interp.modules.get(&rc_resolved) {
             {
                 let mut target = m.borrow_mut();
                 target.clear();
                 target.extend(exports);
             }
-            interp.modules.get(path).cloned().unwrap_or_else(|| {
+            interp.modules.get(&rc_resolved).cloned().unwrap_or_else(|| {
                 Value::Map(Rc::new(RefCell::new(crate::value::MapStore::default())))
             })
         } else {
             let mv = Value::Map(Rc::new(RefCell::new(crate::value::MapStore::from_vec(
                 exports,
             ))));
-            interp.modules.insert(path.to_string(), mv.clone());
+            interp.modules.insert(rc_resolved.clone(), mv.clone());
             mv
         }
     };

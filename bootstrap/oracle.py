@@ -8254,6 +8254,13 @@ class Interp:
             # next file prefix. The use arm binds {} for a total failure,
             # exactly as before.
             return None
+        # #123 mirror: key the cache by the CANONICAL path — the same module
+        # imported via two spellings (`use "h.op"` + `use "./h.op"`) must
+        # load ONCE (the Rust side keys interp.modules by the canonicalized
+        # path since the same fix landed there).
+        canon_key = os.path.realpath(resolved)
+        if canon_key in self.modules:
+            return self.modules[canon_key]
         src = open(resolved, encoding="utf-8", errors="replace").read()  # W59: explicit UTF-8 (Windows locale default is cp1252)
         self.loading.append(path)
         stmts, notes, pubs = parse(src)
@@ -8311,7 +8318,7 @@ class Interp:
                 # this loop; found by the visibility differential fixture).
                 if isinstance(kk, str) and kk != "__parent__" and not kk.startswith("#"):
                     exports[kk] = vv
-        self.modules[path] = exports
+        self.modules[canon_key] = exports
         return exports
 
 def collect_structure(stmts):
