@@ -3370,6 +3370,29 @@ impl Parser {
             let s = self.parse_stmt()?;
             return Some(vec![s]);
         }
+        // #111: nested blocks (`{{{{…`) recurse stmt → block without any
+        // budget — they now share the parser's one depth cap.
+        if self.depth >= 4096 {
+            let line = self.line();
+            self.note(line, 4, "block nested deeper than 4096; truncated");
+            let mut bal = 0usize;
+            while self.pos < self.toks.len() {
+                match self.toks[self.pos].0 {
+                    Tok::LBrace => bal += 1,
+                    Tok::RBrace => {
+                        bal -= 1;
+                        if bal == 0 {
+                            self.pos += 1;
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+                self.pos += 1;
+            }
+            return Some(Vec::new());
+        }
+        self.depth += 1;
         self.next(); // {
         let mut out = Vec::new();
         loop {
@@ -3401,6 +3424,7 @@ impl Parser {
                 }
             }
         }
+        self.depth -= 1;
         Some(out)
     }
 
@@ -3667,7 +3691,35 @@ impl Parser {
             match self.peek().clone() {
                 Tok::LParen => {
                     let call_line = self.line();
+                    // INTEGRITY-SWEEP-2 (#111): call/index/pattern/block
+                    // recursion never touched `self.depth` — the 4096 cap
+                    // only guarded primary-position parens/brackets, so
+                    // `f(f(f(…)))` aborted the process (stack overflow,
+                    // SIGABRT-class) far below the documented cap. All
+                    // recursive descent now shares ONE budget.
+                    if self.depth >= 4096 {
+                        let line = self.line();
+                        self.note(line, 4, "expression nested deeper than 4096; truncated");
+                        let mut bal = 0usize;
+                        while self.pos < self.toks.len() {
+                            match self.toks[self.pos].0 {
+                                Tok::LParen => bal += 1,
+                                Tok::RParen => {
+                                    bal -= 1;
+                                    if bal == 0 {
+                                        self.pos += 1;
+                                        break;
+                                    }
+                                }
+                                _ => {}
+                            }
+                            self.pos += 1;
+                        }
+                        e = Expr::Call(Box::new(e), Vec::new(), call_line);
+                        continue;
+                    }
                     self.next();
+                    self.depth += 1;
                     let mut args = Vec::new();
                     loop {
                         self.eat_newlines_inline();
@@ -3685,12 +3737,36 @@ impl Parser {
                             self.next();
                         }
                     }
+                    self.depth -= 1;
                     e = Expr::Call(Box::new(e), args, call_line);
                 }
                 Tok::LBrack => {
                     let index_line = self.line();
+                    if self.depth >= 4096 {
+                        let line = self.line();
+                        self.note(line, 4, "expression nested deeper than 4096; truncated");
+                        let mut bal = 0usize;
+                        while self.pos < self.toks.len() {
+                            match self.toks[self.pos].0 {
+                                Tok::LBrack => bal += 1,
+                                Tok::RBrack => {
+                                    bal -= 1;
+                                    if bal == 0 {
+                                        self.pos += 1;
+                                        break;
+                                    }
+                                }
+                                _ => {}
+                            }
+                            self.pos += 1;
+                        }
+                        e = Expr::Index(Box::new(e), Box::new(Expr::Null), index_line);
+                        continue;
+                    }
                     self.next();
+                    self.depth += 1;
                     let idx = self.parse_expr();
+                    self.depth -= 1;
                     if matches!(self.peek(), Tok::RBrack) {
                         self.next();
                     } else {
@@ -3707,6 +3783,33 @@ impl Parser {
                             self.next();
                             if matches!(self.peek(), Tok::LParen) {
                                 self.next();
+                                // #111: method-call args share the depth budget
+                                if self.depth >= 4096 {
+                                    let line = self.line();
+                                    self.note(
+                                        line,
+                                        4,
+                                        "expression nested deeper than 4096; truncated",
+                                    );
+                                    let mut bal = 0usize;
+                                    while self.pos < self.toks.len() {
+                                        match self.toks[self.pos].0 {
+                                            Tok::LParen => bal += 1,
+                                            Tok::RParen => {
+                                                bal -= 1;
+                                                if bal == 0 {
+                                                    self.pos += 1;
+                                                    break;
+                                                }
+                                            }
+                                            _ => {}
+                                        }
+                                        self.pos += 1;
+                                    }
+                                    e = Expr::Method(Box::new(e), m, Vec::new(), method_line);
+                                    continue;
+                                }
+                                self.depth += 1;
                                 let mut args = Vec::new();
                                 loop {
                                     self.eat_newlines_inline();
@@ -3722,6 +3825,7 @@ impl Parser {
                                         self.next();
                                     }
                                 }
+                                self.depth -= 1;
                                 e = Expr::Method(Box::new(e), m, args, method_line);
                             } else {
                                 e = Expr::Member(Box::new(e), m);
@@ -3747,6 +3851,33 @@ impl Parser {
                             self.next();
                             if matches!(self.peek(), Tok::LParen) {
                                 self.next();
+                                // #111: safe-call args share the depth budget
+                                if self.depth >= 4096 {
+                                    let line = self.line();
+                                    self.note(
+                                        line,
+                                        4,
+                                        "expression nested deeper than 4096; truncated",
+                                    );
+                                    let mut bal = 0usize;
+                                    while self.pos < self.toks.len() {
+                                        match self.toks[self.pos].0 {
+                                            Tok::LParen => bal += 1,
+                                            Tok::RParen => {
+                                                bal -= 1;
+                                                if bal == 0 {
+                                                    self.pos += 1;
+                                                    break;
+                                                }
+                                            }
+                                            _ => {}
+                                        }
+                                        self.pos += 1;
+                                    }
+                                    e = Expr::MethodSafe(Box::new(e), m, Vec::new(), method_line);
+                                    continue;
+                                }
+                                self.depth += 1;
                                 let mut args = Vec::new();
                                 loop {
                                     self.eat_newlines_inline();
@@ -3762,6 +3893,7 @@ impl Parser {
                                         self.next();
                                     }
                                 }
+                                self.depth -= 1;
                                 e = Expr::MethodSafe(Box::new(e), m, args, method_line);
                             } else {
                                 e = Expr::MemberSafe(Box::new(e), m);
@@ -3878,8 +4010,8 @@ impl Parser {
                             Tok::LParen => bal += 1,
                             Tok::RParen => {
                                 bal -= 1;
-                                self.pos += 1;
                                 if bal == 0 {
+                                    self.pos += 1;
                                     break;
                                 }
                             }
@@ -3911,8 +4043,8 @@ impl Parser {
                             Tok::LBrack => bal += 1,
                             Tok::RBrack => {
                                 bal -= 1;
-                                self.pos += 1;
                                 if bal == 0 {
+                                    self.pos += 1;
                                     break;
                                 }
                             }
@@ -4074,8 +4206,8 @@ impl Parser {
                     Tok::LBrace => bal += 1,
                     Tok::RBrace => {
                         bal -= 1;
-                        self.pos += 1;
                         if bal == 0 {
+                            self.pos += 1;
                             break;
                         }
                     }
@@ -4139,6 +4271,13 @@ impl Parser {
                 }
             }
         }
+        // INTEGRITY-SWEEP-2 (#112): this was the only `depth += 1` in the
+        // file with no matching decrement — the counter is per-file
+        // cumulative, so 4096 FLAT map literals permanently hit the cap
+        // and every later `(`/`[`/`{`/unary parsed as Null (and `fmt
+        // --write` persisted the nulls into the source). Restore the
+        // balance on every exit path that consumed the increment.
+        self.depth -= 1;
         Expr::Map(pairs)
     }
 
@@ -4303,6 +4442,21 @@ impl Parser {
 
     /// One pattern atom (no `|`, no `if` at this level).
     fn parse_pat_atom(&mut self) -> MatchPat {
+        // #111: pattern recursion (variant payloads, list/map patterns) now
+        // shares the parser's one depth budget — a 10k-deep nested pattern
+        // used to be able to abort the process below the documented cap.
+        if self.depth >= 4096 {
+            let line = self.line();
+            self.note(line, 4, "pattern nested deeper than 4096; truncated");
+            return MatchPat::Lit(Expr::Null);
+        }
+        self.depth += 1;
+        let pat = self.parse_pat_atom_inner();
+        self.depth -= 1;
+        pat
+    }
+
+    fn parse_pat_atom_inner(&mut self) -> MatchPat {
         let neg = matches!(self.peek(), Tok::Minus);
         if neg {
             self.next();
