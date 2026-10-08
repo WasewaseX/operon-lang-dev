@@ -333,14 +333,20 @@ pub fn py_call(
 }
 
 fn truncate_protocol(head: &str, stdout: &str, stderr: &str) -> String {
+    // #114 family: byte-slicing a multibyte tail panicked ("byte index N
+    // is not a char boundary") — snap to a char boundary instead.
+    fn snap(s: &str) -> &str {
+        let mut end = s.len().min(160);
+        while end > 0 && !s.is_char_boundary(end) {
+            end -= 1;
+        }
+        &s[..end]
+    }
     let tail = last_line(stdout).unwrap_or("").to_string();
     let err_tail = last_line(stderr).unwrap_or("").to_string();
-    let mut msg = format!("{} (stdout tail: {:?})", head, &tail[..tail.len().min(160)]);
+    let mut msg = format!("{} (stdout tail: {:?})", head, snap(&tail));
     if !err_tail.is_empty() {
-        msg.push_str(&format!(
-            " (stderr tail: {:?})",
-            &err_tail[..err_tail.len().min(160)]
-        ));
+        msg.push_str(&format!(" (stderr tail: {:?})", snap(&err_tail)));
     }
     msg
 }
