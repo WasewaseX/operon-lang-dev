@@ -985,6 +985,10 @@ def wobble_keyword(word):
 class P:
     def __init__(self, toks, notes):
         self.toks, self.pos, self.notes = toks, 0, notes
+        # #111 mirror: ONE shared recursion budget across every recursive
+        # descent site (paren/list/map/unary/postfix/pattern/block), matching
+        # parser.rs `depth` op-for-op so truncation is byte-identical.
+        self.depth = 0
         # W24: contextual `pub` marker names (top level only)
         self.pub_names = []
         # W01-s2 type aliases (mirror of parser.rs type_aliases +
@@ -2475,6 +2479,23 @@ class P:
             self.note(self.peek()[2], 4, "block without braces; single statement accepted")
             s = self.stmt()
             return [s] if s else []
+        # #111 mirror: nested blocks share the 4096 budget
+        if self.depth >= 4096:
+            self.note(self.peek()[2], 4, "block nested deeper than 4096; truncated")
+            bal = 0
+            while self.pos < len(self.toks):
+                k = self.toks[self.pos][0]
+                v = self.toks[self.pos][1]
+                if k == "SYM" and v == "{":
+                    bal += 1
+                elif k == "SYM" and v == "}":
+                    bal -= 1
+                    if bal == 0:
+                        self.pos += 1
+                        break
+                self.pos += 1
+            return []
+        self.depth += 1
         self.next()
         out = []
         while True:
@@ -2492,6 +2513,7 @@ class P:
             if self.pos == before:
                 self.note(t[2], 4, "token skipped")
                 self.next()
+        self.depth -= 1
         return out
 
     # L1a: destructuring pattern parser (mirrors src/parser.rs parse_destructure_pat)
@@ -2699,7 +2721,25 @@ class P:
         while True:
             t = self.peek()
             if t == ("SYM", "(", t[2]):
+                # #111 mirror: call args share the 4096 budget
+                if self.depth >= 4096:
+                    self.note(t[2], 4, "expression nested deeper than 4096; truncated")
+                    bal = 0
+                    while self.pos < len(self.toks):
+                        k = self.toks[self.pos][0]
+                        v = self.toks[self.pos][1]
+                        if k == "SYM" and v == "(":
+                            bal += 1
+                        elif k == "SYM" and v == ")":
+                            bal -= 1
+                            if bal == 0:
+                                self.pos += 1
+                                break
+                        self.pos += 1
+                    e = ("call", e, [], t[2])
+                    continue
                 self.next()
+                self.depth += 1
                 args = []
                 while True:
                     self.eat_nl()
@@ -2712,10 +2752,30 @@ class P:
                     args.append(self.expr())
                     if self.peek() == ("SYM", ",", t2[2]):
                         self.next()
+                self.depth -= 1
                 e = ("call", e, args, t[2])  # W07: LParen line (Rust stamps before next())
             elif t == ("SYM", "[", t[2]):
+                # #111 mirror: index args share the 4096 budget
+                if self.depth >= 4096:
+                    self.note(t[2], 4, "expression nested deeper than 4096; truncated")
+                    bal = 0
+                    while self.pos < len(self.toks):
+                        k = self.toks[self.pos][0]
+                        v = self.toks[self.pos][1]
+                        if k == "SYM" and v == "[":
+                            bal += 1
+                        elif k == "SYM" and v == "]":
+                            bal -= 1
+                            if bal == 0:
+                                self.pos += 1
+                                break
+                        self.pos += 1
+                    e = ("index", e, ("lit", None), t[2])
+                    continue
                 self.next()
+                self.depth += 1
                 idx = self.expr()
+                self.depth -= 1
                 if self.peek() == ("SYM", "]", self.peek()[2]):
                     self.next()
                 else:
@@ -2826,13 +2886,48 @@ class P:
         if kind == "INTERP":
             return self.build_interp(val, line)
         if t == ("SYM", "(", line):
+            # #111 mirror: shared 4096 budget (parser.rs LParen arm)
+            if self.depth >= 4096:
+                self.note(line, 4, "expression nested deeper than 4096; truncated")
+                bal = 1
+                while self.pos < len(self.toks):
+                    k = self.toks[self.pos][0]
+                    v = self.toks[self.pos][1]
+                    if k == "SYM" and v == "(":
+                        bal += 1
+                    elif k == "SYM" and v == ")":
+                        bal -= 1
+                        if bal == 0:
+                            self.pos += 1
+                            break
+                    self.pos += 1
+                return ("lit", None)
+            self.depth += 1
             e = self.expr()
+            self.depth -= 1
             if self.peek() == ("SYM", ")", self.peek()[2]):
                 self.next()
             else:
                 self.note(self.peek()[2], 4, "parenthesis auto-closed")
             return e
         if t == ("SYM", "[", line):
+            # #111 mirror: shared 4096 budget (parser.rs LBrack arm)
+            if self.depth >= 4096:
+                self.note(line, 4, "expression nested deeper than 4096; truncated")
+                bal = 1
+                while self.pos < len(self.toks):
+                    k = self.toks[self.pos][0]
+                    v = self.toks[self.pos][1]
+                    if k == "SYM" and v == "[":
+                        bal += 1
+                    elif k == "SYM" and v == "]":
+                        bal -= 1
+                        if bal == 0:
+                            self.pos += 1
+                            break
+                    self.pos += 1
+                return ("lit", None)
+            self.depth += 1
             items = []
             while True:
                 self.eat_nl()
@@ -2847,8 +2942,27 @@ class P:
                     self.next()
                 elif not (self.peek() == ("SYM", "]", self.peek()[2])):
                     self.note(self.peek()[2], 4, "list items separated automatically")
+            self.depth -= 1
             return ("list", items)
         if t == ("SYM", "{", line):
+            # #112/#111 mirror: the map arm shares the budget AND balances it
+            # on every exit (parser.rs leak class: += without -= was #112).
+            if self.depth >= 4096:
+                self.note(line, 4, "expression nested deeper than 4096; truncated")
+                bal = 1
+                while self.pos < len(self.toks):
+                    k = self.toks[self.pos][0]
+                    v = self.toks[self.pos][1]
+                    if k == "SYM" and v == "{":
+                        bal += 1
+                    elif k == "SYM" and v == "}":
+                        bal -= 1
+                        if bal == 0:
+                            self.pos += 1
+                            break
+                    self.pos += 1
+                return ("lit", None)
+            self.depth += 1
             pairs = []
             while True:
                 self.eat_nl()
@@ -2883,6 +2997,7 @@ class P:
                 pairs.append((key, val))
                 if self.peek() == ("SYM", ",", self.peek()[2]):
                     self.next()
+            self.depth -= 1
             return ("map", pairs)
         if kind == "IDENT":
             if val in ("true", "false"):
@@ -3086,6 +3201,16 @@ class P:
         return pat
 
     def pattern_atom(self):
+        # #111 mirror: pattern recursion shares the 4096 budget
+        if self.depth >= 4096:
+            self.note(self.peek()[2], 4, "pattern nested deeper than 4096; truncated")
+            return ("lit", None)
+        self.depth += 1
+        p = self.pattern_atom_inner()
+        self.depth -= 1
+        return p
+
+    def pattern_atom_inner(self):
         t = self.peek()
         neg = t[0] == "SYM" and t[1] == "-"
         if neg:
