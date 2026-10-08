@@ -1118,7 +1118,8 @@ fn real_main() {
             // moved to `operon lint` and is NOT duplicated in the default
             // diag output: a labeled count + pointer keeps the data visible
             // without doubling the stream; --style inlines it.
-            let src = std::fs::read_to_string(&file).unwrap_or_default();
+            let src = std::fs::read_to_string(&file)
+                .unwrap_or_else(|e| die(&format!("cannot read '{}': {}", file, e)));
             let prog = parser::parse(&src);
             // TYPED-MODE: T-series findings join the check stream under --typed
             let typed_findings: Vec<operon::lint::Finding> = if typed {
@@ -1152,7 +1153,12 @@ fn real_main() {
                 let hard = findings.iter().any(|f| f.sev == operon::lint::Sev::Error)
                     || typed_findings
                         .iter()
-                        .any(|f| f.sev == operon::lint::Sev::Error);
+                        .any(|f| f.sev == operon::lint::Sev::Error)
+                    // #113: a displayed error[E00] (unreadable file) with
+                    // exit 0 was a false-green machine for CI gates running
+                    // `check` over file sets — failing must not report
+                    // success (dx-r1 class).
+                    || !rep.parsed;
                 let typed_soft = typed_findings
                     .iter()
                     .any(|f| f.sev == operon::lint::Sev::Warning);
@@ -1371,11 +1377,14 @@ fn real_main() {
             if let Some(n) = fmt_width {
                 cfg.width = if n == 0 { None } else { Some(n) };
             }
-            let src = std::fs::read_to_string(&file).unwrap_or_default();
+            let src = std::fs::read_to_string(&file)
+                .unwrap_or_else(|e| die(&format!("cannot read '{}': {}", file, e)));
             let prog = parser::parse(&src);
             let out = tools::format_program_with(&prog, &cfg);
             if write {
-                std::fs::write(&file, out).expect("write failed");
+                if let Err(e) = std::fs::write(&file, out) {
+                    die(&format!("cannot write '{}': {}", file, e));
+                }
                 eprintln!("fmt: {} rewritten", file);
             } else {
                 print!("{}", out);
@@ -1682,7 +1691,9 @@ fn real_main() {
                                 report.would_change()
                             );
                             if write {
-                                std::fs::write(&file, new_text).expect("write failed");
+                                if let Err(e) = std::fs::write(&file, new_text) {
+                                    die(&format!("cannot write '{}': {}", file, e));
+                                }
                                 eprintln!("rna v2: {} rewritten", file);
                             }
                         }
@@ -1727,7 +1738,9 @@ fn real_main() {
                     }
                     if let Some(new_text) = &report.new_text {
                         if write {
-                            std::fs::write(&file, new_text).expect("write failed");
+                            if let Err(e) = std::fs::write(&file, new_text) {
+                                die(&format!("cannot write '{}': {}", file, e));
+                            }
                             eprintln!("rna v2: {} rewritten", file);
                         }
                     }
@@ -1812,7 +1825,9 @@ fn real_main() {
                 }
             }
             if write {
-                std::fs::write(&file, &report.new_text).expect("write failed");
+                if let Err(e) = std::fs::write(&file, &report.new_text) {
+                    die(&format!("cannot write '{}': {}", file, e));
+                }
                 eprintln!("rna: {} rewritten", file);
             }
             if report.missed() > 0 {
@@ -1833,7 +1848,8 @@ fn real_main() {
                 Some(f) => f.clone(),
                 None => die("build needs a file"),
             };
-            let src = std::fs::read_to_string(&file).unwrap_or_default();
+            let src = std::fs::read_to_string(&file)
+                .unwrap_or_else(|e| die(&format!("cannot read '{}': {}", file, e)));
             let stem = std::path::Path::new(&file)
                 .file_stem()
                 .map(|s| s.to_string_lossy().to_string())
@@ -1871,7 +1887,9 @@ fn real_main() {
             } else {
                 outfile.clone()
             };
-            std::fs::write(&dest, out).expect("write failed");
+            if let Err(e) = std::fs::write(&dest, out) {
+                die(&format!("cannot write '{}': {}", dest, e));
+            }
             eprintln!(
                 "build: {} → {} (variant: {})",
                 file,
@@ -2053,7 +2071,8 @@ fn real_main() {
                 die("doc needs a file or directory");
             }
             for t in &targets {
-                let src = std::fs::read_to_string(t).unwrap_or_default();
+                let src = std::fs::read_to_string(t)
+                    .unwrap_or_else(|e| die(&format!("cannot read '{}': {}", t, e)));
                 let prog = parser::parse(&src);
                 if json {
                     json_out.push(tools::doc_json(t, &prog));
@@ -2100,7 +2119,8 @@ fn real_main() {
                     return;
                 }
                 visited.push(path.to_string());
-                let src = std::fs::read_to_string(path).unwrap_or_default();
+                let src = std::fs::read_to_string(path)
+                    .unwrap_or_else(|e| die(&format!("cannot read '{}': {}", path, e)));
                 let prog = parser::parse(&src);
                 let base = std::path::Path::new(path).parent().map(|p| p.to_path_buf());
                 for s in &prog.stmts {
@@ -2172,7 +2192,8 @@ fn real_main() {
                 Some(f) => f.clone(),
                 None => die("graph needs a file"),
             };
-            let src = std::fs::read_to_string(&file).unwrap_or_default();
+            let src = std::fs::read_to_string(&file)
+                .unwrap_or_else(|e| die(&format!("cannot read '{}': {}", file, e)));
             let prog = parser::parse(&src);
             let g = graph::collect(&prog.stmts);
             if json {
@@ -2189,7 +2210,8 @@ fn real_main() {
                 Some(f) => f.clone(),
                 None => die("disasm needs a file"),
             };
-            let src = std::fs::read_to_string(&file).unwrap_or_default();
+            let src = std::fs::read_to_string(&file)
+                .unwrap_or_else(|e| die(&format!("cannot read '{}': {}", file, e)));
             let prog = parser::parse(&src);
             if json {
                 println!("{}", vm::disassemble_program_json(&prog));
@@ -2205,7 +2227,8 @@ fn real_main() {
             if matrix {
                 // perturbation matrix: knock out EVERY top-level gene in a
                 // fresh interpreter, run all proofs, tabulate viability
-                let src = std::fs::read_to_string(&file).unwrap_or_default();
+                let src = std::fs::read_to_string(&file)
+                    .unwrap_or_else(|e| die(&format!("cannot read '{}': {}", file, e)));
                 let prog = parser::parse(&src);
                 let mut targets: Vec<String> = Vec::new();
                 for s in &prog.stmts {
