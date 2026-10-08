@@ -480,7 +480,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
 - Files: `src/ls.rs`, `tests/lsp_smoke.py`, `README.md`.
 - Depends: W074 (doc comments) for parameter docs, can land hover-only first.
 
-### W045, LSP depth wave [P1] [dev-2] [L] [done: 7/7 wired (batch1, c85a65f): references (word-boundary, declaration+call sites), prepareRename+rename with all-or-nothing refusal (-32001), semanticTokens full with fixed 6-type legend locked to SEMANTIC_TOKEN_TYPES, all smoke-pinned]
+### W045, LSP depth wave [P1] [dev-2] [L] [done: 7/7 wired (batch1, c85a65f): references (word-boundary, declaration+call sites), prepareRename+rename with all-or-nothing refusal (-32001), semanticTokens full with fixed 6-type legend locked to SEMANTIC_TOKEN_TYPES, all smoke-pinned; W45-v3 2026-10-08: textDocument/inlayHint wired (builder-B) — the checker's inferred types for un-annotated let/const bindings, precomputed per doc version in the same analyze pass, filtered by range at request time, honest-visibility law (any/never/annotated/destructuring never hint, unknown doc = empty array), capability+feature advertised additively (lsp 1 no bump), smoke section 5a + tests/ls_inlay_hints.rs pin the JSON, SPEC §15 + LSP-VERSIONING + README trued]
 - Goal: references, rename, workspace symbols, semantic tokens, folding ranges, selection
   ranges, code actions (quick-fix for known repairs), inlay hints (types per W001),
   document links for `use`.

@@ -64,6 +64,9 @@ assert caps["referencesProvider"] is True, caps
 assert caps["renameProvider"] == {"prepareProvider": True}, caps
 assert caps["documentSymbolProvider"] is True, caps
 assert caps["documentFormattingProvider"] is True, caps
+# W45-v3: inlay hints join additively (lsp 1 unchanged per LSP-VERSIONING rule 1)
+assert caps["inlayHintProvider"] is True, caps
+assert "inlayHints" in _feats, _feats
 assert caps["completionProvider"]["resolveProvider"] is False, caps
 # W45: semantic-token legend matches the core's fixed array
 _st = caps["semanticTokensProvider"]
@@ -448,6 +451,75 @@ send({
 })
 r = recv()
 assert r["id"] == 6 and r["result"] is None, r
+
+# 5a-W45v3. inlay hints — the checker's inferred types for un-annotated
+# bindings, precomputed per document version, filtered by the visible range.
+# Laws pinned: concrete types hint (": int" class, kind 1 = Type, position
+# exactly past the binding name); annotated bindings never hint (the source
+# already shows it); `any` never hints (the dynamic escape hatch carries no
+# information — never a vacuous hint); a narrowed range returns only its rows.
+hints_src = (
+    "let n = 42\n"
+    "let s = \"hi\"\n"
+    "let ann: str = \"x\"\n"
+    "let lst = [1, 2, 3]\n"
+    "let opaq = unknown_lane()\n"
+)
+send({
+    "jsonrpc": "2.0",
+    "method": "textDocument/didOpen",
+    "params": {
+        "textDocument": {"uri": "file:///hints.op", "languageId": "operon", "version": 1},
+        "text": hints_src,
+    },
+})
+d = recv()
+assert d["method"] == "textDocument/publishDiagnostics", d
+
+def _hints_over(start, end):
+    send({
+        "jsonrpc": "2.0",
+        "id": 60,
+        "method": "textDocument/inlayHint",
+        "params": {
+            "textDocument": {"uri": "file:///hints.op"},
+            "range": {"start": {"line": start, "character": 0},
+                      "end": {"line": end, "character": 0}},
+        },
+    })
+    r = recv()
+    assert r["id"] == 60, r
+    return r["result"]
+
+all_hints = _hints_over(0, 4)
+_by_name_pos = {(h["position"]["line"], h["position"]["character"]): h["label"] for h in all_hints}
+# `let n = 42` → `: int` right past the name (line 0, char 5); kind = Type
+assert _by_name_pos.get((0, 5)) == ": int", all_hints
+assert _by_name_pos.get((1, 5)) == ": str", all_hints
+assert _by_name_pos.get((3, 7)) == ": list[int]", all_hints
+assert all(h["kind"] == 1 for h in all_hints), all_hints
+# annotated (`ann`, line 2) and any-typed (`opaq`, line 4) NEVER hint
+assert (2, 9) not in _by_name_pos and (4, 10) not in _by_name_pos, all_hints
+assert len(all_hints) == 3, all_hints
+# narrowed window: only rows inside [start.line, end.line]
+assert _hints_over(0, 1) == [
+    h for h in all_hints if h["position"]["line"] <= 1
+], all_hints
+assert _hints_over(3, 4) == [
+    h for h in all_hints if h["position"]["line"] >= 3
+], all_hints
+# unknown document → honest empty, not an error
+send({
+    "jsonrpc": "2.0",
+    "id": 61,
+    "method": "textDocument/inlayHint",
+    "params": {
+        "textDocument": {"uri": "file:///never-opened.op"},
+        "range": {"start": {"line": 0, "character": 0}, "end": {"line": 9, "character": 0}},
+    },
+})
+r = recv()
+assert r["id"] == 61 and r["result"] == [], r
 
 # 5b. didClose → diagnostics cleared, doc forgotten
 send({
