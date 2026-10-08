@@ -514,14 +514,23 @@ pub fn lex(src: &str) -> Lexed {
                     i = j;
                     match i64::from_str_radix(&digits, radix) {
                         Ok(v) => push!(Tok::Int(v)),
-                        Err(_) => lex_note(
-                            &mut notes,
-                            Note {
-                                line,
-                                rung: 4,
-                                message: format!("integer '{}' out of range treated as 0", raw),
-                            },
-                        ),
+                        Err(_) => {
+                            // #115 (Z-115-LEXZERO): the note says "treated as
+                            // 0" and the ORACLE pushes INT 0 — the token MUST
+                            // exist, otherwise the parser's Null substitution
+                            // eats the statement (and its line break), diverging
+                            // from the oracle and merging the next statement
+                            // into this one
+                            lex_note(
+                                &mut notes,
+                                Note {
+                                    line,
+                                    rung: 4,
+                                    message: format!("integer '{}' out of range treated as 0", raw),
+                                },
+                            );
+                            push!(Tok::Int(0));
+                        }
                     }
                     continue;
                 }
@@ -559,26 +568,38 @@ pub fn lex(src: &str) -> Lexed {
             if is_float {
                 match cleaned.parse::<f64>() {
                     Ok(f) => push!(Tok::Float(f)),
-                    Err(_) => lex_note(
-                        &mut notes,
-                        Note {
-                            line,
-                            rung: 4,
-                            message: format!("malformed number '{}' treated as 0", text),
-                        },
-                    ),
+                    Err(_) => {
+                        // #115 (Z-115-LEXZERO): oracle parity — the malformed
+                        // number is INT 0, not Float 0.0, with the note
+                        // (bootstrap/oracle.py pushes ("INT", 0) here)
+                        lex_note(
+                            &mut notes,
+                            Note {
+                                line,
+                                rung: 4,
+                                message: format!("malformed number '{}' treated as 0", text),
+                            },
+                        );
+                        push!(Tok::Int(0));
+                    }
                 }
             } else {
                 match cleaned.parse::<i64>() {
                     Ok(v) => push!(Tok::Int(v)),
-                    Err(_) => lex_note(
-                        &mut notes,
-                        Note {
-                            line,
-                            rung: 4,
-                            message: format!("integer '{}' out of range treated as 0", text),
-                        },
-                    ),
+                    Err(_) => {
+                        // #115 (Z-115-LEXZERO): the note says "treated as 0"
+                        // and the ORACLE pushes INT 0 — the token MUST exist
+                        // (see the radix arm above)
+                        lex_note(
+                            &mut notes,
+                            Note {
+                                line,
+                                rung: 4,
+                                message: format!("integer '{}' out of range treated as 0", text),
+                            },
+                        );
+                        push!(Tok::Int(0));
+                    }
                 }
             }
             continue;
