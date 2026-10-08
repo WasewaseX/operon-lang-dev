@@ -4190,7 +4190,15 @@ impl Parser {
                         other.describe()
                     ),
                 );
-                self.next();
+                // #115 (Z-115-LEXZERO): the Newline is the STATEMENT layer's
+                // terminator — consuming it here merges the next statement
+                // into this one and executes its side effects (the issue's
+                // cascade: one bad literal deleted the rest of a program's
+                // output). Substitute the Null and leave the line break for
+                // the statement loop.
+                if !matches!(other, Tok::Newline) {
+                    self.next();
+                }
                 Expr::Null
             }
         }

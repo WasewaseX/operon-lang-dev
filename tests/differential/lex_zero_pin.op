@@ -1,0 +1,50 @@
+# lex-zero pin (2026-10-09, issue #115 / Z-115-LEXZERO): the three numeric
+# lexer error arms (radix overflow, malformed number, decimal overflow) say
+# "treated as 0" and MUST push a real INT 0 token — the oracle always does,
+# and the pre-#115 Rust lexer pushed NOTHING, so the parser's Null
+# substitution produced an empty-args call (rust printed "" where the oracle
+# printed "0") or a null assignment, AND the fallback consumed the Newline,
+# merging the next statement into the broken one (side effects executed,
+# program output silently truncated). Expected values are ground truth from
+# the oracle, printed as boolean assertions AND raw values.
+gene main() {
+    # --- decimal overflow: 2^63 is out of i64 range, token = INT 0 --------
+    print("dec_overflow", 9223372036854775808)
+    print("dec_overflow_eq0", 9223372036854775808 == 0)
+
+    # --- radix overflow: 2^64 in hex, token = INT 0 -----------------------
+    print("radix_hex", 0xFFFFFFFFFFFFFFFF)
+    print("radix_hex_eq0", 0xFFFFFFFFFFFFFFFF == 0)
+    print("radix_bin", 0b10000000000000000000000000000000000000000000000000000000000000000)
+    print("radix_oct", 0o777777777777777777777777777777777)
+
+    # --- underscore separators preserved in the note, value still 0 -------
+    print("sep_overflow", 9_223_372_036_854_775_808)
+
+    # --- assignment gets a REAL 0 (pre-fix: null) --------------------------
+    let big = 9223372036854775808
+    print("assign_zero", big)
+    print("assign_zero_plus", big + 5)
+
+    # --- malformed number: token = INT 0 (oracle parity — INT, not Float) -
+    print("assign_malformed", m_bad())
+
+    # --- the cascade: a bad literal must NOT eat the next statement -------
+    let big2 = 9223372036854775808
+    phantom_visit("user42")
+    print("cascade_reached", true)
+
+    # --- well-formed controls stay exact ----------------------------------
+    print("ctrl_i64max", 9223372036854775807)
+    print("ctrl_i64min", 0 - 9223372036854775807 - 1)
+    print("ctrl_hex", 0xDEADBEEF)
+    print("ctrl_float", 1.25e3)
+}
+
+gene m_bad() {
+    return 1.2.3.4
+}
+
+gene phantom_visit(who) {
+    return who
+}
