@@ -1013,6 +1013,23 @@ pub struct Interp {
     /// via the DAP launch argument stopOnEntry. Consumed by the first trap
     /// with reason "entry".
     pub debug_stop_entry: bool,
+    /// Z-121 (#121 item 2): re-entrancy guard for debugger-initiated
+    /// evaluation. debug_eval_value executes arbitrary debuggee code on the
+    /// LIVE interpreter (DAP evaluate/setVariable, conditional-bp
+    /// conditions, the machine-protocol eval); without the guard, any
+    /// statement crossing inside the evaluated call re-armed the trap
+    /// (debug_step survives a stop with debug_step_depth cleared to None,
+    /// so depth_ok is trivially true) and a breakpoint inside the called
+    /// gene fired likewise — serve_at_trap re-entered while a request was
+    /// pending: a second stopped event, the pending response deferred
+    /// forever, snapshots clobbered, side effects interleaved with the
+    /// "stopped" state. While the guard is set the statement trap is not
+    /// consulted AT ALL (no step, no bp, no until, no entry) and
+    /// breakpoint conditions are not even evaluated — a debugger must
+    /// never turn its own evaluation into a surprise stop or hidden
+    /// execution. Save/restore, not set/clear: bp consultations nest (a
+    /// conditional bp evaluated while an outer evaluate is in flight).
+    pub in_debug_eval: bool,
     pub debug_file: String,
     pub seq_tx: Option<mpsc::SyncSender<crate::value::SeqMsg>>,
     /// Process-wide step ceiling shared with every spawned worker: when
@@ -1148,6 +1165,7 @@ impl Interp {
             debug_until: None,
             debug_protocol: false,
             debug_dap: false,
+            in_debug_eval: false,
             debug_stop_entry: false,
             debug_file: String::new(),
             seq_tx: None,
@@ -1471,9 +1489,17 @@ impl Interp {
             // only fires when the condition evaluates truthy in the current
             // frame (see bp_fires); the entry stop (stopOnEntry) is a
             // one-shot that wins over everything at the first statement.
-            let stmt_bp_hit = match s.first_line() {
-                Some(l) => self.bp_fires(env, l),
-                None => false,
+            // Z-121 (#121 item 2): while debugger-initiated evaluation is
+            // in flight the trap is not consulted — breakpoints are not even
+            // evaluated (a condition here would execute debuggee code with
+            // side effects while the debuggee is not running).
+            let stmt_bp_hit = if self.in_debug_eval {
+                false
+            } else {
+                match s.first_line() {
+                    Some(l) => self.bp_fires(env, l),
+                    None => false,
+                }
             };
             let stmt_line = s.first_line();
             // The cur_line fallback only applies to line-silent statements:
@@ -1481,9 +1507,13 @@ impl Interp {
             // HAS its own line must never match a stale cur_line from inside
             // a called body (bp 3 inside work would otherwise re-fire on
             // main's line-8 call statement the moment work returns)
-            let cur_bp_hit = match stmt_line {
-                Some(_) => false,
-                None => self.bp_fires(env, self.cur_line),
+            let cur_bp_hit = if self.in_debug_eval {
+                false
+            } else {
+                match stmt_line {
+                    Some(_) => false,
+                    None => self.bp_fires(env, self.cur_line),
+                }
             };
             let depth_ok = match self.debug_step_depth {
                 Some(d) => self.call_stack.len() <= d,
@@ -1500,7 +1530,18 @@ impl Interp {
             if entry_hit {
                 self.debug_stop_entry = false;
             }
-            if entry_hit || until_hit || stmt_bp_hit || cur_bp_hit || (self.debug_step && depth_ok)
+            // Z-121: the in_debug_eval guard short-circuits the whole trap —
+            // an evaluate crossing a statement must never re-arm a pending
+            // step (debug_step survives the stop) nor fire a breakpoint
+            // inside the evaluated call (no events between request and
+            // response; the pinned contract lives in
+            // tests/dap_reentry_e2e.py).
+            if !self.in_debug_eval
+                && (entry_hit
+                    || until_hit
+                    || stmt_bp_hit
+                    || cur_bp_hit
+                    || (self.debug_step && depth_ok))
             {
                 let reason = if entry_hit {
                     "entry"
@@ -2021,7 +2062,15 @@ impl Interp {
                     let mut out = "\"ok\":false,\"error\":\"cannot evaluate\"".to_string();
                     if let Some(Stmt::Gene(g)) = parsed.stmts.first() {
                         if let Some(Stmt::ExprStmt(e)) = g.body.first() {
-                            match self.eval(env, e) {
+                            // Z-121: same re-entrancy law as the DAP evaluate —
+                            // the machine-protocol eval must not re-arm the
+                            // trap mid-request either (no events between
+                            // request and response on THIS pipe too).
+                            let saved = self.in_debug_eval;
+                            self.in_debug_eval = true;
+                            let r = self.eval(env, e);
+                            self.in_debug_eval = saved;
+                            match r {
                                 Ok(v) => {
                                     out = format!(
                                         "\"ok\":true,\"value\":{}",
@@ -2113,6 +2162,20 @@ impl Interp {
     /// the VALUE (debug_eval_display renders it; bp conditions and the
     /// set-variable paths need the value itself).
     pub(crate) fn debug_eval_value(&mut self, env: &Rc<Env>, src: &str) -> Result<Value, String> {
+        // Z-121 (#121 item 2): the re-entrancy guard covers every
+        // debugger-initiated evaluation — DAP evaluate (via
+        // debug_eval_display), DAP setVariable values, conditional-bp
+        // conditions. Save/restore so nested consultations (a conditional
+        // bp evaluated while an outer evaluate is in flight) cannot leave
+        // the guard stuck on.
+        let saved = self.in_debug_eval;
+        self.in_debug_eval = true;
+        let r = self.debug_eval_value_inner(env, src);
+        self.in_debug_eval = saved;
+        r
+    }
+
+    fn debug_eval_value_inner(&mut self, env: &Rc<Env>, src: &str) -> Result<Value, String> {
         // Primary path: wrap the source as an expression statement.
         let parsed = crate::parser::parse(&format!("gene __dbg() {{ {} }}", src));
         if let Some(Stmt::Gene(g)) = parsed.stmts.first() {
