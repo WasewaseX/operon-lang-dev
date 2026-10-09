@@ -61,10 +61,18 @@ sequence fib_seq(limit = 1e15) {
 }
 
 sequence range_seq(a, b, step) {
+    # step 0 raises, matching the builtin range's law (issue #136 row 12):
+    # the sibling paths used to disagree — the builtin answers
+    # "unfolded: range step cannot be 0" while this sequence silently
+    # yielded nothing (a silent empty drain for a malformed call, the
+    # exact false-green class the stdlib contracts forbid)
+    if step == 0 {
+        raise unfolded, "range step cannot be 0"
+    }
     let i = a
     if step > 0 {
         while i < b { yield i; i = i + step }
     } else {
-        if step < 0 { while i > b { yield i; i = i + step } }
+        while i > b { yield i; i = i + step }
     }
 }
