@@ -8412,15 +8412,20 @@ impl Interp {
             "distance" => {
                 let a = args.first().map(|v| v.display()).unwrap_or_default();
                 let b = args.get(1).map(|v| v.display()).unwrap_or_default();
-                // the DP fallback kernel is O(la*lb): refuse pathological
-                // inputs instead of freezing outside the step budget
-                if a.len().saturating_mul(b.len()) > 10_000_000 {
+                // Z-119 (#119.3): CHAR-based — the oracle's edit_distance walks
+                // Python str indices (characters), so the DP cell unit is the
+                // char, not the byte ("héllo" vs "hello" is 1, not 2). The
+                // DP fallback cost is O(ca*cb): refuse pathological inputs
+                // instead of freezing outside the step budget.
+                let ca = a.chars().count();
+                let cb = b.chars().count();
+                if ca.saturating_mul(cb) > 10_000_000 {
                     return Err(Stress::new(
                         "overflow",
                         "distance inputs exceed the 10M-cell DP ceiling",
                     ));
                 }
-                Ok(Value::Int(crate::ffi::edit_distance(&a, &b) as i64))
+                Ok(Value::Int(crate::ffi::edit_distance_chars(&a, &b) as i64))
             }
             "similar" => {
                 let a = args.first().map(|v| v.display()).unwrap_or_default();
@@ -8431,21 +8436,25 @@ impl Interp {
                 };
                 // sec-r1 (audit C-1): same DP ceiling as distance(), the
                 // kernel hop is fuel-blind, so the budget must be checked
-                // before the call, not by the caller
-                if a.len().saturating_mul(b.len()) > crate::ffi::DP_CELL_BUDGET {
+                // before the call, not by the caller. Z-119: CHAR units.
+                let ca = a.chars().count();
+                let cb = b.chars().count();
+                if ca.saturating_mul(cb) > crate::ffi::DP_CELL_BUDGET {
                     return Err(Stress::new(
                         "overflow",
                         "similar inputs exceed the 10M-cell DP ceiling",
                     ));
                 }
-                // byte-length difference lower-bounds the distance: if the
-                // strings differ in length by more than maxd, the kernel
-                // cannot possibly return a value <= maxd
-                let diff = (a.len() as i64 - b.len() as i64).abs();
+                // char-length difference lower-bounds the CHAR distance: if
+                // the strings differ in char count by more than maxd, the
+                // DP cannot possibly return a value <= maxd (the pre-Z-119
+                // byte-count bound wrongly early-outed multi-byte heads:
+                // "é" vs "" has byte diff 2 but char distance 1)
+                let diff = (ca as i64 - cb as i64).abs();
                 if diff > maxd as i64 {
                     return Ok(Value::Bool(false));
                 }
-                Ok(Value::Bool(crate::ffi::edit_distance(&a, &b) <= maxd))
+                Ok(Value::Bool(crate::ffi::edit_distance_chars(&a, &b) <= maxd))
             }
             "transcribe" => {
                 let s = args.first().map(|v| v.display()).unwrap_or_default();

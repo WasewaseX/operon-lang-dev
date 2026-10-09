@@ -1,0 +1,15 @@
+# Z-119 (#119.3): distance/similar are CHAR-based — the Python-str law the
+# oracle defines. The pre-fix byte kernel counted "é" as two DP cells, so
+# unicode edits came out wrong (and similar's byte-count early-out wrongly
+# refused multi-byte heads). Pinned: unicode edits, CJK, the early-out
+# bound, and the ASCII rows the byte kernel always got right.
+print(distance("héllo", "hello"))
+print(distance("héllö", "hello"))
+print(distance("日本語", "日本"))
+print(similar("héllo", "hello", 1))
+print(similar("é", "", 1))
+print(similar("éé", "", 1))
+print(distance("abc", "abc"))
+print(distance("", ""))
+print(similar("abc", "abd"))
+print(similar("abc", "xyz", 1))
