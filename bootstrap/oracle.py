@@ -431,7 +431,9 @@ def escape_bytes(b):
     return out
 
 def is_identlike(s):
-    return bool(s) and (s[0].isalpha() or s[0] == "_") and all(c.isalnum() or c == "_" for c in s)
+    # Z-125 (item 6): ASCII-only, mirroring the Rust lexer's charset
+    # (SPEC §Identifiers) — Unicode-permissive display conflation removed.
+    return bool(s) and (s[0].isascii() and s[0].isalpha() or s[0] == "_") and all(c.isascii() and (c.isalnum() or c == "_") for c in s)
 
 def v_repr(v, _seen=None, _depth=0):
     # reg-r4 (re-audit B-3): cycle-safe, a container containing itself
@@ -821,7 +823,7 @@ def lex(src):
                     depth -= 1
                 raw += ch; i2 += 1
             if not closed:
-                notes.append(Note(4, "unclosed string consumed to end of line", line))
+                notes.append(Note(4, "unclosed string consumed to end of file", line))
             toks.append(("INTERP" if interp else "STR", raw, line))
             i = i2; continue
         if c == "'":
@@ -839,7 +841,7 @@ def lex(src):
                     line += 1
                 raw += ch; i2 += 1
             if not closed:
-                notes.append(Note(4, "unclosed string consumed to end of line", line))
+                notes.append(Note(4, "unclosed string consumed to end of file", line))
             toks.append(("STR", raw, line))
             i = i2; continue
         if c == "@":
@@ -912,9 +914,13 @@ def lex(src):
                     notes.append(Note(4, f"integer '{text}' out of range treated as 0", line))
                     toks[-1] = ("INT", 0, line)
             i = j; continue
-        if c.isalpha() or c == "_":
+        if c.isascii() and (c.isalpha() or c == "_"):
             j = i
-            while j < n and (src[j].isalnum() or src[j] == "_"):
+            # Z-125 (item 6): ASCII-only identifiers, mirroring the Rust
+            # lexer's is_ascii_alphanumeric scan (SPEC §Identifiers) — the
+            # old Unicode-permissive scan made `café` one ident here and
+            # two tokens in the core, breaking byte-identical parity.
+            while j < n and src[j].isascii() and (src[j].isalnum() or src[j] == "_"):
                 j += 1
             toks.append(("IDENT", src[i:j], line))
             i = j; continue
@@ -1290,7 +1296,8 @@ class P:
 
     def word_stmt(self, w):
         t1 = self.toks[self.pos + 1] if self.pos + 1 < len(self.toks) else ("EOF", None, 0)
-        expr_head = (t1[0] == "SYM" and t1[1] in ("=", "(", "[", ".", "+=", "-=", "*=", "/=", "%="))
+        expr_head = (t1[0] == "SYM" and t1[1] in ("=", "(", "[", ".", "+=", "-=", "*=", "/=", "%=",
+            "==", "!=", "<", "<=", ">", ">=", "+", "-", "*", "/", "//", "%", "&&", "||", "??"))  # Z-125 (item 2)
         word = w
         # W01-s2: `type Name = ...` is the type-alias form; the repair to
         # 'phenotype' happens silently (the alias arm intercepts first).
@@ -1396,6 +1403,7 @@ class P:
                 pat = self.destructure_pat()
                 if self.peek() == ("SYM", "=", self.peek()[2]):
                     self.next()
+                    self.eat_nl()  # Z-125 (item 1): '=' continuation
                     e = self.expr()
                     self.end_stmt()
                     return ("letpat", pat, e)
@@ -1411,6 +1419,7 @@ class P:
                     names.append(self.ident())
                 if self.peek() == ("SYM", "=", self.peek()[2]):
                     self.next()
+                    self.eat_nl()  # Z-125 (item 1): '=' continuation
                     values = [self.expr()]
                     while self.peek() == ("SYM", ",", self.peek()[2]):
                         self.next()
@@ -1427,6 +1436,7 @@ class P:
                 ann = self.type_ann()
                 if self.peek() == ("SYM", "=", self.peek()[2]):
                     self.next()
+                    self.eat_nl()  # Z-125 (item 1): '=' continuation
                     e = self.expr()
                     self.end_stmt()
                     return ("letann", name, ann, e)
@@ -1435,6 +1445,7 @@ class P:
                 return ("letann", name, ann, ("null",))
             if self.peek() == ("SYM", "=", self.peek()[2]):
                 self.next()
+                self.eat_nl()  # Z-125 (item 1): '=' continuation
                 e = self.expr()
                 self.end_stmt()
                 return ("let", name, e)
@@ -1468,6 +1479,7 @@ class P:
             self.next()
             return ("scope", self.block())
         if word == "for":
+            for_line = self.peek()[2]
             self.next()
             t = self.peek()
             # L1a: destructuring loop target
@@ -1475,12 +1487,35 @@ class P:
                 pat = self.destructure_pat()
                 if not self.expect_kw("in"):
                     self.note(self.peek()[2], 4, "'for <pattern>' missing 'in'; iterating null")
+                self.eat_nl()  # Z-125 (item 1): 'in' continuation
                 it = self.expr()
                 return ("forpat", pat, it, self.block())
             name = self.ident()
             if not self.expect_kw("in"):
                 self.note(self.peek()[2], 4, f"'for {name}' missing 'in'; iterating null")
+            self.eat_nl()  # Z-125 (item 1): 'in' continuation
             it = self.expr()
+            # Z-125 (item 3): statement-position collect comprehension —
+            # `for x in xs [if cond] collect expr` used to fall into the
+            # no-braces block tolerance and silently lose the body. Same-line
+            # only, mirroring parser.rs.
+            tk = self.peek()
+            if tk[0] == "IDENT" and tk[1] == "collect" and tk[2] == for_line:
+                self.next()
+                body = self.expr()
+                self.end_stmt()
+                return ("expr", ("collect", name, it, None, body))
+            if tk[0] == "IDENT" and tk[1] == "if" and tk[2] == for_line:
+                self.next()
+                filt = self.expr()
+                tk2 = self.peek()
+                if tk2[0] == "IDENT" and tk2[1] == "collect":
+                    self.next()
+                    body = self.expr()
+                    self.end_stmt()
+                    return ("expr", ("collect", name, it, filt, body))
+                self.note(self.peek()[2], 4, "'for' filter without 'collect'; line skipped")
+                self.skip_line()
             return ("for", name, it, self.block())
         if word == "return":
             self.next()
@@ -2302,6 +2337,7 @@ class P:
         if t1[0] == "SYM" and t1[1] == "=":
             self.next()  # name
             self.next()  # =
+            self.eat_nl()  # Z-125 (item 1): '=' continuation
             v = self.expr()
             self.end_stmt()
             return ("assign", w, None, v)
@@ -2309,6 +2345,7 @@ class P:
             opmap = {"+=": "+", "-=": "-", "*=": "*", "/=": "/", "%=": "%"}
             self.next()  # name
             self.next()  # op=
+            self.eat_nl()  # Z-125 (item 1): 'op=' continuation
             v = self.expr()
             self.end_stmt()
             return ("assign", w, opmap[t1[1]], v)
@@ -2328,6 +2365,7 @@ class P:
                 targets.append(te)
             if valid and self.peek() == ("SYM", "=", self.peek()[2]):
                 self.next()
+                self.eat_nl()  # Z-125 (item 1): '=' continuation
                 values = [self.expr()]
                 while self.peek() == ("SYM", ",", self.peek()[2]):
                     self.next()
@@ -2341,6 +2379,7 @@ class P:
             return ("expr", e)
         if t[0] == "SYM" and t[1] == "=":
             self.next()
+            self.eat_nl()  # Z-125 (item 1): '=' continuation
             v = self.expr()
             self.end_stmt()
             if e[0] == "index":
@@ -2352,6 +2391,7 @@ class P:
         if t[0] == "SYM" and t[1] in ("+=", "-=", "*=", "/=", "%="):
             opmap = {"+=": "+", "-=": "-", "*=": "*", "/=": "/", "%=": "%"}
             self.next()
+            self.eat_nl()  # Z-125 (item 1): 'op=' continuation
             v = self.expr()
             self.end_stmt()
             if e[0] == "index":
@@ -2464,9 +2504,17 @@ class P:
                     self.next()
                 else:
                     self.note(self.peek()[2], 4, "guard condition auto-closed")
-                self.expect_kw("else")
-                gbody = self.block()
-                guard = (cond, gbody)
+                # Z-125 (item 5): the failure body must be a REAL brace
+                # block (the `guard (c) { f }` form, else optional) —
+                # ignoring the block check let block()'s single-statement
+                # tolerance consume the NEXT statement as the failure body
+                # (mirror of parser.rs).
+                if self.expect_kw("else") or self.peek() == ("SYM", "{", self.peek()[2]):
+                    gbody = self.block()
+                    guard = (cond, gbody)
+                else:
+                    self.note(self.peek()[2], 4, "guard without failure body; empty failure body")
+                    guard = (cond, [])
             else:
                 self.note(self.peek()[2], 4, "guard without condition ignored")
         self.eat_nl()
@@ -2585,10 +2633,12 @@ class P:
         t = self.peek()
         if t[0] == "SYM" and t[1] == "?":
             self.next()
+            self.eat_nl()  # Z-125 (item 1): ternary continuation
             a = self.expr()
             t2 = self.peek()
             if t2[0] == "SYM" and t2[1] == ":":
                 self.next()
+                self.eat_nl()  # Z-125 (item 1): ternary continuation
             else:
                 self.note(t[2], 4, "ternary missing ':'; else-branch is null")
             b = self.expr()
@@ -3058,6 +3108,7 @@ class P:
             if val == "for":
                 var = self.ident()
                 self.expect_kw("in")
+                self.eat_nl()  # Z-125 (item 1): 'in' continuation
                 it = self.expr()
                 filt = None
                 if self.at_ident("if"):
