@@ -626,6 +626,28 @@ def type_name(v):
     if isinstance(v, WeakRef): return "weak"
     return "native"
 
+class _NanKey(float):
+    """z-s0-parity (#107.1): a NaN map key that bypasses CPython's dict
+    identity fast-path. deep_eq(NaN, NaN) is False (SPEC: NaN never equals
+    NaN), so repeated NaN-key writes must ACCUMULATE (the Rust contract,
+    len(m) == 2 after two m[n]=v writes with n NaN), but storing the same
+    float object collapses to one dict slot via the identity shortcut.
+    Identity-based hashing + the inherited float __eq__ (False for NaN
+    pairs) gives each write its own entry while lookups stay honest:
+    hash(nan) is identity-based on CPython 3.10+, so raw-NaN has/read/del
+    probes never match a _NanKey slot (matching Rust: has(nan) false).
+    Renders exactly like the plain float (float.__repr__ inherited)."""
+
+    __hash__ = object.__hash__
+
+
+def _nkey(k):
+    """Wrap a NaN float key for map writes; everything else passes through."""
+    if isinstance(k, float) and k != k:
+        return _NanKey(k)
+    return k
+
+
 def deep_eq(a, b, _pairs=None):
     # reg-r4: cycle-safe, a pair of containers already being compared is
     # treated as equal (mirror of the Rust deep_eq's seen-pair set); the
@@ -4088,7 +4110,7 @@ class Interp:
                             if self.is_frozen(tv):
                                 raise self._frozen_stress("map")
                             key = iv if isinstance(iv, (str, int, float, bool)) else v_display(iv)
-                            tv[key] = val
+                            tv[_nkey(key)] = val
                         else:
                             self.note(4, "index assignment on non-container ignored")
                     elif t[0] == "member":
@@ -4159,7 +4181,7 @@ class Interp:
                 key = iv if isinstance(iv, (str, int, float, bool, bytes)) else (
                     iv if isinstance(iv, ObjInst) else v_display(iv))
                 self._cycle_note_insert(tv, nv)  # W013: value edge (keys not walked)
-                tv[key] = nv
+                tv[_nkey(key)] = nv
             else:
                 self.note(4, "index assignment on non-container ignored")
         elif k == "mem_assign":
@@ -4177,7 +4199,7 @@ class Interp:
                 cur = tv.get(key)
                 nv = self.binop(op, cur, v) if op else v
                 self._cycle_note_insert(tv, nv)  # W013: before the edge lands
-                tv[key] = nv
+                tv[_nkey(key)] = nv
             else:
                 self.note(4, "member assignment on non-map ignored")
         elif k == "if":
@@ -4580,7 +4602,7 @@ class Interp:
                 # W029 mirror: bytes are scalar keys (Rust key_scalar includes
                 # Bytes), never stringified
                 key = kv if isinstance(kv, (str, int, float, bool, bytes)) else v_display(kv)
-                m[key] = self.eval(env, ve)
+                m[_nkey(key)] = self.eval(env, ve)
             return m
         if k == "ident":
             v = self.lookup(env, e[1])

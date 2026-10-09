@@ -3882,9 +3882,14 @@ impl Interp {
         // deep_eq against every existing key per upsert, quadratic CPU that
         // burned zero fuel (25k list-keyed inserts was a live hang). Charge
         // the scan to the step budget; the next tick raises overflow.
+        // z-s0-parity (#107.2): the int/float cross-equality class pays the
+        // same exact scan on insert — charge it symmetrically.
         if !crate::value::key_is_scalar(&key) {
             let n = m.borrow().len() as u64;
             self.steps = self.steps.saturating_add(n);
+        } else {
+            let cost = m.borrow().lookup_scan_cost(&key);
+            self.steps = self.steps.saturating_add(cost);
         }
         // dx-r3: memoized upsert (was a linear deep_eq scan)
         // W013: insertion-time cycle detection, before the edge lands, the
@@ -4080,6 +4085,10 @@ impl Interp {
                         }
                     }
                     (Value::Map(m), _) => {
+                        // z-s0-parity (#107.2): charge the scan position()
+                        // may pay (cross-numeric exact scan) before it runs
+                        let cost = m.borrow().lookup_scan_cost(&iv);
+                        self.steps = self.steps.saturating_add(cost);
                         let pos = m.borrow().position(&iv);
                         match pos {
                             // ast-grep-ignore: no-unwrap-in-src
@@ -6198,7 +6207,19 @@ impl Interp {
             // has no frame to park: fall back to the blocking lane)
             let saved_armed = std::mem::replace(&mut self.fiber_armed, false);
             let saved_hook = std::mem::replace(&mut self.fiber_hook, false);
-            let dv = self.eval(fenv, d).unwrap_or(Value::Null);
+            // z-s0-parity (#126.5): a stress inside a default expression
+            // propagates as a catchable stress raised at the CALL (the
+            // oracle's contract; `stress/rescue` at the caller sees it).
+            // The old `unwrap_or(Null)` swallowed it — the rescue never
+            // fired and the param silently bound null.
+            let dv = match self.eval(fenv, d) {
+                Ok(v) => v,
+                Err(s) => {
+                    self.fiber_armed = saved_armed;
+                    self.fiber_hook = saved_hook;
+                    return Err(s);
+                }
+            };
             self.fiber_armed = saved_armed;
             self.fiber_hook = saved_hook;
             if let Some(ann) = def.param_anns.get(i).and_then(|a| a.as_ref()) {
@@ -7304,7 +7325,15 @@ impl Interp {
                 // the gene funnel: no frame exists to park)
                 let saved_armed = std::mem::replace(&mut self.fiber_armed, false);
                 let saved_hook = std::mem::replace(&mut self.fiber_hook, false);
-                let dv = self.eval(&fenv, d).unwrap_or(Value::Null);
+                // z-s0-parity (#126.5): propagate, see resolve_param
+                let dv = match self.eval(&fenv, d) {
+                    Ok(v) => v,
+                    Err(s) => {
+                        self.fiber_armed = saved_armed;
+                        self.fiber_hook = saved_hook;
+                        return Err(s);
+                    }
+                };
                 self.fiber_armed = saved_armed;
                 self.fiber_hook = saved_hook;
                 fenv.define_param(pname, dv);
@@ -7808,7 +7837,12 @@ impl Interp {
                 _ => Ok(Value::List(Rc::new(RefCell::new(vec![])))),
             },
             "has" => match (args.first(), args.get(1)) {
-                (Some(Value::Map(m)), Some(k)) => Ok(Value::Bool(m.borrow().position(k).is_some())),
+                (Some(Value::Map(m)), Some(k)) => {
+                    // z-s0-parity (#107.2): charge the scan position() may pay
+                    let cost = m.borrow().lookup_scan_cost(k);
+                    self.steps = self.steps.saturating_add(cost);
+                    Ok(Value::Bool(m.borrow().position(k).is_some()))
+                }
                 _ => Ok(Value::Bool(false)),
             },
             "del" => match (args.first(), args.get(1)) {
@@ -7816,6 +7850,10 @@ impl Interp {
                     if self.is_frozen_map(m) {
                         return Err(Self::frozen_stress("map"));
                     }
+                    // z-s0-parity (#107.2): charge the scan del's position()
+                    // may pay before it runs
+                    let cost = m.borrow().lookup_scan_cost(k);
+                    self.steps = self.steps.saturating_add(cost);
                     m.borrow_mut().del(k);
                     Ok(Value::Null)
                 }
@@ -10023,13 +10061,18 @@ impl Interp {
                     ))
                 };
                 match (&args[0], &args[1]) {
-                    (Value::Map(m), k) => match m.borrow().position(k) {
-                        Some(i) => {
-                            let v = m.borrow().items[i].1.clone();
-                            Ok(Value::Variant(crate::value::VTag::OkV, Some(Box::new(v))))
+                    (Value::Map(m), k) => {
+                        // z-s0-parity (#107.2): charge the scan position() may pay
+                        let cost = m.borrow().lookup_scan_cost(k);
+                        self.steps = self.steps.saturating_add(cost);
+                        match m.borrow().position(k) {
+                            Some(i) => {
+                                let v = m.borrow().items[i].1.clone();
+                                Ok(Value::Variant(crate::value::VTag::OkV, Some(Box::new(v))))
+                            }
+                            None => err(format!("no key '{}'", k.display())),
                         }
-                        None => err(format!("no key '{}'", k.display())),
-                    },
+                    }
                     (other, _) => err(format!("try_get needs a map, got {}", other.type_name())),
                 }
             }
@@ -12421,6 +12464,9 @@ impl Interp {
                 )))),
                 "has" => {
                     let t = args.first().cloned().unwrap_or(Value::Null);
+                    // z-s0-parity (#107.2): charge the scan position() may pay
+                    let cost = m.borrow().lookup_scan_cost(&t);
+                    self.steps = self.steps.saturating_add(cost);
                     Ok(Value::Bool(m.borrow().position(&t).is_some()))
                 }
                 "get" => {
@@ -12428,6 +12474,9 @@ impl Interp {
                     // missing key keeps the member-access note; with a
                     // default it is returned silently (mainstream idiom).
                     let t = args.first().cloned().unwrap_or(Value::Null);
+                    // z-s0-parity (#107.2): charge the scan position() may pay
+                    let cost = m.borrow().lookup_scan_cost(&t);
+                    self.steps = self.steps.saturating_add(cost);
                     match m.borrow().position(&t) {
                         Some(i) => Ok(m
                             .borrow()
@@ -12453,6 +12502,10 @@ impl Interp {
                         return Err(Self::frozen_stress("map"));
                     }
                     let t = args.first().cloned().unwrap_or(Value::Null);
+                    // z-s0-parity (#107.2): charge the scan del's position()
+                    // may pay before it runs
+                    let cost = m.borrow().lookup_scan_cost(&t);
+                    self.steps = self.steps.saturating_add(cost);
                     m.borrow_mut().del(&t);
                     Ok(Value::Null)
                 }
@@ -12758,15 +12811,27 @@ fn http_get(host: &str, port: u16, path: &str) -> Result<String, String> {
 pub fn json_stringify(v: &Value) -> String {
     // cycle-safe: a container containing itself serializes the repeated
     // branch as null (JSON has no cycle marker; CPython's json.dumps errors,
-    // we contain instead of crash). sec-r5 (F-10): the visited set is NOT
-    // unwound, so shared (aliased) subtrees also serialize once, see the
-    // F-10 note in json_stringify_g; this keeps serialization LINEAR for
-    // DAG-shaped values instead of exponential.
+    // we contain instead of crash). sec-r5 (F-10) + z-s0-parity (#119.2):
+    // the visited set is a PATH (unwound on exit) and each container's
+    // serialized form is memoized; a re-encounter of an already-serialized
+    // node re-emits the memoized bytes (oracle parity: CPython duplicates
+    // shared subtrees) charged against a per-call duplication budget; past
+    // the budget — and for true cycles — the repeated branch serializes as
+    // null. Memoization keeps serialization LINEAR for DAG-shaped values
+    // (the old exponential re-walk live hang stays fixed).
     let mut seen: Vec<usize> = Vec::new();
-    json_stringify_g(v, &mut seen, 0)
+    let mut memo: std::collections::HashMap<usize, String> = std::collections::HashMap::new();
+    let mut budget: u64 = crate::value::REPR_DUP_BUDGET;
+    json_stringify_g(v, &mut seen, &mut memo, &mut budget, 0)
 }
 
-fn json_stringify_g(v: &Value, seen: &mut Vec<usize>, depth: u32) -> String {
+fn json_stringify_g(
+    v: &Value,
+    seen: &mut Vec<usize>,
+    memo: &mut std::collections::HashMap<usize, String>,
+    budget: &mut u64,
+    depth: u32,
+) -> String {
     if depth > 512 {
         return "null".into();
     }
@@ -12805,31 +12870,50 @@ fn json_stringify_g(v: &Value, seen: &mut Vec<usize>, depth: u32) -> String {
                 crate::value::VTag::ErrV => "err",
                 crate::value::VTag::NoneV => "none",
             },
-            json_stringify_g(p, seen, depth + 1)
+            json_stringify_g(p, seen, memo, budget, depth + 1)
         ),
         // defensive: bare Some/Ok/Err without payload cannot be constructed
         Value::Variant(_, None) => "null".into(),
         Value::List(l) => {
             let id = std::rc::Rc::as_ptr(l) as *const u8 as usize;
             if seen.contains(&id) {
+                // cycle: the node is on the current serialization path
                 return "null".into();
+            }
+            if let Some(m) = memo.get(&id) {
+                // z-s0-parity (#119.2): shared-but-acyclic re-encounter
+                // re-emits the memoized bytes, budget-charged (oracle
+                // parity); past the budget, the cycle marker.
+                return if *budget >= m.len() as u64 {
+                    *budget -= m.len() as u64;
+                    m.clone()
+                } else {
+                    "null".into()
+                };
             }
             seen.push(id);
             let parts: Vec<String> = l
                 .borrow()
                 .iter()
-                .map(|x| json_stringify_g(x, seen, depth + 1))
+                .map(|x| json_stringify_g(x, seen, memo, budget, depth + 1))
                 .collect();
-            // sec-r5 (F-10): the visited id is NOT popped. Unwinding made
-            // DAG-shaped values (l=[l,l] chains) re-walk exponentially,
-            // 2^45 node visits for one builtin call (live hang). Memoized:
-            // shared subtrees serialize once, later references as null.
-            format!("[{}]", parts.join(","))
+            let s = format!("[{}]", parts.join(","));
+            seen.pop();
+            memo.insert(id, s.clone());
+            s
         }
         Value::Map(m) => {
             let id = std::rc::Rc::as_ptr(m) as *const u8 as usize;
             if seen.contains(&id) {
                 return "null".into();
+            }
+            if let Some(mm) = memo.get(&id) {
+                return if *budget >= mm.len() as u64 {
+                    *budget -= mm.len() as u64;
+                    mm.clone()
+                } else {
+                    "null".into()
+                };
             }
             seen.push(id);
             let parts: Vec<String> = m
@@ -12839,12 +12923,14 @@ fn json_stringify_g(v: &Value, seen: &mut Vec<usize>, depth: u32) -> String {
                     format!(
                         "{}:{}",
                         json_quote(&k.display()),
-                        json_stringify_g(x, seen, depth + 1)
+                        json_stringify_g(x, seen, memo, budget, depth + 1)
                     )
                 })
                 .collect();
-            // sec-r5 (F-10): visited id stays (see the list arm above)
-            format!("{{{}}}", parts.join(","))
+            let s = format!("{{{}}}", parts.join(","));
+            seen.pop();
+            memo.insert(id, s.clone());
+            s
         }
         other => json_quote(&other.display()),
     }
@@ -13440,7 +13526,20 @@ pub fn json_parse(src: &str) -> Result<Value, String> {
                         }
                         self.i += 1;
                         let v = self.value()?;
-                        out.push((Value::Str(k.display()), v));
+                        // z-s0-parity (#119.5): duplicate keys are LAST-WINS,
+                        // byte-matching the oracle's CPython dict semantics
+                        // (RFC 8259 §4 recommends uniqueness; every mainstream
+                        // parser resolves the collision, and the last value is
+                        // the interoperable choice). The old engine kept both
+                        // entries, so json_str re-emitted the duplicate pair.
+                        let ks = k.display();
+                        match out
+                            .iter_mut()
+                            .find(|(ek, _)| matches!(ek, Value::Str(es) if *es == ks))
+                        {
+                            Some(slot) => slot.1 = v,
+                            None => out.push((Value::Str(ks), v)),
+                        }
                         match self.peek() {
                             Some(',') => {
                                 self.i += 1;
