@@ -296,7 +296,10 @@ pub fn builtin_sig(name: &str, args: &[Ty]) -> Option<(usize, usize, Ty)> {
         "values" => Some(Ty::List(Box::new(Ty::Any))),
         "items" => Some(Ty::List(Box::new(Ty::Any))),
         "has" => Some(Ty::Bool),
-        "del" => Some(Ty::Bool),
+        // z-s1-typedgate (#124.4): del returns Null at runtime (both
+        // engines; was typed Bool — a checker lie `let b: bool = del m[k]`
+        // stressed at the annotation check)
+        "del" => Some(Ty::Null),
         "contains" => Some(Ty::Bool),
         "print" | "println" | "eprint" | "eprintln" => Some(Ty::Null),
         "some" => Some(Ty::OptionT(Box::new(
@@ -360,7 +363,7 @@ pub enum MethodHit {
 
 /// Builtin method surface per receiver type, mirrored from
 /// `interp.rs::call_method` (TYPED-MODE.md §6).
-pub fn method_hit(recv: &Ty, name: &str, _args: &[Ty], phenos: &[PhenoInfo]) -> MethodHit {
+pub fn method_hit(recv: &Ty, name: &str, args: &[Ty], phenos: &[PhenoInfo]) -> MethodHit {
     match recv {
         Ty::Any | Ty::Never | Ty::Param(_) => MethodHit::Open,
         Ty::Str => match name {
@@ -387,7 +390,19 @@ pub fn method_hit(recv: &Ty, name: &str, _args: &[Ty], phenos: &[PhenoInfo]) -> 
             "contains" => MethodHit::Found(Ty::Bool),
             "index_of" => MethodHit::Found(Ty::Int),
             "len" => MethodHit::Found(Ty::Int),
-            "push" | "pop" | "get" => MethodHit::Found((**el).clone()),
+            // z-s1-typedgate (#124.2): push returns the WHOLE list, pop/get
+            // return null out-of-range/empty (bare) — unions with Null, the
+            // map.get convention one row below. get with a default folds
+            // the default's type in.
+            "push" => MethodHit::Found(Ty::List(el.clone())),
+            "pop" => MethodHit::Found(mk_union(vec![(**el).clone(), Ty::Null])),
+            "get" => {
+                let mut alts = vec![(**el).clone(), Ty::Null];
+                if let Some(d) = args.get(1) {
+                    alts.push(d.clone());
+                }
+                MethodHit::Found(mk_union(alts))
+            }
             _ => MethodHit::Missing,
         },
         Ty::Map(_k, v) => match name {
@@ -396,7 +411,8 @@ pub fn method_hit(recv: &Ty, name: &str, _args: &[Ty], phenos: &[PhenoInfo]) -> 
             "items" => MethodHit::Found(Ty::List(Box::new(Ty::List(Box::new(Ty::Any))))),
             "has" => MethodHit::Found(Ty::Bool),
             "get" => MethodHit::Found(mk_union(vec![v.as_ref().clone(), Ty::Null])),
-            "del" => MethodHit::Found(Ty::Bool),
+            // z-s1-typedgate (#124.4): del returns Null (was Bool)
+            "del" => MethodHit::Found(Ty::Null),
             "len" => MethodHit::Found(Ty::Int),
             _ => MethodHit::Missing,
         },
