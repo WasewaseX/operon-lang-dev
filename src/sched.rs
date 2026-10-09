@@ -202,6 +202,23 @@ impl AsyncSched {
         for req in self.take_wake_reqs() {
             match req {
                 WakeReq::Sent(ch) => {
+                    // Z-120 (#120): a RUNNING fiber's recv pops the queue
+                    // directly (builtin_recv) WITHOUT consuming this request
+                    // — a stale Sent whose value was already consumed must
+                    // NOT wake a parked waiter: that wake's recv_answer
+                    // would pop an EMPTY OPEN channel and deliver null, but
+                    // closed+empty is the only null recv may produce (the
+                    // pinned invariant). Drop the stale request; the waiter
+                    // stays parked for the next real send (the scheduler's
+                    // stall return keeps a fully-parked program honest),
+                    // exactly the documented "send wakes the first-parked
+                    // waiter" rule minus the consumed-value theft wake.
+                    {
+                        let st = ch.state.lock().unwrap_or_else(|e| e.into_inner());
+                        if st.queue.is_empty() {
+                            continue;
+                        }
+                    }
                     // first recv-parked waiter on this channel, FIFO
                     let recv_pos = self
                         .chan_parks

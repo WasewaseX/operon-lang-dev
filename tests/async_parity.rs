@@ -303,3 +303,63 @@ gene main() {
         f.notes
     );
 }
+
+/// Z-120 (#120): a stale `WakeReq::Sent` must never wake a parked waiter
+/// whose item was already consumed by a RUNNING fiber's direct recv — that
+/// wake's recv_answer popped an EMPTY OPEN channel and delivered null,
+/// breaking the pinned invariant (closed+empty is the ONLY null recv can
+/// produce). The scheduler now drops a Sent whose queue is empty at
+/// processing time; the starved waiter surfaces the deterministic
+/// join-timeout note instead. Fiber-lane assertions only: the thread lane
+/// hands the same send to the parked consumer via the condvar (documented
+/// "different scheduling") and its producer then blocks on the condvar
+/// with no further wake source, so the program is inherently
+/// scheduling-dependent ACROSS lanes — the invariant under test (no
+/// recv-null from an open channel) holds on BOTH.
+const STALE_SENT: &str = r#"
+gene consumer(ch) {
+    let v = recv(ch)
+    if v == null { print("BUG: consumer got null on an OPEN channel") }
+    else { print("consumer ok:", v) }
+    return v
+}
+gene producer(ch) {
+    send(ch, 42)
+    let echo = recv(ch)
+    print("producer echo:", echo)
+    return echo
+}
+gene main() {
+    let ch = channel()
+    let c = spawn(consumer, [ch])
+    let p = spawn(producer, [ch])
+    print("joined consumer:", join(c), "producer:", join(p))
+    return 0
+}
+"#;
+
+#[test]
+fn stale_sent_wake_never_delivers_null_from_an_open_channel() {
+    let f = run_lane(STALE_SENT, "fiber", None);
+    let joined = f.out.join("\n");
+    assert!(
+        !joined.contains("BUG: consumer got null"),
+        "recv delivered null from an OPEN channel (stale WakeReq::Sent wake): {joined}"
+    );
+    assert!(
+        joined.contains("producer: 42"),
+        "the producer's running recv must keep its direct-pop (join sees the echoed 42): {joined}"
+    );
+    assert!(
+        f.notes
+            .iter()
+            .any(|n| n.contains("join timeout") && n.contains("task 1")),
+        "the starved waiter must surface the deterministic join-timeout note, not a fake recv null: {:?}",
+        f.notes
+    );
+    assert!(
+        f.main_err.is_none(),
+        "main must not stress: {:?}",
+        f.main_err
+    );
+}
