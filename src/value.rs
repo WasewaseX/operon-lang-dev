@@ -2,7 +2,7 @@
 
 use crate::ast::GeneDef;
 use std::cell::RefCell;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
 
@@ -287,6 +287,25 @@ impl MapStore {
     pub fn position(&self, key: &Value) -> Option<usize> {
         let (cls, h) = key_class_hash(key);
         self.position_h(key, cls, h)
+    }
+
+    /// z-s0-parity (#107.2): the fuel a `position()` call MAY pay, mirroring
+    /// `position_h`'s branching: non-scalar keys pay the capped linear scan,
+    /// int/float lookups on numerically-mixed maps pay the exact scan
+    /// (cross-equality class), everything else is the O(1) memo probe.
+    /// Callers charge this to the step budget so a 50k-entry map probed in
+    /// a loop cannot burn quadratic CPU for free.
+    pub fn lookup_scan_cost(&self, key: &Value) -> u64 {
+        let (cls, _) = key_class_hash(key);
+        if cls == KC_OTHER {
+            return (self.items.len() as u64).min(NON_SCALAR_SCAN_CAP as u64);
+        }
+        if (cls == KC_INT && self.memo.num_float > 0)
+            || (cls == KC_FLOAT && self.memo.num_numeric > 0)
+        {
+            return self.items.len() as u64;
+        }
+        1
     }
     /// O(1) string-key lookup without constructing a `Value::Str` (the
     /// `.`/`?.` member-read hot path — P4-safe). Same contract as
@@ -742,16 +761,29 @@ impl Value {
     /// with a `[...]` / `{...}` marker (CPython behavior), never recurses
     /// forever. Depth is capped too, so very deep (non-cyclic) nesting
     /// degrades gracefully instead of exhausting the native stack.
-    /// sec-r5 (F-10): the visited set is NOT unwound on exit, unwinding
-    /// made DAG-shaped values (l=[l,l] chains) re-walk exponentially (a
-    /// 45-deep chain is 2^45 node visits: a live hang). Memoized: a shared
-    /// subtree renders once; later references render the cycle marker.
+    /// sec-r5 (F-10) + z-s0-parity (#119.2): the visited set is a PATH
+    /// (unwound on exit), and each container's rendered form is memoized.
+    /// A re-encounter of an already-rendered node re-emits the memoized
+    /// bytes (oracle parity: CPython duplicates shared subtrees) charged
+    /// against a per-call duplication budget; past the budget — and for
+    /// true cycles — the `[...]` / `{...}` marker renders. This keeps the
+    /// old exponential-DAG live-hang bounded (memo = each node renders
+    /// once; re-emission is a memcpy) while shared-but-acyclic containers
+    /// now print their full contents at every reference.
     pub fn repr(&self) -> String {
         let mut seen: HashSet<usize> = HashSet::new();
-        self.repr_g(&mut seen, 0)
+        let mut memo: HashMap<usize, String> = HashMap::new();
+        let mut budget: u64 = REPR_DUP_BUDGET;
+        self.repr_g(&mut seen, &mut memo, &mut budget, 0)
     }
 
-    fn repr_g(&self, seen: &mut HashSet<usize>, depth: u32) -> String {
+    fn repr_g(
+        &self,
+        seen: &mut HashSet<usize>,
+        memo: &mut HashMap<usize, String>,
+        budget: &mut u64,
+        depth: u32,
+    ) -> String {
         match self {
             Value::Null => "null".into(),
             Value::Bool(true) => "true".into(),
@@ -764,35 +796,61 @@ impl Value {
             Value::Bytes(b) => format!("b\"{}\"", escape_bytes(b)),
             Value::List(l) => {
                 let id = Rc::as_ptr(l) as *const u8 as usize;
-                if depth > 256 || !seen.insert(id) {
+                if depth > 256 || seen.contains(&id) {
+                    // cycle: the node is on the current render path
                     return "[...]".into();
                 }
+                if let Some(m) = memo.get(&id) {
+                    // z-s0-parity (#119.2): shared-but-acyclic re-encounter
+                    // re-emits the memoized render, budget-charged (oracle
+                    // parity); past the budget, the containment marker.
+                    return if *budget >= m.len() as u64 {
+                        *budget -= m.len() as u64;
+                        m.clone()
+                    } else {
+                        "[...]".into()
+                    };
+                }
+                seen.insert(id);
                 let items: Vec<String> = l
                     .borrow()
                     .iter()
-                    .map(|v| v.repr_g(seen, depth + 1))
+                    .map(|v| v.repr_g(seen, memo, budget, depth + 1))
                     .collect();
-                // sec-r5 (F-10): visited id stays, memoized DAG containment
-                format!("[{}]", items.join(", "))
+                let s = format!("[{}]", items.join(", "));
+                seen.remove(&id);
+                memo.insert(id, s.clone());
+                s
             }
             Value::Map(m) => {
                 let id = Rc::as_ptr(m) as *const u8 as usize;
-                if depth > 256 || !seen.insert(id) {
+                if depth > 256 || seen.contains(&id) {
                     return "{...}".into();
                 }
+                if let Some(m) = memo.get(&id) {
+                    return if *budget >= m.len() as u64 {
+                        *budget -= m.len() as u64;
+                        m.clone()
+                    } else {
+                        "{...}".into()
+                    };
+                }
+                seen.insert(id);
                 let items: Vec<String> = m
                     .borrow()
                     .iter()
                     .map(|(k, v)| {
                         format!(
                             "{}: {}",
-                            key_repr_g(k, seen, depth),
-                            v.repr_g(seen, depth + 1)
+                            key_repr_g(k, seen, memo, budget, depth),
+                            v.repr_g(seen, memo, budget, depth + 1)
                         )
                     })
                     .collect();
-                // sec-r5 (F-10): visited id stays, memoized DAG containment
-                format!("{{{}}}", items.join(", "))
+                let s = format!("{{{}}}", items.join(", "));
+                seen.remove(&id);
+                memo.insert(id, s.clone());
+                s
             }
             Value::Gene(d, _) => match &d.name {
                 Some(n) => format!("<gene {}>", n),
@@ -802,7 +860,11 @@ impl Value {
             // payload renders through repr_g so depth/cycle caps apply.
             Value::Variant(VTag::NoneV, _) => "None".into(),
             Value::Variant(t, Some(p)) => {
-                format!("{}({})", t.tag_name(), p.repr_g(seen, depth + 1))
+                format!(
+                    "{}({})",
+                    t.tag_name(),
+                    p.repr_g(seen, memo, budget, depth + 1)
+                )
             }
             // a Some/Ok/Err with no payload cannot be constructed (builtins
             // enforce arity); render defensively rather than panic.
@@ -1086,12 +1148,24 @@ fn escape_bytes(b: &[u8]) -> String {
     out
 }
 
-fn key_repr_g(k: &Value, seen: &mut HashSet<usize>, depth: u32) -> String {
+fn key_repr_g(
+    k: &Value,
+    seen: &mut HashSet<usize>,
+    memo: &mut HashMap<usize, String>,
+    budget: &mut u64,
+    depth: u32,
+) -> String {
     match k {
         Value::Str(s) if is_identlike(s) => s.clone(),
-        other => other.repr_g(seen, depth + 1),
+        other => other.repr_g(seen, memo, budget, depth + 1),
     }
 }
+
+/// z-s0-parity (#119.2): per-call duplication budget for repr/json of
+/// shared-but-acyclic containers. Realistic shared payloads re-render in
+/// full (oracle parity); adversarial fan-out chains are capped here
+/// instead of doubling output without bound.
+pub const REPR_DUP_BUDGET: u64 = 4 * 1024 * 1024;
 
 fn is_identlike(s: &str) -> bool {
     !s.is_empty()
