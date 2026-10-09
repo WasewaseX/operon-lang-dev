@@ -3453,6 +3453,7 @@ impl Parser {
             let is_or = self.at_kw("or") || matches!(self.peek(), Tok::PipePipe);
             if is_or {
                 self.next();
+                self.eat_newlines();
                 let right = self.parse_nullish();
                 left = Expr::Binary(BinOp::Or, Box::new(left), Box::new(right), self.line());
             } else {
@@ -3469,6 +3470,7 @@ impl Parser {
         while matches!(self.peek(), Tok::QuestionQuestion) {
             let nullish_line = self.line();
             self.next();
+            self.eat_newlines(); // Z-125: trailing ?? continues onto the next line
             let right = self.parse_and();
             left = Expr::Binary(
                 BinOp::Nullish,
@@ -3486,6 +3488,7 @@ impl Parser {
             let is_and = self.at_kw("and") || matches!(self.peek(), Tok::AmpAmp);
             if is_and {
                 self.next();
+                self.eat_newlines();
                 let right = self.parse_not();
                 left = Expr::Binary(BinOp::And, Box::new(left), Box::new(right), self.line());
             } else {
@@ -3520,6 +3523,7 @@ impl Parser {
             if let Some(op) = op {
                 let bin_line = self.line();
                 self.next();
+                self.eat_newlines();
                 let right = self.parse_bitor();
                 left = Expr::Binary(op, Box::new(left), Box::new(right), bin_line);
             } else {
@@ -3533,6 +3537,7 @@ impl Parser {
         let mut left = self.parse_bitxor();
         while matches!(self.peek(), Tok::Pipe) {
             self.next();
+            self.eat_newlines();
             let right = self.parse_bitxor();
             left = Expr::Binary(BinOp::BitOr, Box::new(left), Box::new(right), self.line());
         }
@@ -3543,6 +3548,7 @@ impl Parser {
         let mut left = self.parse_bitand();
         while matches!(self.peek(), Tok::Caret) {
             self.next();
+            self.eat_newlines();
             let right = self.parse_bitand();
             left = Expr::Binary(BinOp::BitXor, Box::new(left), Box::new(right), self.line());
         }
@@ -3553,6 +3559,7 @@ impl Parser {
         let mut left = self.parse_shift();
         while matches!(self.peek(), Tok::Amp) {
             self.next();
+            self.eat_newlines();
             let right = self.parse_shift();
             left = Expr::Binary(BinOp::BitAnd, Box::new(left), Box::new(right), self.line());
         }
@@ -3570,6 +3577,7 @@ impl Parser {
             if let Some(op) = op {
                 let bin_line = self.line();
                 self.next();
+                self.eat_newlines();
                 let right = self.parse_add();
                 left = Expr::Binary(op, Box::new(left), Box::new(right), bin_line);
             } else {
@@ -3590,6 +3598,7 @@ impl Parser {
             if let Some(op) = op {
                 let bin_line = self.line();
                 self.next();
+                self.eat_newlines();
                 let right = self.parse_mul();
                 left = Expr::Binary(op, Box::new(left), Box::new(right), bin_line);
             } else {
@@ -3612,6 +3621,7 @@ impl Parser {
             if let Some(op) = op {
                 let bin_line = self.line();
                 self.next();
+                self.eat_newlines();
                 let right = self.parse_unary();
                 left = Expr::Binary(op, Box::new(left), Box::new(right), bin_line);
             } else {
@@ -3679,6 +3689,7 @@ impl Parser {
         if matches!(self.peek(), Tok::StarStar) {
             let pow_line = self.line();
             self.next();
+            self.eat_newlines();
             let right = self.parse_unary();
             return Expr::Binary(BinOp::Pow, Box::new(left), Box::new(right), pow_line);
         }
