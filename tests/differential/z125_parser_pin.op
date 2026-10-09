@@ -1,0 +1,117 @@
+# Z-125 parser-hardening pin (2026-10-09, issue #125): the parser/lexer
+# hardening bundle rows, engine==oracle==vm==tree-walk byte-identical.
+# Rows this pin forecloses (pre-fix state):
+#   1. `let s = 1 +\n2` — a newline after any binary operator/`=`/ternary
+#      arm silently nullified the operand (s bound null, the operand became
+#      an orphan statement). Post-fix: operator continuation — the newline
+#      after a dangling operator is eaten (Python-style line join), while a
+#      newline NOT after an operator still terminates the statement
+#      (`let a = 1\n-2` stays two statements).
+#   2. `net == 1` / `i == 1` at statement head — the wobble ladder repaired
+#      'net' to 'let' and 'i' to 'if' (bogus binding, rest of line skipped).
+#      Post-fix: the expression-head suppression set covers the comparison
+#      and arithmetic operators, so the line parses as an expression
+#      statement and the following statements run untouched.
+#   3. `for x in xs collect x * 2` at statement position — the body was
+#      silently lost (phantom collect ident loop, every following statement
+#      shifted a slot). Post-fix: the statement for arm recognizes the
+#      same-line collect comprehension (with optional same-line `if` filter)
+#      and evaluates it as an expression statement.
+#   5. `gene g() guard (c)` without `else` — the guard body parse consumed
+#      the NEXT block as the failure body (statements shifted). Post-fix:
+#      rung-4 note + empty failure body; the block stays the gene body.
+#   6. `café = 5` — the oracle's Unicode-permissive ident scan made `café`
+#      one identifier while the ASCII core lexed `caf` + skip; byte-parity
+#      broken. Post-fix: oracle scan is ASCII-restricted (SPEC §Identifiers).
+gene main() {
+    # --- item 1: operator continuation -----------------------------------
+    let s = 1 +
+2
+    print("cont_add", s)
+    let t = (1 +
+2) * 3
+    print("cont_paren", t)
+    let u = 2 *
+3 +
+4
+    print("cont_chain", u)
+    let v = true ?
+10 :
+20
+    print("cont_tern", v)
+    let w = 7
+    w +=
+3 +
+1
+    print("cont_compound", w)
+    let m = [1, 2,
+3]
+    print("cont_list", m)
+    let acc = 0
+    for k in [1, 2,
+3] {
+        acc += k
+    }
+    print("cont_in", acc)
+    let big = 10 *
+10 *
+10
+    print("cont_mul", big)
+    # negative control: NO dangling operator — statement ends at the newline
+    let a = 1
+    -2
+    print("no_join", a)
+    let b = 5
+    print("no_join2", b)
+    # --- item 2: statement-head comparison is not wobble fuel ------------
+    net = 5
+    net == 1
+    print("cmp_head", net)
+    i = 3
+    i == 1
+    print("cmp_head2", i)
+    # --- item 3: statement-position collect ------------------------------
+    xs = [1, 2, 3]
+    for x in xs collect x * 2
+    print("after_collect", xs)
+    n = 7
+    print("after_collect2", n)
+    ys = [1, 2, 3, 4]
+    for v in ys if v > 2 collect v * 10
+    print("filtered_collect", ys)
+    let summed = for c in xs collect c + 100
+    print("expr_collect", summed)
+    # --- item 5: guard without else does not steal ------------------------
+    print("guards_done")
+}
+gene g1() guard (true) else {
+    print("g1_guard_fired")
+}
+{
+    print("g1_body")
+}
+gene g2() guard (false) else {
+    print("g2_guard_fired")
+}
+{
+    print("g2_body")
+}
+gene g3() guard (true)
+{
+    print("g3_body")
+}
+gene g4() guard (false) {
+    print("g4_guard_fired")
+}
+{
+    print("g4_body")
+}
+# --- item 6: ASCII ident charset parity --------------------------------
+# `café` lexes as ident `caf` + skipped 'é' on EVERY lane; the program
+# still runs and prints (byte-identical stdout, identical notes on stderr).
+café = 5
+print("charset", caf)
+g1()
+g2()
+g3()
+g4()

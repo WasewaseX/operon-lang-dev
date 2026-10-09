@@ -867,6 +867,10 @@ impl Parser {
         // so rung-2/3 repair is suppressed (protects short variable names
         // like `i` from repairing to `if`).
         let t1 = self.toks.get(self.pos + 1).map(|t| t.0.clone());
+        // Z-125 (item 2): the suppression set also covers the comparison and
+        // arithmetic operators — `net == 1` / `i == 1` at statement head are
+        // expression statements, never wobble fuel (the old set repaired
+        // 'net' to 'let' and 'i' to 'if', silently corrupting the line).
         let expr_head = matches!(
             t1,
             Some(Tok::Eq)
@@ -879,6 +883,21 @@ impl Parser {
                 | Some(Tok::SlashEq)
                 | Some(Tok::DSlashEq)
                 | Some(Tok::PercentEq)
+                | Some(Tok::EqEq)
+                | Some(Tok::Neq)
+                | Some(Tok::Lt)
+                | Some(Tok::Le)
+                | Some(Tok::Gt)
+                | Some(Tok::Ge)
+                | Some(Tok::Plus)
+                | Some(Tok::Minus)
+                | Some(Tok::Star)
+                | Some(Tok::Slash)
+                | Some(Tok::DSlash)
+                | Some(Tok::Percent)
+                | Some(Tok::AmpAmp)
+                | Some(Tok::PipePipe)
+                | Some(Tok::QuestionQuestion)
         );
         // W01-s2: `type Name = ...` is the type-alias form, not the
         // phenotype synonym: the repair happens silently (the alias arm
@@ -1114,6 +1133,7 @@ impl Parser {
                     let pat = self.parse_destructure_pat();
                     if matches!(self.peek(), Tok::Eq) {
                         self.next();
+                        self.eat_newlines_inline(); // Z-125 (item 1): '=' continuation
                         let e = self.parse_expr();
                         let line = self.line();
                         self.end_stmt();
@@ -1131,6 +1151,7 @@ impl Parser {
                     let ann = self.parse_type_ann();
                     if matches!(self.peek(), Tok::Eq) {
                         self.next();
+                        self.eat_newlines_inline(); // Z-125 (item 1): '=' continuation
                         let e = self.parse_expr();
                         let line = self.line();
                         self.end_stmt();
@@ -1155,6 +1176,7 @@ impl Parser {
                     }
                     if matches!(self.peek(), Tok::Eq) {
                         self.next();
+                        self.eat_newlines_inline(); // Z-125 (item 1): '=' continuation
                         let mut values = vec![self.parse_expr()];
                         while matches!(self.peek(), Tok::Comma) {
                             self.next();
@@ -1173,6 +1195,7 @@ impl Parser {
                 }
                 if matches!(self.peek(), Tok::Eq) {
                     self.next();
+                    self.eat_newlines_inline(); // Z-125 (item 1): '=' continuation
                     let e = self.parse_expr();
                     let line = self.line();
                     self.end_stmt();
@@ -1232,6 +1255,7 @@ impl Parser {
                 Some(Stmt::Scope(body))
             }
             "for" => {
+                let for_line = self.line();
                 self.next();
                 // L1a: destructuring loop target, `for [k, v] in pairs { }`.
                 if matches!(self.peek(), Tok::LBrack | Tok::LBrace) {
@@ -1240,6 +1264,7 @@ impl Parser {
                         let line = self.line();
                         self.note(line, 4, "'for <pattern>' missing 'in'; iterating null");
                     }
+                    self.eat_newlines_inline(); // Z-125 (item 1): 'in' continuation
                     let iter = self.parse_expr();
                     let body = self.parse_block().unwrap_or_default();
                     return Some(Stmt::ForPat(pat, iter, body));
@@ -1253,7 +1278,45 @@ impl Parser {
                         format!("'for {}' missing 'in'; iterating null", name),
                     );
                 }
+                self.eat_newlines_inline(); // Z-125 (item 1): 'in' continuation
                 let iter = self.parse_expr();
+                // Z-125 (item 3): statement-position collect comprehension —
+                // `for x in xs [if cond] collect expr` used to fall into the
+                // no-braces block tolerance and silently lose the body (the
+                // collect line ran as a phantom ident and every following
+                // statement shifted a slot). Same-line only: a `collect`/
+                // `if` on the following line stays a block-less loop body.
+                if self.at_kw("collect") && self.line() == for_line {
+                    self.next(); // consume 'collect'
+                    let body = self.parse_expr();
+                    self.end_stmt();
+                    let collect = Expr::Collect {
+                        var: name,
+                        iter: Box::new(iter),
+                        filter: None,
+                        body: Box::new(body),
+                    };
+                    return Some(Stmt::ExprStmt(self.at_line(collect, for_line)));
+                }
+                if self.at_kw("if") && self.line() == for_line {
+                    self.next();
+                    let filter = self.parse_expr();
+                    if self.at_kw("collect") {
+                        self.next(); // consume 'collect'
+                        let body = self.parse_expr();
+                        self.end_stmt();
+                        let collect = Expr::Collect {
+                            var: name,
+                            iter: Box::new(iter),
+                            filter: Some(Box::new(filter)),
+                            body: Box::new(body),
+                        };
+                        return Some(Stmt::ExprStmt(self.at_line(collect, for_line)));
+                    }
+                    let line = self.line();
+                    self.note(line, 4, "'for' filter without 'collect'; line skipped");
+                    self.skip_line();
+                }
                 let body = self.parse_block().unwrap_or_default();
                 Some(Stmt::For(name, iter, body))
             }
@@ -2825,6 +2888,7 @@ impl Parser {
             A::Plain => {
                 self.next(); // name
                 self.next(); // =
+                self.eat_newlines_inline(); // Z-125 (item 1): '=' continuation
                 let val = self.parse_expr();
                 let line = self.line();
                 self.end_stmt();
@@ -2833,6 +2897,7 @@ impl Parser {
             A::Compound(op) => {
                 self.next(); // name
                 self.next(); // op=
+                self.eat_newlines_inline(); // Z-125 (item 1): 'op=' continuation
                 let val = self.parse_expr();
                 let line = self.line();
                 self.end_stmt();
@@ -2849,6 +2914,7 @@ impl Parser {
                 match self.peek().clone() {
                     Tok::Eq => {
                         self.next();
+                        self.eat_newlines_inline(); // Z-125 (item 1): '=' continuation
                         let val = self.parse_expr();
                         self.end_stmt();
                         match e {
@@ -2884,6 +2950,7 @@ impl Parser {
                         }
                         if valid && matches!(self.peek(), Tok::Eq) {
                             self.next();
+                            self.eat_newlines_inline(); // Z-125 (item 1): '=' continuation
                             let mut values = vec![self.parse_expr()];
                             while matches!(self.peek(), Tok::Comma) {
                                 self.next();
@@ -2918,6 +2985,7 @@ impl Parser {
                             _ => BinOp::Mod,
                         };
                         self.next(); // op=
+                        self.eat_newlines_inline(); // Z-125 (item 1): 'op=' continuation
                         let val = self.parse_expr();
                         self.end_stmt();
                         match e {
@@ -3291,9 +3359,20 @@ impl Parser {
                     let line = self.line();
                     self.note(line, 4, "guard condition auto-closed");
                 }
-                self.expect_kw("else");
-                let gbody = self.parse_block().unwrap_or_default();
-                guard = Some((cond, gbody));
+                // Z-125 (item 5): the failure body must be a REAL brace
+                // block (the `guard (c) { f }` form, else optional) —
+                // ignoring the block check let parse_block's
+                // single-statement tolerance consume the NEXT statement
+                // as the failure body (every following statement shifted
+                // one slot up).
+                if self.expect_kw("else") || matches!(self.peek(), Tok::LBrace) {
+                    let gbody = self.parse_block().unwrap_or_default();
+                    guard = Some((cond, gbody));
+                } else {
+                    let line = self.line();
+                    self.note(line, 4, "guard without failure body; empty failure body");
+                    guard = Some((cond, Vec::new()));
+                }
             } else {
                 let line = self.line();
                 self.note(line, 4, "guard without condition ignored");
@@ -3435,9 +3514,12 @@ impl Parser {
         if matches!(self.peek(), Tok::Question) {
             let line = self.line();
             self.next();
+            // Z-125 (item 1): newline continuation after the ternary arms.
+            self.eat_newlines_inline();
             let a = self.parse_expr();
             if matches!(self.peek(), Tok::Colon) {
                 self.next();
+                self.eat_newlines_inline();
             } else {
                 self.note(line, 4, "ternary missing ':'; else-branch is null");
             }
