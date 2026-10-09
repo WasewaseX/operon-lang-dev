@@ -184,8 +184,10 @@ gene to_csv_rows(rows, sep) {
             let f = str(cell)
             # CR is quoted too (#106 class): the CSV reader swallows bare
             # carriage returns as CRLF endings, so an unquoted CR inside a
-            # cell would be silently lost on the round trip
-            if f.contains(sep) or f.contains("\"") or f.contains("\n") or f.contains("\r") {
+            # cell would be silently lost on the round trip. chr(13), NOT
+            # "\r" — \r is not an escape in Operon source (two-char literal
+            # backslash-r), the first cut tested a backslash sequence.
+            if f.contains(sep) or f.contains("\"") or f.contains("\n") or f.contains(chr(13)) {
                 parts.push("\"" + f.replace("\"", "\"\"") + "\"")
             } else {
                 parts.push(f)

@@ -1,0 +1,49 @@
+# differential: std/csv separator-collusion routing law (#106). A separator
+# that collides with the machine's control characters (quote, newline, CR)
+# routes to csv_parse_machine unconditionally; csv_escape quotes CR-bearing
+# fields so the round trip preserves them. Pure Operon module output pinned
+# byte-identically across rust VM, tree-walk and the Python oracle.
+# Timestamp-free lines only.
+use std/csv as c
+
+gene main() {
+    let cr = chr(13)
+
+    # sep == quote: the machine's open-quote rule precedes the sep arm, so
+    # a field-start quote OPENS (pre-fix the hybrid returned [["a\"b"]])
+    print(c.csv_parse("a\"b", "\""))
+    print(c.csv_parse("a\"b,c", "\""))
+    print(c.csv_parse("a\"b", "\"") == c.csv_parse_machine("a\"b", "\""))
+
+    # sep == CR: the sep arm precedes the CR-swallow, so CRs split fields
+    # (pre-fix the hybrid's CR-strip erased the separator: [["abc"]])
+    print(c.csv_parse("a" + cr + cr + "b" + cr + cr + "c", cr))
+    print(c.csv_parse("a" + cr + "b" + cr + "c", cr))
+    print(c.csv_parse("a" + cr + "\nb" + cr + "\n", cr))
+    print(c.csv_parse("a" + cr + cr + "b" + cr + cr + "c", cr) == c.csv_parse_machine("a" + cr + cr + "b" + cr + cr + "c", cr))
+
+    # sep == newline: the sep arm precedes the row-flush, so newlines flush
+    # FIELDS (pre-fix the hybrid line-split assumed rows)
+    print(c.csv_parse("a\nb\n", "\n"))
+    print(c.csv_parse("a\nb", "\n"))
+    print(c.csv_parse("a\n\nb\n", "\n"))
+    print(c.csv_parse("a\nb\n", "\n") == c.csv_parse_machine("a\nb\n", "\n"))
+
+    # the sane separators keep the fast path (spot pins on each lane)
+    print(c.csv_parse("a,b\nc,d\n", ","))
+    print(c.csv_parse("a;b\nc\n", ";"))
+
+    # csv_escape CR law: CR-bearing fields are quoted, round trip preserves
+    # the CR (pre-fix csv_escape tested "\r" — the two-char literal
+    # backslash-r — and never saw a real CR, so CRs were silently lost)
+    print(c.csv_escape("a" + cr + "b", ",") == "\"a" + cr + "b\"")
+    print(len(c.csv_escape("a" + cr + "b", ",")))
+    print(c.csv_row(["a" + cr + "b", "c"], ",") == "\"a" + cr + "b\",c")
+    print(c.csv_parse(c.csv_row(["a" + cr + "b", "c"], ","), ",") == [["a" + cr + "b", "c"]])
+    print(c.csv_parse("\"a" + cr + "b\",c", ",") == [["a" + cr + "b", "c"]])
+
+    # raw bytes of the quoted-CR field (byte-identity class)
+    print(c.csv_escape("a" + cr + "b", ","))
+    print(c.csv_escape("a" + cr + "b", "\""))
+    print(c.csv_escape("a" + cr + "\"b", ","))
+}

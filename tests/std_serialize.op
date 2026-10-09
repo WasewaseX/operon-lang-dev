@@ -63,6 +63,15 @@ frame proof {
     assert(unwrap(reparsed) == rows, "csv rows round-trip")
     assert(csv.csv_escape("p,q", ",") == "\"p,q\"", "std/csv still reachable directly")
 
+    # CR cells are quoted (#106 class, chr(13) not "\r") and survive the
+    # round trip: a bare CR reads as a CRLF ending, so unquoted would be lost
+    let cr = chr(13)
+    let crit = "\"a" + cr + "b\",c\nd,e"
+    assert(ser.to_csv_rows([["a" + cr + "b", "c"], ["d", "e"]], ",") == crit, "CR cell is quoted")
+    let crback = ser.from_csv_rows(crit, ",")
+    assert(is_ok(crback), "CR text re-parses")
+    assert(unwrap(crback) == [["a" + cr + "b", "c"], ["d", "e"]], "CR survives the round trip")
+
     # ---- format-generic dispatch + unsupported-format honesty ----
     assert(ser.serialize([1, 2], "json") == "[1,2]", "serialize() dispatches json")
     assert(is_ok(ser.deserialize("[1, 2]", "json")), "deserialize() dispatches json")
