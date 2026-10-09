@@ -2076,6 +2076,11 @@ impl Interp {
         env: &Rc<Env>,
         src: &str,
     ) -> Result<String, String> {
+        // Z-105 (#105): a DAP evaluate box can call fingerprint()/regulate on
+        // a program whose AST was clean at load (the attach-before-run
+        // premise, consumer-list item 4) — the eval'd fragment must not ride
+        // the file lane's fast path
+        self.force_bookkeeping_live();
         self.debug_eval_value(env, src).map(|v| v.display())
     }
 
@@ -6697,6 +6702,19 @@ impl Interp {
         if !st.has_regulate && !st.imports && !st.fp_reachable {
             self.bk_fast = true;
         }
+    }
+
+    /// Z-105 (#105): interactive surfaces keep full bookkeeping. A file lane
+    /// can analyze its WHOLE AST pre-execution, so a clean file may take the
+    /// fast path; the REPL and the DAP evaluate box cannot — lines arrive
+    /// one fragment at a time, so `fingerprint()` spelled on line 30 names a
+    /// consumer no earlier line's AST could see, and per-line analysis is
+    /// unsound in BOTH directions (a late consumer means the earlier calls
+    /// ran uncounted; a fresh per-line derivation re-arms the fast path the
+    /// session already forfeited). Interactive lines are not perf-critical:
+    /// the gate stays OFF (full bookkeeping) for the session.
+    pub fn force_bookkeeping_live(&mut self) {
+        self.bk_fast = false;
     }
 
     /// W011-s3a: could any decay ticker have work this call? True whenever
