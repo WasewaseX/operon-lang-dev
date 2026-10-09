@@ -6,7 +6,7 @@
     "notes": [
         "W61 COMMUNITY DRAFT - not CI-validated; the sha256 below is pinned",
         "from the v2.10.0 release's companion .sha256 sidecar (asset hash,",
-        "verified in release run 37711796207). Re-pin on every bump.",
+        "verified in release run 37927698480). Re-pin on every bump.",
         "Ships operon, operon-ls, and the self-hosted std/ directory."
     ],
     "architecture": {
