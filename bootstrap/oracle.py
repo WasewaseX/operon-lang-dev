@@ -2601,6 +2601,7 @@ class P:
             t = self.peek()
             if (t[0] == "IDENT" and t[1] == "or") or (t[0] == "SYM" and t[1] == "||"):
                 self.next()
+                self.eat_nl()
                 left = ("bin", "or", left, self.nullish_expr(), self.peek()[2])  # W07: line = right-operand start (Rust stamps after next())
             else:
                 return left
@@ -2612,6 +2613,7 @@ class P:
             t = self.peek()
             if t[0] == "SYM" and t[1] == "??":
                 self.next()
+                self.eat_nl()
                 left = ("bin", "nullish", left, self.and_expr(), t[2])  # W07: op line
             else:
                 return left
@@ -2622,6 +2624,7 @@ class P:
             t = self.peek()
             if (t[0] == "IDENT" and t[1] == "and") or (t[0] == "SYM" and t[1] == "&&"):
                 self.next()
+                self.eat_nl()
                 left = ("bin", "and", left, self.not_expr(), self.peek()[2])  # W07: line = right-operand start
             else:
                 return left
@@ -2639,9 +2642,11 @@ class P:
             t = self.peek()
             if t[0] == "SYM" and t[1] in ("==", "!=", "<", "<=", ">", ">="):
                 self.next()
+                self.eat_nl()
                 left = ("bin", t[1], left, self.bitor_expr(), t[2])
             elif t[0] == "IDENT" and t[1] == "in":
                 self.next()
+                self.eat_nl()
                 left = ("bin", "in", left, self.bitor_expr(), t[2])
             else:
                 return left
@@ -2652,6 +2657,7 @@ class P:
             t = self.peek()
             if t[0] == "SYM" and t[1] == "|":
                 self.next()
+                self.eat_nl()
                 left = ("bin", "|", left, self.bitxor_expr(), t[2])
             else:
                 return left
@@ -2662,6 +2668,7 @@ class P:
             t = self.peek()
             if t[0] == "SYM" and t[1] == "^":
                 self.next()
+                self.eat_nl()
                 left = ("bin", "^", left, self.bitand_expr(), t[2])
             else:
                 return left
@@ -2672,6 +2679,7 @@ class P:
             t = self.peek()
             if t[0] == "SYM" and t[1] == "&":
                 self.next()
+                self.eat_nl()
                 left = ("bin", "&", left, self.shift_expr(), t[2])
             else:
                 return left
@@ -2682,6 +2690,7 @@ class P:
             t = self.peek()
             if t[0] == "SYM" and t[1] in ("<<", ">>"):
                 self.next()
+                self.eat_nl()
                 left = ("bin", t[1], left, self.add_expr(), t[2])
             else:
                 return left
@@ -2692,6 +2701,7 @@ class P:
             t = self.peek()
             if t[0] == "SYM" and t[1] in ("+", "-"):
                 self.next()
+                self.eat_nl()
                 left = ("bin", t[1], left, self.mul_expr(), t[2])
             else:
                 return left
@@ -2702,6 +2712,7 @@ class P:
             t = self.peek()
             if t[0] == "SYM" and t[1] in ("*", "/", "//", "%"):
                 self.next()
+                self.eat_nl()
                 left = ("bin", t[1], left, self.unary(), t[2])
             else:
                 return left
@@ -2720,6 +2731,7 @@ class P:
         t = self.peek()
         if t[0] == "SYM" and t[1] == "**":
             self.next()
+            self.eat_nl()  # Z-125: trailing ** continues onto the next line
             # right-assoc; right operand re-enters unary so 2**-3 parses
             return ("bin", "**", left, self.unary(), t[2])
         return left
