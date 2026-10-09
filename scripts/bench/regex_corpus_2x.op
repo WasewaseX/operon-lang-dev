@@ -2,11 +2,14 @@
 # A fixed set of patterns against a fixed set of strings: full matches,
 # leftmost finds. Deterministic; exercises the bit-parallel-ish regex
 # engine with its 2M-step backtracking ceiling.
+# R0.8 scaling twin (L-039): regex_corpus.op with the main work loop doubled
+# (600 -> 1200). Everything else is byte-equal to the base fixture;
+# the scaling table reports t(2N)/t(N) from base vs this file.
 main {
-    let pats = ["a+b", "[0-9]\{2,4\}-[a-z]+", "x.*y", "(ab|cd)+e", "f[aoi]o"]
+    let pats = ["a+b", "[0-9]{2,4}-[a-z]+", "x.*y", "(ab|cd)+e", "f[aoi]o"]
     let strs = ["aaab", "1234-abc", "xxxyyy", "abcde", "faoo", "aab", "99-x", "xabcy", "cde", "foi"]
     let hits = 0
-    for r in range(600) {
+    for r in range(1200) {
         for p in pats {
             for s in strs {
                 if re_match(p, s) {

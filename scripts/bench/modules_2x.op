@@ -1,0 +1,23 @@
+# bench: module-heavy — six local modules imported at startup, called in a
+# loop (W083). Measures the import machinery (resolution table SPEC §8,
+# module cache, TAD insulation) plus cross-module call overhead. There is
+# no algorithmic Python mirror: the "native" column for this workload is
+# CPython's cached import machinery over six real stdlib modules, which is
+# a shape comparison, not an algorithm parity (BENCH.md notes this).
+# R0.8 scaling twin (L-039): modules.op with the main work loop doubled
+# (20000 -> 40000). Everything else is byte-equal to the base fixture;
+# the scaling table reports t(2N)/t(N) from base vs this file.
+use scripts/bench/mods/m_a;
+use scripts/bench/mods/m_b;
+use scripts/bench/mods/m_c;
+use scripts/bench/mods/m_d;
+use scripts/bench/mods/m_e;
+use scripts/bench/mods/m_f;
+
+main {
+    let acc = 0
+    for i in range(40000) {
+        acc = acc + m_a.ma(i) + m_b.mb(i) + m_c.mc(i) + m_d.md(i) + m_e.me(i) + m_f.mf(i)
+    }
+    promote("modules acc = {acc}")
+}

@@ -1,0 +1,8 @@
+# R0.8 scaling twin (L-039): strings.op with the main work loop doubled
+# (4000 -> 8000). Everything else is byte-equal to the base fixture;
+# the scaling table reports t(2N)/t(N) from base vs this file.
+main {
+    let s = ""
+    for i in range(8000) { s = s + "x{t}y".replace("{t}", str(i % 10)) }
+    promote("len = {len(s)}")
+}

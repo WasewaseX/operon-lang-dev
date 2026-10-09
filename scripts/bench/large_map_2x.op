@@ -1,0 +1,15 @@
+# bench: large-map — build a 6k-key map, then a full lookup pass (W083)
+# R0.8 scaling twin (L-039): large_map.op with the main work loop doubled
+# (6000 -> 12000). Everything else is byte-equal to the base fixture;
+# the scaling table reports t(2N)/t(N) from base vs this file.
+main {
+    let m = {}
+    for i in range(12000) {
+        m["key-" + str(i)] = i * 3
+    }
+    let acc = 0
+    for i in range(12000) {
+        acc = acc + m["key-" + str(i)]
+    }
+    promote("map sum = {acc}")
+}
