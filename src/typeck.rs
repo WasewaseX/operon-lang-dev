@@ -520,7 +520,7 @@ impl Checker {
                         }
                     }
                     (Some(bt), Some(binop)) => {
-                        let joined = self.binop_ty(binop, &bt, &vt, hint);
+                        let joined = self.binop_ty(binop, &bt, &vt, 0, hint);
                         let _ = joined;
                     }
                     _ => {} // unknown binding: dynamic law (lint owns phantoms)
@@ -669,7 +669,12 @@ impl Checker {
             Expr::Ident(name) => match env.get(name) {
                 Some(t) => t,
                 None => match self.genes.get(name) {
-                    Some(sig) => sig.ret.clone().unwrap_or(Ty::Any),
+                    // z-s1-typedgate (#124.3): a bare gene reference binds
+                    // Value::Gene at runtime (both engines print <gene f>) —
+                    // NOT the gene's return type. The old typing let
+                    // `let x: int = f` through the gate and stress at the
+                    // annotation check.
+                    Some(_) => Ty::Gene,
                     None => {
                         let _ = builtin_sig(name, &[]);
                         Ty::Any
@@ -699,7 +704,24 @@ impl Checker {
             Expr::Binary(op, l, r, _line) => {
                 let lt = self.infer(l, env, hint);
                 let rt = self.infer(r, env, hint);
-                self.binop_ty(op, &lt, &rt, hint)
+                // z-s1-typedgate (#124.5): Int ** Int is exponent-literal
+                // aware: -1 = syntactically negative literal (runtime
+                // promotes to float), +1 = non-negative int literal
+                // (stays int), 0 = unknown sign (sound union).
+                let exp_lit = if matches!(op, crate::ast::BinOp::Pow) {
+                    match &**r {
+                        Expr::Unary(crate::ast::UnOp::Neg, inner)
+                            if matches!(&**inner, Expr::Int(_)) =>
+                        {
+                            -1
+                        }
+                        Expr::Int(_) => 1,
+                        _ => 0,
+                    }
+                } else {
+                    0
+                };
+                self.binop_ty(op, &lt, &rt, exp_lit, hint)
             }
             Expr::Ternary(_, a, b) => {
                 let at = self.infer(a, env, hint);
@@ -1050,15 +1072,29 @@ impl Checker {
     /// Binary operator result type following the EXACT dynamic lattice of
     /// interp.rs apply_binop (TYPED-MODE.md §6). Impossible combinations
     /// (can only stress at runtime) are T03 findings.
-    fn binop_ty(&mut self, op: &crate::ast::BinOp, lt: &Ty, rt: &Ty, hint: usize) -> Ty {
+    fn binop_ty(
+        &mut self,
+        op: &crate::ast::BinOp,
+        lt: &Ty,
+        rt: &Ty,
+        exp_lit: i8,
+        hint: usize,
+    ) -> Ty {
         use crate::ast::BinOp::*;
         // short-circuit/boolean families first
         match op {
             And | Or => return mk_union(vec![lt.clone(), rt.clone()]),
             Nullish => {
-                // a ?? b: non-null side of a, or b
+                // a ?? b: non-null side of a, or b.
+                // z-s1-typedgate (#124.1): the runtime coalesces ONLY
+                // Value::Null — a Variant (some/none) passes through WHOLE
+                // on both engines (`some(5) ?? 0` -> Some(5)), so the
+                // result of OptionT ?? b is the OptionT itself, not the
+                // payload. The old payload claim let
+                // `let x: int = some(5) ?? 0` through the gate and stress
+                // at the annotation check.
                 let non_null = match lt {
-                    Ty::OptionT(t) => (**t).clone(),
+                    Ty::OptionT(t) => return Ty::OptionT(t.clone()),
                     Ty::Union(alts) => mk_union(
                         alts.iter()
                             .filter(|a| !matches!(a, Ty::Null))
@@ -1074,13 +1110,17 @@ impl Checker {
                 // comparisons always produce bool; ordering ops on
                 // non-comparable pairs are left to the runtime (Any today)
                 if matches!(op, Lt | Le | Gt | Ge) {
+                    // z-s1-typedgate (#124.6): the ordering contract is
+                    // numeric/str (bool rides Python's bool-is-int law and
+                    // IS orderable on the oracle; Bytes ordering raises
+                    // "cannot order" on both engines) — Bytes is OUT of
+                    // the comparable set.
                     let ok = |t: &Ty| {
                         matches!(
                             t,
                             Ty::Int
                                 | Ty::Float
                                 | Ty::Str
-                                | Ty::Bytes
                                 | Ty::Bool
                                 | Ty::Any
                                 | Ty::Never
@@ -1184,7 +1224,11 @@ impl Checker {
             }
             Pow => {
                 if matches!(lt, Ty::Int) && matches!(rt, Ty::Int) {
-                    Ty::Int // non-negative exponent path; negative promotes
+                    match exp_lit {
+                        -1 => Ty::Float,                         // negative literal: promotes, always
+                        1 => Ty::Int,                            // non-negative literal: stays int
+                        _ => mk_union(vec![Ty::Int, Ty::Float]), // unknown sign
+                    }
                 } else if lt.is_numeric() && rt.is_numeric() {
                     Ty::Float
                 } else {

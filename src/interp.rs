@@ -4750,6 +4750,19 @@ impl Interp {
         match (l, r) {
             (Value::Int(a), Value::Int(b)) => Ok(a.cmp(b)),
             (Value::Str(a), Value::Str(b)) => Ok(a.cmp(b)),
+            // z-s1-typedgate (#124.6): bool ordering is REAL on the oracle
+            // (CPython: bool IS int, `true < false` -> False) — the VM used
+            // to reject it while the gate admitted it. Coerce bools to ints
+            // for every ordering pair, mirroring the Python subclass law.
+            (Value::Bool(a), Value::Bool(b)) => Ok((*a as i64).cmp(&(*b as i64))),
+            (Value::Bool(a), Value::Int(b)) => Ok((*a as i64).cmp(b)),
+            (Value::Int(a), Value::Bool(b)) => Ok(a.cmp(&(*b as i64))),
+            (Value::Bool(a), Value::Float(b)) => {
+                Ok(crate::num_exact::cmp_i64_f64_exact(*a as i64, *b))
+            }
+            (Value::Float(a), Value::Bool(b)) => {
+                Ok(crate::num_exact::cmp_i64_f64_exact(*b as i64, *a).reverse())
+            }
             // sweep-3 #130 (Z-130-EXACT2): mixed Int<->Float ordering is
             // EXACT (Python float_richcompare law) — the lossy f64
             // narrowing said 9007199254740993 == 9007199254740992.0. NaN

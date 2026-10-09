@@ -1,0 +1,22 @@
+# z-s1-typedgate: runtime-semantics pin for the #124 batch.
+# Engine-side change: bool ordering is REAL on the oracle (CPython
+# bool-is-int law) — the VM now coerces bools to ints for every ordering
+# pair instead of stressing. Everything below is byte-identical on all
+# three lanes: VM, tree-walk, oracle.
+
+# bool ordering (was: VM contained stress, oracle returned a value)
+print(true < false)
+print(false < true)
+print(true > false)
+print(true <= true)
+print(true < 2)
+print(2 > true)
+print(true < 2.5)
+
+# sort over bools rides the same compare
+print([true, false, true].sort())
+
+# negative-control: str/num ordering unchanged
+print("a" < "b")
+print(1 < 2)
+print(1 < 2.5)
