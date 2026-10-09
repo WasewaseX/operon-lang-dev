@@ -2413,6 +2413,12 @@ fn repl() {
     l.interp.fuel_pool = Some(std::sync::Arc::new(std::sync::atomic::AtomicI64::new(
         500_000_000,
     )));
+    // Z-105 (#105): the REPL keeps full bookkeeping for the whole session —
+    // the /dev/null bootstrap classified clean, but REPL lines arrive as
+    // fragments, so `fingerprint()`/`regulate` spelled on a LATER line name
+    // consumers no earlier line's AST could see. Interactive surface, not a
+    // perf lane: the fast path stays off.
+    l.interp.force_bookkeeping_live();
     // every executed chunk is kept so `:proof` can replay the session's
     // proof frames against the live interpreter state
     let mut session = String::new();
@@ -2824,6 +2830,7 @@ fn repl_eval(l: &mut tools::Loaded, src: &str) {
         }
         return;
     }
+    // Z-105 (#105): the expression-mode line rides the same session gate
     let env = l.interp.global.clone();
     let note_start = l.interp.notes.len();
     for stmt in &wprog.stmts {
