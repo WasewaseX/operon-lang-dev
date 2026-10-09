@@ -22,13 +22,13 @@ The mandate: *"Rust, then C, then Python, then Operon, then C++, then HTML, then
 - Python as bootstrap (not implementation) is the right reduction from v1's 100%-Python mistake.
 - One point withheld: **Operon below Python is a snapshot, not a destiny.** Mainstream languages converge on self-hosting (Rust in Rust, Go in Go, TypeScript in TypeScript). Operon's share must grow release over release, the stdlib is already pure `.op`.
 
-### Measured composition (main @ bfce6e0, `bash scripts/stack_report.sh`)
+### Measured composition (main @ 9e7d7419, `bash scripts/stack_report.sh`)
 
 | rank | language | lines | share | role |
 |---|---|---|---|---|
-| 1 | **Operon** | 435,396 | ~85% | **self-hosted stdlib (35 modules, generated inventory in [docs/STATS.md](docs/STATS.md)), proof tests, red-team suite, differential corpus, GenomeLab + the ytdl app (incl. the cross-language bench surface)** (`std/ tests/ examples/ apps/`) |
-| 2 | **Rust** | 60,838 | ~12% | lexer, Total Grammar parser, evaluator, capability sandbox, symbol table, HTTP/JSON, toolchain CLI, REPL, `operon-ls` LSP (`src/`) |
-| 3 | **Python** | 9,725 | ~1.9% | bootstrap: reference oracle + differential harness (`bootstrap/`), test infrastructure only, nothing shipped depends on it |
+| 1 | **Operon** | 435,450 | ~85% | **self-hosted stdlib (35 modules, generated inventory in [docs/STATS.md](docs/STATS.md)), proof tests, red-team suite, differential corpus, GenomeLab + the ytdl app (incl. the cross-language bench surface)** (`std/ tests/ examples/ apps/`) |
+| 2 | **Rust** | 61,114 | ~12% | lexer, Total Grammar parser, evaluator, capability sandbox, symbol table, HTTP/JSON, toolchain CLI, REPL, `operon-ls` LSP (`src/`) |
+| 3 | **Python** | 9,757 | ~1.9% | bootstrap: reference oracle + differential harness (`bootstrap/`), test infrastructure only, nothing shipped depends on it |
 | 4 | **Shell** | 3,329 | <1% | build/test/bench/stack/install scripts (`scripts/`) |
 | 5 | **JavaScript** | 2,062 | ~0.4% | browser playground subset interpreter (`web/playground/app.js`) |
 | 6 | **HTML** | 1,347 | ~0.3% | documentation site (`docs/`) |
