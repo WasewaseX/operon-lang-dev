@@ -119,6 +119,51 @@ assert r["id"] == 2, r
 value = r["result"]["contents"]["value"]
 assert "gene boost(x)" in value, value
 
+# 3b-Z121. didOpen with the text at the SPEC position (params.textDocument.
+# text — what every real client sends) must store the document: the phantom
+# call is reported immediately. The pre-fix server read params.text only and
+# stored the EMPTY document (all features dead until a didChange).
+text_spec = "gene boost(x) { return x }\nmain { missing(2) }\n"
+send({
+    "jsonrpc": "2.0",
+    "method": "textDocument/didOpen",
+    "params": {
+        "textDocument": {
+            "uri": "file:///specpos.op",
+            "languageId": "operon",
+            "version": 1,
+            "text": text_spec,
+        }
+    },
+})
+d = recv()
+assert d["method"] == "textDocument/publishDiagnostics", d
+assert d["params"]["uri"] == "file:///specpos.op", d
+msgs_spec = [x["message"] for x in d["params"]["diagnostics"]]
+assert any("missing" in m and "phantom" in m for m in msgs_spec), msgs_spec
+
+# 3c-Z121. a RANGED-ONLY didChange must KEEP the previous document (the
+# pre-fix fallthrough blanked it — ranged edits are not applied, sync=1
+# limitation, but blanking destroyed the analyzed state outright)
+send({
+    "jsonrpc": "2.0",
+    "method": "textDocument/didChange",
+    "params": {
+        "textDocument": {"uri": "file:///specpos.op", "version": 2},
+        "contentChanges": [
+            {"range": {"start": {"line": 1, "character": 6}, "end": {"line": 1, "character": 13}}, "text": "absent("}
+        ],
+    },
+})
+d = recv()
+assert d["method"] == "textDocument/publishDiagnostics", d
+msgs_ranged = [x["message"] for x in d["params"]["diagnostics"]]
+# document retained: the ORIGINAL phantom (missing) is still diagnosed
+assert any("missing" in m and "phantom" in m for m in msgs_ranged), msgs_ranged
+# the ranged fragment text did not REPLACE the document (that would
+# re-diagnose `absent(` as a top-level parse error instead)
+assert not any("absent" in m for m in msgs_ranged), msgs_ranged
+
 # 4b. definition on the CALL site of boost (line 1) → jumps to line 0
 send({
     "jsonrpc": "2.0",
