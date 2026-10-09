@@ -49,7 +49,7 @@ exe-relative (installed trees) or from the interpreter's own tree; a
 | `std/url.op` | percent-encoding and URL shaping over plain strings (pure, canonical, lenient by contract): `url_encode` (RFC 3986 unreserved set, uppercase hex, UTF-8 byte law — scalars ≥ 128 emit one %XX per UTF-8 byte), `url_decode` (`%XX` and `+` to space, valid multi-byte sequences reassemble into one character, malformed escapes kept verbatim, never fails), `url_parse` (scheme/host/port/path/query map with decoded pairs), `url_query_encode` (sorted keys, canonical output) |
 
 Native kernels back the hot parts and are builtins, not imports:
-`distance(a, b)` (bit-parallel Myers edit distance, C++), `codon(seq)`
+`distance(a, b)` (edit distance over characters — Z-119 char law, oracle-mirrored), `codon(seq)`
 (codon-usage style score, C++), `json_parse`/`json_str`, and the
 capability-gated `re_*` regex family. Every stdlib gene is pure `.op`
 over those builtins, the library ships no native code of its own.

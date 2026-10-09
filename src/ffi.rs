@@ -143,6 +143,41 @@ pub const DP_BUDGET_SENTINEL: i32 = i32::MAX;
 /// suggestion candidates are tiny; 64 KiB per operand is generous headroom.
 pub const FFI_OPERAND_CAP: usize = 64 * 1024;
 
+/// Char-based Levenshtein distance over two Rust strings (pure Rust two-row
+/// DP, no kernel hop). Z-119 (#119.3): the `distance`/`similar` BUILTINS are
+/// char-based — the oracle's `edit_distance` walks Python str indices, i.e.
+/// CHARACTERS, so `distance("héllo", "hello")` is 1 (one char deletion), not
+/// the byte kernel's 2 (é is two UTF-8 bytes). The byte kernel above stays:
+/// its only other callers are the parser's wobble ladder and the diagnostics
+/// nearest-match, whose candidates are ASCII keywords (char law == byte law
+/// there) and which need the fuel-blind kernel hop.
+///
+/// Budget discipline: the caller enforces the 10M-cell ceiling and the
+/// per-operand cap on CHAR counts BEFORE calling (the builtins raise the
+/// catchable `overflow` Stress; this fn is unguarded by design). Two rows of
+/// `b.len()` cells, `i32` — the caller's budget makes overflow unreachable.
+pub fn edit_distance_chars(a: &str, b: &str) -> i32 {
+    if a == b {
+        return 0;
+    }
+    let bc: Vec<char> = b.chars().collect();
+    let lb = bc.len();
+    if lb == 0 {
+        return a.chars().count() as i32;
+    }
+    let mut prev: Vec<i32> = (0..=lb as i32).collect();
+    let mut cur: Vec<i32> = vec![0; lb + 1];
+    for (i, ca) in a.chars().enumerate() {
+        cur[0] = i as i32 + 1;
+        for j in 1..=lb {
+            let cost = if ca == bc[j - 1] { 0 } else { 1 };
+            cur[j] = (prev[j] + 1).min(cur[j - 1] + 1).min(prev[j - 1] + cost);
+        }
+        std::mem::swap(&mut prev, &mut cur);
+    }
+    prev[lb]
+}
+
 /// Edit distance between two Rust strings (C++ bit-parallel kernel).
 pub fn edit_distance(a: &str, b: &str) -> i32 {
     if a.len().saturating_mul(b.len()) > DP_CELL_BUDGET
