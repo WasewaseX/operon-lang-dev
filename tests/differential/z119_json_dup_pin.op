@@ -1,0 +1,41 @@
+# z119_json_dup_pin.op - Z-119 (#119 item 5): json_parse duplicate keys
+# follow the map-literal law: first position kept, LAST value wins, on
+# every runner (VM == tree-walk == oracle, stdout byte-identical).
+# Pre-fix Rust: json_parse pushed every pair raw (len 2, first-wins
+# lookup), diverging from its own literals AND the oracle. Rows 1-3
+# failed on pre-fix main e28ff29 (Rust side).
+let q = chr(34)
+let lb = chr(123)
+let rb = chr(125)
+# row 1: the B repro: dup scalar keys (first-position, last-value)
+let s1 = lb + q + "a" + q + ":1," + q + "a" + q + ":2" + rb
+let m1 = json_parse(s1)
+print(len(m1))
+print(m1["a"])
+# row 2: dup among others: the surviving key keeps its first slot;
+# later keys unaffected
+let s2 = lb + q + "a" + q + ":1," + q + "b" + q + ":2," + q + "a" + q + ":3" + rb
+let m2 = json_parse(s2)
+print(len(m2))
+print(m2["a"])
+print(m2["b"])
+# row 3: nested dup inside a nested object + outer dup
+let s3 = lb + q + "x" + q + ":1," + q + "n" + q + ":" + lb + q + "k" + q + ":5," + q + "k" + q + ":6" + rb + "," + q + "x" + q + ":9" + rb
+let m3 = json_parse(s3)
+print(len(m3))
+print(m3["x"])
+print(m3["n"]["k"])
+# row 4: dup objects inside an array: array order untouched
+let s4 = "[" + s1 + "," + s1 + "]"
+let arr = json_parse(s4)
+print(len(arr))
+print(arr[1]["a"])
+# row 5: negative control: distinct keys untouched
+let s5 = lb + q + "p" + q + ":1," + q + "q" + q + ":2," + q + "r" + q + ":3" + rb
+let m5 = json_parse(s5)
+print(len(m5))
+print(m5["p"] + m5["q"] + m5["r"])
+# row 6: the convergence target: the literal law itself (unchanged)
+let lit = {"z":1,"z":2}
+print(len(lit))
+print(lit["z"])

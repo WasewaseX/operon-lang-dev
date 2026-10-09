@@ -13427,6 +13427,19 @@ pub fn json_parse(src: &str) -> Result<Value, String> {
                 '{' => {
                     self.i += 1;
                     let mut out: Vec<(Value, Value)> = Vec::new();
+                    // Z-119 (#119 item 5): duplicate keys follow the map-literal
+                    // law — first position kept, LAST value wins (the Python
+                    // dict law the oracle executes; matches {"k":..,"k":..}
+                    // literals byte-for-byte on every runner). The pre-fix
+                    // parser pushed every pair raw: len 2, first-wins lookup —
+                    // diverging from the literal form AND the oracle in one
+                    // defect (json_parse('{"a":1,"a":2}') was len 2 with
+                    // m["a"]==1 while the oracle said len 1 / 2 and both
+                    // engines' own literals said len 1 / 2). seen maps the
+                    // key's display form to its slot; distinct keys stay O(1)
+                    // per key (the json bench rows must not regress).
+                    let mut seen: std::collections::HashMap<String, usize> =
+                        std::collections::HashMap::new();
                     if self.peek() == Some('}') {
                         self.i += 1;
                         return Ok(Value::Map(Rc::new(RefCell::new(
@@ -13440,7 +13453,16 @@ pub fn json_parse(src: &str) -> Result<Value, String> {
                         }
                         self.i += 1;
                         let v = self.value()?;
-                        out.push((Value::Str(k.display()), v));
+                        let key = k.display();
+                        match seen.get(&key) {
+                            Some(&pos) => {
+                                out[pos].1 = v;
+                            }
+                            None => {
+                                seen.insert(key.clone(), out.len());
+                                out.push((Value::Str(key), v));
+                            }
+                        }
                         match self.peek() {
                             Some(',') => {
                                 self.i += 1;
