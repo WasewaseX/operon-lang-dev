@@ -1,0 +1,11 @@
+# Z-116 (#116 leg 2): the const check fires BEFORE the compound binop.
+# A const target with an overflowing rhs raises the frozen error (E1000,
+# kind frozen) on every lane — the VM used to execute the Bin first and
+# raise the binop's own overflow (E1020) instead.
+const c = 1
+gene main() {
+    print("before")
+    c += 9223372036854775807
+    print("unreachable")
+    return 0
+}
