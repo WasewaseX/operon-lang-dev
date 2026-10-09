@@ -893,7 +893,7 @@ fn lex_string(
     let note = if closed {
         None
     } else {
-        Some("unclosed string consumed to end of line".to_string())
+        Some("unclosed string consumed to end of file".to_string())
     };
     let tok = if has_interp {
         Tok::Interp(raw)
