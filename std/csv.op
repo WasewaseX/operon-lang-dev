@@ -8,15 +8,23 @@
 # single-char separator take a bulk fast path (C-speed split/replace only,
 # measured ~19x on a 5000-row document), everything else falls through to
 # csv_parse_machine, the original character-level state machine. Both
-# paths are byte-identical on every input; tests/std_csv.op pins the
-# contract, apps/csvstat e2e checksums a real 5000-row document.
+# paths are byte-identical on every input they share; separators that
+# collide with the machine's control characters (a quote, a newline, a
+# carriage return) route to the machine UNCONDITIONALLY (#106: in those
+# classes the machine's arm ordering is the semantics, and the fast
+# path's CR-strip / quote-split would erase or reclassify the separator
+# itself). tests/std_csv.op pins the contract including the collusion
+# classes, apps/csvstat e2e checksums a real 5000-row document.
 
 gene csv_escape(field, sep) {
     # quote a field when needed; double any inner quotes. CR quotes too
     # (#106 class): the reader swallows bare carriage returns as CRLF
-    # endings, so an unquoted CR would not survive the round trip
+    # endings, so an unquoted CR would not survive the round trip.
+    # chr(13), NOT "\r" — \r is not an escape in Operon source (it lexes
+    # as the two-char literal backslash-r), so the first cut of this check
+    # tested for a backslash sequence and never saw a real CR.
     let f = str(field)
-    if f.contains(sep) or f.contains("\"") or f.contains("\n") or f.contains("\r") {
+    if f.contains(sep) or f.contains("\"") or f.contains("\n") or f.contains(chr(13)) {
         return "\"" + f.replace("\"", "\"\"") + "\""
     }
     return f
@@ -58,7 +66,16 @@ gene csv_parse(text, sep) {
     # Equivalence with the pure machine is pinned in tests/std_csv.op
     # (both paths on the same inputs) and checksummed end-to-end by the
     # apps/csvstat suite on a 5000-row document.
-    if len(sep) != 1 {
+    #
+    # Routing law (#106): the machine's arm order is quote-open -> sep ->
+    # newline -> CR-swallow, so a separator that IS one of those control
+    # characters changes the semantics the fast path cannot mirror (a CR
+    # sep would be erased by the CR-strip before the split; a quote sep
+    # is classified as a quote first; a newline sep makes the machine
+    # flush FIELDS at newlines while the line-splitter assumes rows).
+    # Those classes route to the machine wholesale — the hybrid claims
+    # no independent semantics for them.
+    if len(sep) != 1 or sep == "\"" or sep == "\n" or sep == chr(13) {
         return csv_parse_machine(text, sep)
     }
     if text == "" {
