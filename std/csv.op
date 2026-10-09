@@ -61,10 +61,21 @@ gene csv_parse(text, sep) {
     if len(sep) != 1 {
         return csv_parse_machine(text, sep)
     }
+    let cr = chr(13)
+    # z-csv-contract (#106): the two degenerate separators bypass the fast
+    # path and feed the reference machine directly. sep == '"': the fast
+    # path would split on the quote while the machine's open-quote rule
+    # fires first (machine splits the field); sep == CR: the fast path
+    # strips CRs as line-endings BEFORE the split, erasing the separators
+    # the machine would honor. Both shapes now agree with the machine by
+    # construction, restoring the "byte-identical on every input" header
+    # claim (tests/std_csv.op pins both).
+    if sep == "\"" or sep == cr {
+        return csv_parse_machine(text, sep)
+    }
     if text == "" {
         return []
     }
-    let cr = chr(13)
     let raw = text.split("\n")
     let n = len(raw)
     let rows = []
