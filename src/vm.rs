@@ -2758,6 +2758,15 @@ pub fn optimize_with(code: &GeneCode, passes: PassSet) -> GeneCode {
                         work.push(*t as usize);
                         work.push(ip + 1);
                     }
+                    // W011 (#117): the bridge's break/continue targets are
+                    // jump edges — following them is the conservative-safe
+                    // superset (they normally point at already-reachable
+                    // loop boundaries, but the pass must not BET on that)
+                    Instr::BridgeStmtInLoop(_, c, b, _) => {
+                        work.push(*c as usize);
+                        work.push(*b as usize);
+                        work.push(ip + 1);
+                    }
                     Instr::Ret | Instr::RetName(_) => {}
                     _ => work.push(ip + 1),
                 }
@@ -2782,6 +2791,13 @@ pub fn optimize_with(code: &GeneCode, passes: PassSet) -> GeneCode {
                     match &mut instr {
                         Instr::Jmp(t) | Instr::JmpIfF(t) | Instr::Brk(t) | Instr::Cont(t) => {
                             *t = map[*t as usize];
+                        }
+                        // W011 (#117): the bridged statement's break/continue
+                        // operands ride the same old->new table as every other
+                        // loop boundary
+                        Instr::BridgeStmtInLoop(_, cont_t, brk_t, _) => {
+                            *cont_t = map[*cont_t as usize];
+                            *brk_t = map[*brk_t as usize];
                         }
                         _ => {}
                     }
@@ -2851,6 +2867,21 @@ fn remap_after_removal(code: &mut GeneCode, at: usize, count: usize) {
                 let tt = *t as usize;
                 if tt > at + count - 1 {
                     *t = (tt - count) as u32;
+                }
+            }
+            // W011 (#117): a bridged statement's break/continue operands are
+            // loop boundaries too — a removal before the loop shifts them
+            // exactly like the Jmp/Brk/Cont targets. Left stale, a bridged
+            // Flow::Brk/Flow::Cont jumped to a mid-sequence offset or past
+            // the gene's return (silent fall-off null) on every folded or
+            // DCE'd program that broke out of a bridged statement in a loop.
+            Instr::BridgeStmtInLoop(_, cont_t, brk_t, _) => {
+                let targets: [&mut u32; 2] = [cont_t, brk_t];
+                for t in targets {
+                    let tt = *t as usize;
+                    if tt > at + count - 1 {
+                        *t = (tt - count) as u32;
+                    }
                 }
             }
             _ => {}
@@ -3401,6 +3432,77 @@ mod tests {
         for i in &opt.code {
             if let Instr::Jmp(t) | Instr::JmpIfF(t) | Instr::Brk(t) | Instr::Cont(t) = i {
                 assert!((*t as usize) <= opt.code.len(), "DCE remap out of range");
+            }
+        }
+    }
+
+    /// W011: a constant fold (or DCE) removal BEFORE a loop shifts every
+    /// later offset — the bridged statement's break/continue operands are
+    /// loop boundaries too and must ride the same remap Jmp/Brk/Cont get.
+    /// The fixture puts the fold candidate inside the while condition and
+    /// a bridged match-break inside the body, with a single RetName after
+    /// the loop: a stale brk_t lands one instruction PAST the RetName
+    /// (out of range) on the unfixed remap.
+    #[test]
+    fn opt_remaps_bridge_loop_targets() {
+        let src = concat!(
+            "gene f() {\n",
+            "    let i = 0\n",
+            "    while i < (2 + 3) {\n",
+            "        i = i + 1\n",
+            "        match 1 {\n",
+            "            case 1 { if i == 2 { break } }\n",
+            "        }\n",
+            "    }\n",
+            "    return i\n",
+            "}\n",
+        );
+        let parsed = crate::parser::parse(src);
+        let mut body: Vec<Stmt> = Vec::new();
+        for s in &parsed.stmts {
+            if let Stmt::Gene(g) = s {
+                body = g.body.clone();
+            }
+        }
+        assert!(!body.is_empty(), "fixture stale");
+        let mut prog = VmProgram::default();
+        let raw = compile_body("f", &body, &mut prog, &[]);
+        assert!(
+            raw.code
+                .iter()
+                .any(|i| matches!(i, Instr::BridgeStmtInLoop(..))),
+            "fixture lost the bridged match"
+        );
+        let opt = optimize(&raw);
+        assert!(
+            opt.code.len() < raw.code.len(),
+            "fixture lost the constant fold (no removal to remap)"
+        );
+        for i in &opt.code {
+            match i {
+                Instr::Jmp(t) | Instr::JmpIfF(t) | Instr::Brk(t) | Instr::Cont(t) => {
+                    assert!((*t as usize) <= opt.code.len(), "remap out of range");
+                }
+                Instr::BridgeStmtInLoop(_, c, b, _) => {
+                    assert!(
+                        (*c as usize) <= opt.code.len(),
+                        "bridge cont target out of range"
+                    );
+                    // the fixture's gene ends with `return i`, so the loop's
+                    // brk boundary is the return instruction itself — a
+                    // stale brk_t falls one past it (== code.len(): the
+                    // implicit-null fall-off, a WRONG silent return)
+                    assert!(
+                        matches!(
+                            opt.code.get(*b as usize),
+                            Some(Instr::Ret) | Some(Instr::RetName(_))
+                        ),
+                        "bridge brk target must land on the loop-exit return, got {:?} at {}",
+                        opt.code.get(*b as usize),
+                        b
+                    );
+                }
+                _ => {}
             }
         }
     }
