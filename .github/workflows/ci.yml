@@ -48,6 +48,8 @@ jobs:
         run: python3 bootstrap/oracle.py test tests/
       - name: LSP seed smoke (operon-ls stdio session)
         run: python3 tests/lsp_smoke.py
+      - name: DAP re-entrancy pin (Z-121 — a debug evaluate must never re-enter the trap mid-request; the pre-fix bug re-armed the pending step inside the evaluated call and deferred the response behind a nested serve_at_trap forever. Wired here per the #196 lesson: a pin no workflow executes is the rot class)
+        run: python3 tests/dap_reentry_e2e.py
       - name: Playground smoke
         run: node web/playground/smoke.js
       - name: Stack report
