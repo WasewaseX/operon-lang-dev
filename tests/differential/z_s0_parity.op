@@ -1,0 +1,59 @@
+# z-s0-parity: S0 engine-parity pins for the 2026-10-10 fix batch.
+# Contract refs: #119.2 (DAG serialization), #119.5 (json dup keys
+# last-wins), #107.1 (NaN map keys accumulate, lookups miss), #126.5
+# (default-argument stresses propagate to the caller's rescue).
+# Byte-identical on all three lanes: VM, tree-walk, oracle.
+
+# --- #119.2: shared-but-acyclic containers serialize fully at every
+# reference (oracle parity: CPython duplicates shared subtrees). The
+# old engine emitted null / [...] for the second reference.
+let inner = [1, 2]
+let a = [inner, inner]
+print(json_str(a))
+print(a)
+let mi = {"x": 10}
+let ma = {"p": mi, "q": mi}
+print(json_str(ma))
+
+# cycles stay contained (marker, not a hang)
+let cyc = [1]
+cyc[0] = cyc
+print(json_str(cyc).len() > 0)
+
+# --- #119.5: json_parse duplicate keys resolve LAST-WINS (CPython dict
+# semantics; the old engine kept both entries). String literals escape
+# braces (\{ \}) so the interpolation grammar does not fire.
+print(json_str(json_parse("\{\"a\":1,\"a\":2\}")))
+print(json_str(json_parse("\{\"k\":1,\"j\":2,\"k\":3\}")))
+
+# --- #107.1: NaN map keys accumulate (NaN never equals NaN), lookups
+# on the raw NaN stay honest misses (has() false; the m[n] read raises
+# the same "key not found" stress on every lane, contained identically)
+let n = (1e308 * 10.0) - (1e308 * 10.0)
+let m = {}
+m[n] = 1
+m[n] = 2
+print(len(m))
+print(m.has(n))
+
+# --- #126.5: a stress inside a default-argument expression propagates
+# to the caller and is rescue-catchable (was: silently swallowed, the
+# param bound null and no rescue fired)
+gene g(x = 1 / 0) {
+    return x
+}
+stress {
+    print(g())
+} rescue (e) {
+    print("[" + e.kind + "] " + e.message)
+}
+
+# negative controls: ordinary behavior unchanged
+let plain = {"a": 1}
+print(plain["a"])
+print(plain.has("b"))
+gene h(x = 7) {
+    return x
+}
+print(h())
+print(h(9))
