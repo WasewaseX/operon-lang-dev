@@ -77,10 +77,31 @@ gene digits(n) {
 
 gene round(x) {
     # half away from zero: round(2.5) == 3, round(-2.5) == -3
-    if x >= 0 {
-        return floor(x + 0.5)
+    # FP-artifact-free (issue #136 row 10): the old floor(x + 0.5) form
+    # mis-rounds 0.49999999999999994 — x + 0.5 rounds UP to exactly 1.0 in
+    # binary floating point and floor answers 1, while the true value is
+    # below the half point and any half-away contract answers 0. The
+    # comparison form never adds near the boundary: floor(x) gives the
+    # integer band, then x is compared against the EXACT midpoint
+    # floor(x) + 0.5 (exactly representable for every in-range band, so no
+    # rounding can move x across it). |x| >= 2^52 (or NaN/inf): every
+    # finite double is an integer, the band is the value itself.
+    if not (x > -4503599627370496.0 and x < 4503599627370496.0) {
+        return x
     }
-    return ceil(x - 0.5)
+    let fl = floor(x)
+    let half = fl + 0.5
+    if x > half {
+        return fl + 1
+    }
+    if x < half {
+        return fl
+    }
+    # x is exactly the midpoint: half away from ZERO (2.5 -> 3, -2.5 -> -3)
+    if fl >= 0 {
+        return fl + 1
+    }
+    return fl
 }
 
 gene round_to(x, n) {

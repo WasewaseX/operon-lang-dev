@@ -1,0 +1,71 @@
+# Z-136 residual pin (2026-10-09): the two hardening-pool rows that fell
+# through the seam between the #133 math sweep (fixed round_to, not round)
+# and the S3-136H pool (12 modules, math.op + seq.op not among them).
+#
+# row 10 — std/math round: half away from zero WITHOUT the floor(x + 0.5)
+#          FP artifact (x + 0.5 rounds up to exactly 1.0 for
+#          0.49999999999999994, so the old form answered 1; the true value
+#          is below the half point). The comparison form pins the contract:
+#          artifact pair -> 0/0, exact halves away from zero, band edges,
+#          int passthrough, the neighbors one ulp around the half point.
+# row 12 — std/seq range_seq: step 0 raises the builtin range's law
+#          ("unfolded: range step cannot be 0") instead of silently
+#          draining empty; normal and negative ranges unchanged.
+#
+# 3-way byte-identical: VM, tree-walk, oracle (pure-.op fixes — all lanes
+# execute this same source; the differential harness arbitrates).
+use std/math as m
+use std/seq as sq
+
+main {
+    # --- row 10: the artifact pair (the old form answered 1 and -1) ------
+    print("r10a", m.round(0.49999999999999994))
+    print("r10b", m.round(0.0 - 0.49999999999999994))
+
+    # --- row 10: exact halves away from zero (doc examples) --------------
+    print("r10c", m.round(2.5))
+    print("r10d", m.round(0.0 - 2.5))
+    print("r10e", m.round(0.5))
+    print("r10f", m.round(0.0 - 0.5))
+
+    # --- row 10: band edges and neighbors one ulp around the half point --
+    print("r10g", m.round(2.4), m.round(2.6))
+    print("r10h", m.round(0.0 - 2.4), m.round(0.0 - 2.6))
+    print("r10i", m.round(0.5000000000000001))
+    print("r10j", m.round(0.4999999999999999))
+    print("r10k", m.round(1.4999999999999998))
+    print("r10l", m.round(2.5000000000000004))
+
+    # --- row 10: integer passthrough and zero ----------------------------
+    print("r10m", m.round(3))
+    print("r10n", m.round(0.0))
+    print("r10o", m.round(0.0 - 0.0))
+
+    # --- row 12: step 0 raises the builtin's law --------------------------
+    let acc = 0
+    stress {
+        for x in sq.range_seq(0, 5, 0) {
+            acc = acc + x
+        }
+    } rescue (e) {
+        print("r12a", "[" + e.kind + "] " + e.message)
+    }
+    print("r12b", acc)
+
+    # --- row 12: normal and negative ranges unchanged ---------------------
+    let up = []
+    for x in sq.range_seq(0, 5, 2) {
+        push(up, x)
+    }
+    print("r12c", up)
+    let down = []
+    for x in sq.range_seq(5, 0, 0 - 2) {
+        push(down, x)
+    }
+    print("r12d", down)
+    let empty = []
+    for x in sq.range_seq(5, 0, 2) {
+        push(empty, x)
+    }
+    print("r12e", empty)
+}
