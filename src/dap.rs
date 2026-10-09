@@ -108,6 +108,14 @@ fn read_message() -> Option<String> {
                     .and_then(|v| v.trim().parse().ok())
             })
         })?;
+    // z-s2-harden (#126.16): port the LSP MAX_FRAME armor (sec-r1 C-4) —
+    // Content-Length is client-controlled; the unbounded `vec![0u8; len]`
+    // panics on capacity overflow and reserves gigabytes before one body
+    // byte arrives. Same 64 MiB cap as operon-ls.
+    const MAX_FRAME: usize = 64 * 1024 * 1024;
+    if len > MAX_FRAME {
+        return None;
+    }
     let mut body = vec![0u8; len];
     lock.read_exact(&mut body).ok()?;
     Some(String::from_utf8_lossy(&body).into_owned())

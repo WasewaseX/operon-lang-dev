@@ -4194,7 +4194,13 @@ impl Interp {
                 for a in args {
                     argvs.push(self.eval(env, a)?);
                 }
-                self.construct_obj(&def, argvs)
+                // z-s2-harden (#126.7): the `new`-site env rides into the
+                // construction so FIELD INITIALIZERS evaluate where the
+                // instance is born (a pheno declared in a gene body used to
+                // read its construction-site locals as null in field inits
+                // while methods saw them — the init eval was pinned to the
+                // global env)
+                self.construct_obj(env, &def, argvs)
             }
             Expr::FateNew(name) => {
                 let def = match self.fates.get(name) {
@@ -4237,6 +4243,12 @@ impl Interp {
                     Value::Str(s) => {
                         source = s.chars().map(|c| Value::Str(c.to_string())).collect()
                     }
+                    // z-s2-harden (#126.6): collect over bytes yields the
+                    // int values 0..=255, the same W029 convention the
+                    // for-statement uses (the comprehension silently
+                    // yielded [] instead — a silent divergence from the
+                    // statement form of the same iteration)
+                    Value::Bytes(b) => source = b.iter().map(|x| Value::Int(*x as i64)).collect(),
                     Value::Map(m) => source = m.borrow().iter().map(|(k, _)| k.clone()).collect(),
                     Value::Seq(_d, st) => seq_state = Some(st),
                     _ => {}
@@ -7161,6 +7173,7 @@ impl Interp {
     /// lineage), then own overrides, then the init method if declared.
     pub fn construct_obj(
         &mut self,
+        env: &Rc<Env>,
         def: &Arc<PhenoDef>,
         args: Vec<Value>,
     ) -> Result<Value, Stress> {
@@ -7169,9 +7182,10 @@ impl Interp {
         let chain = self.pheno_chain(def);
         for d in chain.iter().rev() {
             for (fname, fexpr) in &d.fields {
-                let v = self
-                    .eval(&self.global.clone(), fexpr)
-                    .unwrap_or(Value::Null);
+                // z-s2-harden (#126.7): field inits evaluate at the `new`
+                // site (was self.global — construction-site locals were
+                // invisible to field initializers)
+                let v = self.eval(env, fexpr).unwrap_or(Value::Null);
                 // m is a fresh field store, never frozen; the write cannot fail
                 let _ = self.map_insert(&m, Value::Str(fname.clone()), v);
             }
