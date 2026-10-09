@@ -18,11 +18,12 @@ llvm-tools-preview`, then re-run `scripts/coverage.sh`.
 
 Status: measured. Static analysis of the corpus, not execution
 coverage; the exact rules and limits are in the methodology below.
-Scope: `tests/*.op`, `tests/differential/*.op`, `tests/granted/*.op` (235 files scanned, 56 of them import std).
+Scope: `tests/*.op`, `tests/differential/*.op`, `tests/granted/*.op` (242 files scanned, 58 of them import std).
 
 | module | defined | referenced | referenced names |
 |---|---|---|---|
 | std/args | 9 | 8 | `args_flag`, `args_get`, `args_has`, `args_norm`, `args_number`, `args_positional`, `args_subcommand`, `args_value` |
+| std/arrays | 37 | 28 | `arr_abs`, `arr_add`, `arr_argmax`, `arr_argmin`, `arr_div`, `arr_dot`, `arr_dtype`, `arr_from_list`, `arr_get`, `arr_infer`, `arr_matmul`, `arr_max`, `arr_mean`, `arr_min`, `arr_mul`, `arr_neg`, `arr_new`, `arr_ones`, `arr_render`, `arr_reshape`, `arr_set`, `arr_shape`, `arr_sub`, `arr_sum`, `arr_to_list`, `arr_transpose`, `arr_validate`, `arr_zeros` |
 | std/bigint | 20 | 14 | `big_abs`, `big_add`, `big_cmp`, `big_fact`, `big_from_int`, `big_from_str`, `big_is_zero`, `big_mul`, `big_neg`, `big_pow`, `big_sub`, `big_to_int`, `big_to_str`, `big_zero` |
 | std/binary | 17 | 13 | `bin_hex_decode`, `bin_hex_encode`, `bin_i64le`, `bin_read_i64le`, `bin_read_u16be`, `bin_read_u16le`, `bin_read_u32be`, `bin_read_u32le`, `bin_size`, `bin_u16be`, `bin_u16le`, `bin_u32be`, `bin_u32le` |
 | std/bio | 4 | 4 | `codon_usage`, `gc_skew`, `is_palindromic_site`, `melting_point` |
@@ -55,9 +56,9 @@ Scope: `tests/*.op`, `tests/differential/*.op`, `tests/granted/*.op` (235 files 
 | std/try_numeric | 3 | 3 | `try_ceil`, `try_floor`, `try_sqrt` |
 | std/typed | 0 | 0 | (no top-level gene defs; sequence exports) |
 | std/unicode | 8 | 8 | `byte_width`, `char_codes`, `from_char_codes`, `is_alpha`, `is_digit`, `is_lower`, `is_upper`, `upper` |
-| std/url | 13 | 4 | `url_decode`, `url_encode`, `url_parse`, `url_query_encode` |
+| std/url | 15 | 4 | `url_decode`, `url_encode`, `url_parse`, `url_query_encode` |
 
-Total: **301 of 360** defined std functions referenced by the corpus (**83.6%** call-site coverage) across 34 modules; 59 functions uncovered. Qualified-namespace calls alone reach 301 of 360 (83.6%); the bare-name rule adds nothing today, it stays in as the disclosed over-count surface.
+Total: **329 of 399** defined std functions referenced by the corpus (**82.5%** call-site coverage) across 35 modules; 70 functions uncovered. Qualified-namespace calls alone reach 327 of 399 (82.0%), the bare-name rule adds the other 2 and is the disclosed over-count surface.
 
 ### Methodology (call-site coverage, static analysis of the corpus)
 
@@ -91,7 +92,7 @@ Total: **301 of 360** defined std functions referenced by the corpus (**83.6%** 
 
 ## Top-20 uncovered std functions (next targets, pick from evidence)
 
-Public names only, ranked by module, then name; the full uncovered set is 59
+Public names only, ranked by module, then name; the full uncovered set is 70
 functions.
 
 | # | module | function |
@@ -117,6 +118,6 @@ functions.
 | 19 | std/url | `url_escape_char` |
 | 20 | std/url | `url_hex_digit` |
 
-Std-internal helpers (the __ prefix) are 32 further names the corpus never
+Std-internal helpers (the __ prefix) are 41 further names the corpus never
 reaches; the corpus cannot call them directly by design, so they are not
-targets, and this is not a dead-code claim: `__args_num_ok`, `__add_mag`, `__all_digits`, `__cmp_mag`, `__digit`, `__norm_limbs`, `__sub_mag`, `__bin_hex_byte`, `__bin_hex_digit`, `__bin_hex_val`, `__bc_apply`, `__bc_copy`, `__dq_copy`, `__gr_copy`, `__gr_less`, `__gr_pair_edges`, `__gr_row`, `__hash_hex_byte`, `__hash_hex_digit`, `__hash_rotr32`, `__heap_less`, `__heap_sift_down`, `__heap_sift_up`, `__hp_copy`, `__rfind`, `__trim_trailing`, `__from_wire`, `__to_wire`, `__set_canon`, `__days_from_civil`, `__is_digits`, `__p2`.
+targets, and this is not a dead-code claim: `__args_num_ok`, `__ar_binary`, `__ar_check`, `__ar_check_shape`, `__ar_conforms`, `__ar_copy`, `__ar_is_num`, `__ar_same_shape`, `__ar_shape_text`, `__ar_size`, `__add_mag`, `__all_digits`, `__cmp_mag`, `__digit`, `__norm_limbs`, `__sub_mag`, `__bin_hex_byte`, `__bin_hex_digit`, `__bin_hex_val`, `__bc_apply`, `__bc_copy`, `__dq_copy`, `__gr_copy`, `__gr_less`, `__gr_pair_edges`, `__gr_row`, `__hash_hex_byte`, `__hash_hex_digit`, `__hash_rotr32`, `__heap_less`, `__heap_sift_down`, `__heap_sift_up`, `__hp_copy`, `__rfind`, `__trim_trailing`, `__from_wire`, `__to_wire`, `__set_canon`, `__days_from_civil`, `__is_digits`, `__p2`.

@@ -1,0 +1,73 @@
+# arrays pin (2026-10-09): R0.2 typed numeric arrays, byte-identical across
+# vm / tree-walk / oracle. Every printed value is hand-computed or CPython-
+# parity: int arithmetic stays EXACT (no float collapse), division is the
+# host's true division (always Float), float sums pin the sequential f64
+# accumulation law (A4: 0.1 + 0.2 + 0.3 == 0.6000000000000001), matmul and
+# reductions are hand-checked, refusals print as booleans with the exact
+# message spelled once. No RNG, no time, no engine-variant territory —
+# every byte below is a law, not a snapshot.
+use std/arrays;
+gene main() {
+    print("-- construction + render contract --")
+    let v = unwrap(arr_from_list([1, 2, 3, 4], "int"))
+    print(arr_render(v))
+    let m22 = unwrap(arr_reshape(v, [2, 2]))
+    print(arr_render(m22))
+    print(arr_render(unwrap(arr_ones([2], "float"))))
+    print(arr_dtype(unwrap(arr_infer([1, 2, 3]))))
+    print(arr_dtype(unwrap(arr_infer([1, 2.5]))))
+    print("-- A3 host-mirror arithmetic (exact) --")
+    let a = unwrap(arr_from_list([1, 2, 3], "int"))
+    let b = unwrap(arr_from_list([10, 20, 30], "int"))
+    print(arr_render(unwrap(arr_add(a, b))))
+    print(arr_render(unwrap(arr_sub(b, a))))
+    print(arr_render(unwrap(arr_mul(a, 3))))
+    print(arr_render(unwrap(arr_div(a, b))))
+    print(arr_dtype(unwrap(arr_div(a, b))))
+    print(arr_render(unwrap(arr_add(a, 2.5))))
+    print(unwrap(arr_dot(a, b)))
+    print("-- matmul + transpose (hand-computed) --")
+    print(arr_render(unwrap(arr_matmul(m22, m22))))
+    let mf = unwrap(arr_reshape(unwrap(arr_from_list([1.5, 2.0, 0.5, 1.0, 2.0, 1.0], "float")), [2, 3]))
+    print(arr_render(unwrap(arr_matmul(mf, unwrap(arr_transpose(mf))))))
+    print(arr_render(unwrap(arr_transpose(m22))))
+    print("-- A4 reductions (order law + exactness) --")
+    print(unwrap(arr_sum(a)))
+    print(unwrap(arr_sum(unwrap(arr_from_list([4611686018427387904, 1, 1], "int")))))
+    print(str(unwrap(arr_sum(unwrap(arr_from_list([0.1, 0.2, 0.3], "float"))))))
+    print(unwrap(arr_min(a)))
+    print(unwrap(arr_max(a)))
+    print(unwrap(arr_mean(a)))
+    print(str(unwrap(arr_mean(unwrap(arr_from_list([1, 2, 4], "int"))))))
+    print("-- A5 first-occurrence stability --")
+    print(unwrap(arr_argmax(unwrap(arr_from_list([5, 9, 9, 2], "int")))))
+    print(unwrap(arr_argmin(unwrap(arr_from_list([1.5, 1.5, 2.0], "float")))))
+    print("-- A6 copy-on-write --")
+    let m2 = unwrap(arr_set(m22, [0, 0], 99))
+    print(unwrap(arr_get(m2, [0, 0])))
+    print(unwrap(arr_get(m22, [0, 0])))
+    print("-- refusals (exact, catchable) --")
+    print(is_err(arr_div(a, 0)))
+    print(is_err(arr_div(a, unwrap(arr_from_list([1, 0, 3], "int")))))
+    print(is_err(arr_add(unwrap(arr_reshape(unwrap(arr_from_list([1, 2, 3, 4, 5, 6], "int")), [2, 3])), unwrap(arr_reshape(unwrap(arr_from_list([1, 2, 3, 4, 5, 6], "int")), [3, 2])))))
+    print(is_err(arr_matmul(m22, unwrap(arr_reshape(unwrap(arr_from_list([1, 2, 3, 4, 5, 6], "int")), [2, 3])))))
+    print(is_err(arr_from_list([1.5], "int")))
+    print(is_err(arr_set(m22, [0, 0], 1.5)))
+    print(is_err(arr_get(m22, [2, 0])))
+    print(is_err(arr_validate({"tag": "numarr", "dtype": "int", "shape": [2], "data": [1, 2.5]})))
+    match arr_div(a, unwrap(arr_from_list([1, 0, 3], "int"))) {
+        case Err(msg) {
+            print(msg)
+        }
+        case Ok(x) {
+            print("UNREACHABLE")
+        }
+    }
+    print("-- hand-check booleans (the pin carries the truth) --")
+    print(unwrap(arr_get(unwrap(arr_matmul(m22, m22)), [1, 1])) == 22)
+    print(unwrap(arr_get(unwrap(arr_matmul(mf, unwrap(arr_transpose(mf)))), [1, 0])) == 6.0)
+    print(unwrap(arr_dot(a, b)) == 140)
+    print(unwrap(arr_sum(a)) == 6)
+    print(str(unwrap(arr_mean(unwrap(arr_from_list([1, 2, 4], "int"))))) == "2.3333333333333335")
+    print(arr_render(m22) == "numarr<int shape=[2, 2]> [1, 2] [3, 4]")
+}

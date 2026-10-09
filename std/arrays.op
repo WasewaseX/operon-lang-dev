@@ -1,0 +1,757 @@
+# std/arrays — R0.2 typed numeric arrays (the quantitative-model substrate).
+#
+# Typed numeric vectors and matrices for the quantitative bio waves: a
+# declared element type (int preserves exact Int arithmetic, float is f64
+# per DETERMINISM §5.1), a declared shape, and row-major flat storage.
+# Zero engine delta by design (class C4): every law here is ordinary .op
+# arithmetic over host values, so both engines run it byte-identically and
+# the differential pin is just the outputs.
+#
+# LAWS (normative text: docs/spec/NUMERIC-ARRAYS.md):
+#   A1 type law       every stored element matches the declared dtype
+#                     exactly; a typed container never stores null, a str,
+#                     or a mixed element. Construction PROMOTES Int->Float
+#                     when dtype is float (the one declared coercion); every
+#                     other type mismatch is refused with the offender named.
+#   A2 shape law      element-wise ops require identical shapes; matmul
+#                     requires (m x k) * (k x n); reshape requires the same
+#                     total size; refusals name both shapes.
+#   A3 host mirror    element-wise arithmetic NEVER invents its own numeric
+#                     semantics (L2): it performs the host's per-element
+#                     operation, so int op int stays int, any float operand
+#                     yields float, and division is the host's TRUE division
+#                     (always Float, DETERMINISM §5.6). The ONE declared
+#                     deviation: arr_div refuses division by zero eagerly
+#                     (flat index named) because A1 outranks the host's
+#                     scalar null-repair INSIDE a typed container.
+#   A4 order law      reductions accumulate strictly left-to-right in
+#                     row-major flat order (sequential, single pass — the
+#                     anti-parallel-reduction-order law that keeps float
+#                     sums bit-reproducible; DETERMINISM §5.2's promised
+#                     set only: no transcendentals in this module).
+#   A5 stability law  argmin/argmax return the FIRST occurrence in flat
+#                     row-major order (the #137 stability analog).
+#   A6 copy law       every mutating op (set, reshape, transpose) returns a
+#                     NEW array; the input is never mutated (the stdlib
+#                     copy law, biocore/rand_shuffle precedent).
+#
+# Honesty: this module is the SEMANTIC CONTRACT prototype, not the packed
+# execution kernel — the map-of-lists representation exercises the language
+# itself (the R0.1 biocore precedent); a VM-native packed f64/i64 buffer is
+# the declared future lowering (class C7 native kernel per LOWERING.md's
+# ladder), semantics-preserving by construction because every function here
+# has declared, byte-pinned behavior. Rank 1 (vectors) and rank 2 (matrices)
+# only in v1; scalar RHS is the only broadcasting. arr_validate() is the
+# DEEP check (walks every element); other entry points do the cheap
+# structural checks (tag/dtype/shape) and trust the type law between calls.
+
+# ---------------------------------------------------------------- shape
+
+# An array is a map:
+#   { "tag": "numarr", "dtype": "int" | "float",
+#     "shape": [d0] | [rows, cols],        # rank 1 or 2, every dim >= 1
+#     "data":  [e0, e1, ...] }             # flat row-major, len == product(shape)
+
+# ------------------------------------------------------------- helpers
+
+gene __ar_copy(a) {
+    # new record shell sharing nothing mutable (data + shape are copied;
+    # values are numbers, sharing them is sharing nothing)
+    let data = []
+    for v in a["data"] {
+        push(data, v)
+    }
+    let shape = []
+    for d in a["shape"] {
+        push(shape, d)
+    }
+    return { "tag": "numarr", "dtype": a["dtype"], "shape": shape, "data": data }
+}
+
+gene __ar_size(shape) {
+    let n = 1
+    for d in shape {
+        n = n * d
+    }
+    return n
+}
+
+gene __ar_is_num(v) {
+    let t = type(v)
+    return t == "int" || t == "float"
+}
+
+gene __ar_conforms(v, dtype) {
+    # A1: stored elements match the dtype exactly (construction is the
+    # promoter; storage never coerces)
+    if dtype == "int" {
+        return type(v) == "int"
+    }
+    return type(v) == "float"
+}
+
+gene __ar_check_shape(shape) {
+    # rank 1 or 2, every dim an int >= 1 (empty vectors refused: one law,
+    # no special case)
+    let r = len(shape)
+    if r < 1 || r > 2 {
+        return err("shape must have rank 1 or 2, got rank " + str(r))
+    }
+    for d in shape {
+        if type(d) != "int" {
+            return err("shape dims must be int, got " + type(d))
+        }
+        if d < 1 {
+            return err("shape dims must be >= 1, got " + str(d))
+        }
+    }
+    return ok(true)
+}
+
+gene __ar_check(a) {
+    # structural check: tag, dtype, shape legality, data length. The DEEP
+    # element walk lives in arr_validate; this is the cheap gate every
+    # entry point shares. Returns err(...) or ok(true).
+    if type(a) != "map" || a["tag"] != "numarr" {
+        return err("not a numarr (tag law A1)")
+    }
+    if a["dtype"] != "int" && a["dtype"] != "float" {
+        return err("unknown dtype '" + a["dtype"] + "' (int|float only)")
+    }
+    let sc = __ar_check_shape(a["shape"])
+    if is_err(sc) {
+        return sc
+    }
+    if len(a["data"]) != __ar_size(a["shape"]) {
+        return err("data length " + str(len(a["data"])) + " != product(shape) " + str(__ar_size(a["shape"])) + " (A1)")
+    }
+    return ok(true)
+}
+
+gene __ar_shape_text(shape) {
+    let parts = []
+    for d in shape {
+        push(parts, str(d))
+    }
+    return "[" + parts.join(", ") + "]"
+}
+
+gene __ar_same_shape(a, b) {
+    let sa = a["shape"]
+    let sb = b["shape"]
+    if len(sa) != len(sb) {
+        return false
+    }
+    for i in range(len(sa)) {
+        if sa[i] != sb[i] {
+            return false
+        }
+    }
+    return true
+}
+
+# ---------------------------------------------------------- construction
+
+gene arr_new(shape, fill, dtype) {
+    # filled array: every dim >= 1, rank 1|2; fill is promoted Int->Float
+    # when dtype is float (A1's one declared coercion), refused otherwise
+    let sc = __ar_check_shape(shape)
+    if is_err(sc) {
+        return sc
+    }
+    if dtype != "int" && dtype != "float" {
+        return err("unknown dtype '" + dtype + "' (int|float only)")
+    }
+    if !__ar_is_num(fill) {
+        return err("fill must be a number, got " + type(fill))
+    }
+    if !__ar_conforms(fill, dtype) {
+        if type(fill) == "int" && dtype == "float" {
+            fill = fill * 1.0
+        } else {
+            return err("fill " + str(fill) + " is " + type(fill) + ", dtype is " + dtype)
+        }
+    }
+    let data = []
+    let n = __ar_size(shape)
+    let i = 0
+    while i < n {
+        push(data, fill)
+        i = i + 1
+    }
+    let sh = []
+    for d in shape {
+        push(sh, d)
+    }
+    return ok({ "tag": "numarr", "dtype": dtype, "shape": sh, "data": data })
+}
+
+gene arr_zeros(shape, dtype) {
+    return arr_new(shape, 0, dtype)
+}
+
+gene arr_ones(shape, dtype) {
+    return arr_new(shape, 1, dtype)
+}
+
+gene arr_from_list(ls, dtype) {
+    # rank-1 constructor from a flat list; Int elements promote to Float
+    # when dtype is float; non-numeric elements refused with the index
+    if dtype != "int" && dtype != "float" {
+        return err("unknown dtype '" + dtype + "' (int|float only)")
+    }
+    let data = []
+    let i = 0
+    for v in ls {
+        if !__ar_is_num(v) {
+            return err("element " + str(i) + " is " + type(v) + ", not a number")
+        }
+        if __ar_conforms(v, dtype) {
+            push(data, v)
+        } else {
+            if type(v) == "int" && dtype == "float" {
+                push(data, v * 1.0)
+            } else {
+                return err("element " + str(i) + " is float but dtype is int (lossy, refused)")
+            }
+        }
+        i = i + 1
+    }
+    if len(data) < 1 {
+        return err("empty vectors refused (every dim >= 1)")
+    }
+    return ok({ "tag": "numarr", "dtype": dtype, "shape": [len(data)], "data": data })
+}
+
+gene arr_infer(ls) {
+    # dtype inference: all int -> int; any float (rest int) -> float with
+    # promotion; anything else refused with the offender named
+    let dtype = "int"
+    let i = 0
+    for v in ls {
+        if !__ar_is_num(v) {
+            return err("element " + str(i) + " is " + type(v) + ", not a number")
+        }
+        if type(v) == "float" {
+            dtype = "float"
+        }
+        i = i + 1
+    }
+    return arr_from_list(ls, dtype)
+}
+
+# ------------------------------------------------------------- reading
+
+gene arr_shape(a) {
+    # a COPY of the shape (A6: callers cannot mutate the array via the
+    # returned list)
+    let sh = []
+    for d in a["shape"] {
+        push(sh, d)
+    }
+    return sh
+}
+
+gene arr_dtype(a) {
+    return a["dtype"]
+}
+
+gene arr_to_list(a) {
+    # a COPY of the flat row-major data
+    let data = []
+    for v in a["data"] {
+        push(data, v)
+    }
+    return data
+}
+
+gene arr_get(a, idx) {
+    # idx: [i] for a vector, [r, c] for a matrix; bounds-refused exactly
+    let ck = __ar_check(a)
+    if is_err(ck) {
+        return ck
+    }
+    if type(idx) != "list" || len(idx) != len(a["shape"]) {
+        return err("index must be a list of rank " + str(len(a["shape"])) + ", got rank " + str(len(idx)))
+    }
+    let flat = 0
+    for j in range(len(idx)) {
+        let d = a["shape"][j]
+        if type(idx[j]) != "int" {
+            return err("index components must be int, got " + type(idx[j]))
+        }
+        if idx[j] < 0 || idx[j] >= d {
+            return err("index " + __ar_shape_text(idx) + " out of bounds for shape " + __ar_shape_text(a["shape"]))
+        }
+        flat = flat * d + idx[j]
+    }
+    return ok(a["data"][flat])
+}
+
+# ------------------------------------------------------------- writing
+
+gene arr_set(a, idx, v) {
+    # copy-on-write (A6); the value conforms EXACTLY (A1: storage never
+    # coerces — construction is the promoter)
+    let ck = __ar_check(a)
+    if is_err(ck) {
+        return ck
+    }
+    if type(idx) != "list" || len(idx) != len(a["shape"]) {
+        return err("index must be a list of rank " + str(len(a["shape"])) + ", got rank " + str(len(idx)))
+    }
+    if !__ar_is_num(v) {
+        return err("value must be a number, got " + type(v))
+    }
+    if !__ar_conforms(v, a["dtype"]) {
+        return err("value " + str(v) + " is " + type(v) + ", array dtype is " + a["dtype"] + " (A1: convert explicitly)")
+    }
+    let flat = 0
+    for j in range(len(idx)) {
+        let d = a["shape"][j]
+        if type(idx[j]) != "int" {
+            return err("index components must be int, got " + type(idx[j]))
+        }
+        if idx[j] < 0 || idx[j] >= d {
+            return err("index " + __ar_shape_text(idx) + " out of bounds for shape " + __ar_shape_text(a["shape"]))
+        }
+        flat = flat * d + idx[j]
+    }
+    let out = __ar_copy(a)
+    out["data"][flat] = v
+    return ok(out)
+}
+
+# ------------------------------------------------- element-wise arithmetic
+
+gene __ar_binary(a, b, op) {
+    # shared element-wise driver (A2 + A3): same-shape arrays or a scalar
+    # RHS; the per-element arithmetic is the HOST's operator, applied in
+    # flat row-major order. Returns the result data list or err(...).
+    # Result dtype: float if any operand is float, else int — EXCEPT
+    # division which is always float (A3, the host true-division law).
+    let av = a["dtype"]
+    let bv = null
+    let scalar = false
+    if type(b) == "map" && b["tag"] == "numarr" {
+        let ck = __ar_check(b)
+        if is_err(ck) {
+            return ck
+        }
+        if !__ar_same_shape(a, b) {
+            return err("shape mismatch: " + __ar_shape_text(a["shape"]) + " vs " + __ar_shape_text(b["shape"]) + " (A2)")
+        }
+        bv = b["dtype"]
+    } else {
+        if !__ar_is_num(b) {
+            return err("RHS must be a numarr or a number, got " + type(b))
+        }
+        scalar = true
+        bv = type(b)
+    }
+    let isfloat = av == "float" || bv == "float"
+    if op == "div" {
+        if scalar {
+            if b == 0 || b == 0.0 {
+                return err("division by zero (scalar RHS) (A3: refused, a numarr never stores null)")
+            }
+        } else {
+            let i = 0
+            for v in b["data"] {
+                if v == 0 || v == 0.0 {
+                    return err("division by zero at flat index " + str(i) + " (A3: refused, a numarr never stores null)")
+                }
+                i = i + 1
+            }
+        }
+    }
+    let out = []
+    if scalar {
+        for v in a["data"] {
+            if op == "add" {
+                push(out, v + b)
+            } else {
+                if op == "sub" {
+                    push(out, v - b)
+                } else {
+                    if op == "mul" {
+                        push(out, v * b)
+                    } else {
+                        push(out, v / b)
+                    }
+                }
+            }
+        }
+    } else {
+        let i = 0
+        for v in a["data"] {
+            let w = b["data"][i]
+            if op == "add" {
+                push(out, v + w)
+            } else {
+                if op == "sub" {
+                    push(out, v - w)
+                } else {
+                    if op == "mul" {
+                        push(out, v * w)
+                    } else {
+                        push(out, v / w)
+                    }
+                }
+            }
+            i = i + 1
+        }
+    }
+    let dt = "int"
+    if isfloat || op == "div" {
+        dt = "float"
+    }
+    # A1: division may produce floats from int inputs — promote the record
+    # honestly; add/sub/mul keep the declared dtype because the host's
+    # int-int arithmetic stays int
+    if dt == "float" {
+        let promoted = []
+        for v in out {
+            if type(v) == "int" {
+                push(promoted, v * 1.0)
+            } else {
+                push(promoted, v)
+            }
+        }
+        out = promoted
+    }
+    return { "data": out, "dtype": dt }
+}
+
+gene arr_add(a, b) {
+    let ck = __ar_check(a)
+    if is_err(ck) {
+        return ck
+    }
+    let r = __ar_binary(a, b, "add")
+    if is_err(r) {
+        return r
+    }
+    return ok({ "tag": "numarr", "dtype": r["dtype"], "shape": arr_shape(a), "data": r["data"] })
+}
+
+gene arr_sub(a, b) {
+    let ck = __ar_check(a)
+    if is_err(ck) {
+        return ck
+    }
+    let r = __ar_binary(a, b, "sub")
+    if is_err(r) {
+        return r
+    }
+    return ok({ "tag": "numarr", "dtype": r["dtype"], "shape": arr_shape(a), "data": r["data"] })
+}
+
+gene arr_mul(a, b) {
+    let ck = __ar_check(a)
+    if is_err(ck) {
+        return ck
+    }
+    let r = __ar_binary(a, b, "mul")
+    if is_err(r) {
+        return r
+    }
+    return ok({ "tag": "numarr", "dtype": r["dtype"], "shape": arr_shape(a), "data": r["data"] })
+}
+
+gene arr_div(a, b) {
+    let ck = __ar_check(a)
+    if is_err(ck) {
+        return ck
+    }
+    let r = __ar_binary(a, b, "div")
+    if is_err(r) {
+        return r
+    }
+    return ok({ "tag": "numarr", "dtype": r["dtype"], "shape": arr_shape(a), "data": r["data"] })
+}
+
+gene arr_neg(a) {
+    let ck = __ar_check(a)
+    if is_err(ck) {
+        return ck
+    }
+    let out = []
+    for v in a["data"] {
+        push(out, -v)
+    }
+    return ok({ "tag": "numarr", "dtype": a["dtype"], "shape": arr_shape(a), "data": out })
+}
+
+gene arr_abs(a) {
+    let ck = __ar_check(a)
+    if is_err(ck) {
+        return ck
+    }
+    let out = []
+    for v in a["data"] {
+        push(out, abs(v))
+    }
+    return ok({ "tag": "numarr", "dtype": a["dtype"], "shape": arr_shape(a), "data": out })
+}
+
+# ------------------------------------------------------- linear algebra
+
+gene arr_dot(a, b) {
+    # rank-1 only; sequential left-to-right (A4); int*int stays int
+    let ck = __ar_check(a)
+    if is_err(ck) {
+        return ck
+    }
+    let ck2 = __ar_check(b)
+    if is_err(ck2) {
+        return ck2
+    }
+    if len(a["shape"]) != 1 || len(b["shape"]) != 1 {
+        return err("dot requires two rank-1 arrays, got ranks " + str(len(a["shape"])) + " and " + str(len(b["shape"])))
+    }
+    if len(a["data"]) != len(b["data"]) {
+        return err("dot length mismatch: " + str(len(a["data"])) + " vs " + str(len(b["data"])) + " (A2)")
+    }
+    let acc = 0
+    let i = 0
+    for v in a["data"] {
+        acc = acc + v * b["data"][i]
+        i = i + 1
+    }
+    return ok(acc)
+}
+
+gene arr_matmul(a, b) {
+    # (m x k) * (k x n), row-major, sequential (A4); int*int stays int,
+    # any float promotes the result
+    let ck = __ar_check(a)
+    if is_err(ck) {
+        return ck
+    }
+    let ck2 = __ar_check(b)
+    if is_err(ck2) {
+        return ck2
+    }
+    if len(a["shape"]) != 2 || len(b["shape"]) != 2 {
+        return err("matmul requires two rank-2 arrays, got ranks " + str(len(a["shape"])) + " and " + str(len(b["shape"])))
+    }
+    let m = a["shape"][0]
+    let k = a["shape"][1]
+    let k2 = b["shape"][0]
+    let n = b["shape"][1]
+    if k != k2 {
+        return err("matmul inner dims differ: " + __ar_shape_text(a["shape"]) + " vs " + __ar_shape_text(b["shape"]) + " (A2)")
+    }
+    let isfloat = a["dtype"] == "float" || b["dtype"] == "float"
+    let data = []
+    let i = 0
+    while i < m {
+        let j = 0
+        while j < n {
+            let acc = 0
+            let t = 0
+            while t < k {
+                acc = acc + a["data"][i * k + t] * b["data"][t * n + j]
+                t = t + 1
+            }
+            if isfloat && type(acc) == "int" {
+                acc = acc * 1.0
+            }
+            push(data, acc)
+            j = j + 1
+        }
+        i = i + 1
+    }
+    let dt = "int"
+    if isfloat {
+        dt = "float"
+    }
+    return ok({ "tag": "numarr", "dtype": dt, "shape": [m, n], "data": data })
+}
+
+gene arr_transpose(a) {
+    let ck = __ar_check(a)
+    if is_err(ck) {
+        return ck
+    }
+    if len(a["shape"]) != 2 {
+        return err("transpose requires rank 2, got rank " + str(len(a["shape"])))
+    }
+    let r = a["shape"][0]
+    let c = a["shape"][1]
+    let data = []
+    let i = 0
+    while i < c {
+        let j = 0
+        while j < r {
+            push(data, a["data"][j * c + i])
+            j = j + 1
+        }
+        i = i + 1
+    }
+    return ok({ "tag": "numarr", "dtype": a["dtype"], "shape": [c, r], "data": data })
+}
+
+gene arr_reshape(a, shape) {
+    let ck = __ar_check(a)
+    if is_err(ck) {
+        return ck
+    }
+    let sc = __ar_check_shape(shape)
+    if is_err(sc) {
+        return sc
+    }
+    if __ar_size(shape) != len(a["data"]) {
+        return err("reshape size mismatch: " + __ar_shape_text(shape) + " holds " + str(__ar_size(shape)) + " but the array holds " + str(len(a["data"])) + " (A2)")
+    }
+    let out = __ar_copy(a)
+    let sh = []
+    for d in shape {
+        push(sh, d)
+    }
+    out["shape"] = sh
+    return ok(out)
+}
+
+# ---------------------------------------------------------- reductions
+
+gene arr_sum(a) {
+    # A4: ONE sequential left-to-right pass in flat row-major order; int
+    # arrays accumulate EXACT Int arithmetic (the R0.4 exactness tie-in)
+    let ck = __ar_check(a)
+    if is_err(ck) {
+        return ck
+    }
+    let acc = 0
+    for v in a["data"] {
+        acc = acc + v
+    }
+    return ok(acc)
+}
+
+gene arr_min(a) {
+    let ck = __ar_check(a)
+    if is_err(ck) {
+        return ck
+    }
+    let best = a["data"][0]
+    for v in a["data"] {
+        if v < best {
+            best = v
+        }
+    }
+    return ok(best)
+}
+
+gene arr_max(a) {
+    let ck = __ar_check(a)
+    if is_err(ck) {
+        return ck
+    }
+    let best = a["data"][0]
+    for v in a["data"] {
+        if v > best {
+            best = v
+        }
+    }
+    return ok(best)
+}
+
+gene arr_mean(a) {
+    # ALWAYS Float: the exact int sum (or sequential float sum) divided by
+    # the count through the host's true-division law — one division, at
+    # the end, never running means (A4)
+    let s = arr_sum(a)
+    if is_err(s) {
+        return s
+    }
+    return ok(unwrap(s) / len(a["data"]))
+}
+
+gene arr_argmin(a) {
+    # A5: FIRST occurrence in flat row-major order
+    let ck = __ar_check(a)
+    if is_err(ck) {
+        return ck
+    }
+    let best = 0
+    let i = 0
+    for v in a["data"] {
+        if v < a["data"][best] {
+            best = i
+        }
+        i = i + 1
+    }
+    return ok(best)
+}
+
+gene arr_argmax(a) {
+    # A5: FIRST occurrence in flat row-major order
+    let ck = __ar_check(a)
+    if is_err(ck) {
+        return ck
+    }
+    let best = 0
+    let i = 0
+    for v in a["data"] {
+        if v > a["data"][best] {
+            best = i
+        }
+        i = i + 1
+    }
+    return ok(best)
+}
+
+# -------------------------------------------------------- introspection
+
+gene arr_validate(a) {
+    # the DEEP check: structure (via __ar_check) plus every element's type
+    # conformance (A1). ok(a) or err(first offender, flat index named).
+    let ck = __ar_check(a)
+    if is_err(ck) {
+        return ck
+    }
+    let i = 0
+    for v in a["data"] {
+        if !__ar_conforms(v, a["dtype"]) {
+            return err("element " + str(i) + " is " + type(v) + ", dtype is " + a["dtype"] + " (A1)")
+        }
+        i = i + 1
+    }
+    return ok(a)
+}
+
+gene arr_render(a) {
+    # deterministic rendering for pins and diffs: dtype, shape, then the
+    # flat rows (vectors print one bracket; matrices one bracket per row,
+    # row-major order always)
+    let ck = __ar_check(a)
+    if is_err(ck) {
+        return ck
+    }
+    let head = "numarr<" + a["dtype"] + " shape=" + __ar_shape_text(a["shape"]) + ">"
+    let rows = []
+    if len(a["shape"]) == 1 {
+        let parts = []
+        for v in a["data"] {
+            push(parts, str(v))
+        }
+        push(rows, "[" + parts.join(", ") + "]")
+    } else {
+        let r = a["shape"][0]
+        let c = a["shape"][1]
+        let i = 0
+        while i < r {
+            let parts = []
+            let j = 0
+            while j < c {
+                push(parts, str(a["data"][i * c + j]))
+                j = j + 1
+            }
+            push(rows, "[" + parts.join(", ") + "]")
+            i = i + 1
+        }
+    }
+    return head + " " + rows.join(" ")
+}
