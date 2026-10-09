@@ -1,0 +1,43 @@
+# Z-116 (#116): engine-convergence pins — the three divergences between the
+# VM and the tree-walk, each once observable, now byte-identical on BOTH
+# lanes AND the oracle.
+#
+# leg 1: compound assignment reads the target AFTER the rhs evaluates
+#        (the VM used to emit LoadNameQuiet before the rhs insns).
+# leg 2: the const check fires BEFORE the compound binop, so a const
+#        target with an overflowing rhs raises frozen (E1000), never the
+#        binop's own overflow (E1020).
+# leg 3: the RISC silencing gate runs BEFORE the arguments evaluate
+#        ("a degraded call is not expression") — a degraded call's args
+#        never execute, on every lane.
+
+# ---------- leg 1: read-after-rhs ----------
+g = 5
+gene bump() { g = 1  return 1000 }
+gene probe() { return g }
+gene main() {
+    g += bump()
+    print("final g:", probe())
+    # the same order law for a non-Add compound op
+    h = 10
+    gene bump2() { h = 2  return 100 }
+    h -= bump2()
+    print("final h:", h)
+    return 0
+}
+
+# ---------- leg 3: silenced args never evaluate (degrade) ----------
+side = 0
+gene loud() { side = 99  return 7 }
+gene ghost() { return "boo" }
+silence ghost;
+print("degraded call:", ghost(loud()))
+print("side after degrade:", side)
+print("ghost again:", ghost(loud(), loud()))
+
+# ---------- leg 3b: redirect evaluates args (replacement runs) ----------
+gene replacement(x) { return "repl-saw-" + str(x) }
+gene aliased() { return "orig" }
+silence aliased -> replacement;
+print("redirected:", aliased(loud()))
+print("side after redirect:", side)

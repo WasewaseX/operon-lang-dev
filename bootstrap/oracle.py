@@ -4581,8 +4581,21 @@ class Interp:
         if k == "call":
             self.cur_line = e[3] if len(e) > 3 else 0  # W07 mirror: A13 stamp
             if e[1][0] == "ident":
+                # Z-116 (#116 leg 3): the RISC gate runs BEFORE the args
+                # evaluate ("a degraded call is not expression" — the Rust
+                # tree-walk order; the VM gates pre-args via CallGateRisc).
+                # Degrade returns null without evaluating anything; redirect
+                # evaluates the args and calls the replacement.
+                dec = self.risc_gate(env, e[1][1])
+                if dec == "degrade":
+                    return None
+                if isinstance(dec, tuple):  # ("redirect", target_name)
+                    to = dec[1]
+                    tgt = self.lookup(env, to)
+                    argvs = [self.eval(env, a) for a in e[2]]
+                    return self.call_value(env, tgt, argvs)
                 args = [self.eval(env, a) for a in e[2]]
-                return self.call_named(env, e[1][1], args)
+                return self.call_named(env, e[1][1], args, _risc_pre=True)
             callee = self.eval(env, e[1])
             args = [self.eval(env, a) for a in e[2]]
             return self.call_value(env, callee, args)
@@ -4946,7 +4959,47 @@ class Interp:
         self.note(4, f"called a {type_name(callee)} (not a gene); result null")
         return None
 
-    def call_named(self, env, name, args):
+    def risc_gate(self, env, name):
+        # Z-116 (#116 leg 3): the RISC silencing gate, extracted so it can
+        # run BEFORE argument evaluation (the tree-walk order) — the notes,
+        # draw order and capture arithmetic are the moved code, verbatim.
+        # Returns "degrade", ("redirect", to), or "proceed".
+        entries = [e for e in self.silences if e[0] == name]
+        if not entries:
+            return "proceed"
+        target_gene = self.lookup(env, name)
+        immune = isinstance(target_gene, Gene) and target_gene.acetylate
+        if immune:
+            return "proceed"
+        surv = 1.0
+        for _f, _t, s_i, sites_i in entries:
+            base = 1.0 - s_i
+            for _k in range(sites_i):
+                surv *= base
+        p = 1.0 - surv
+        captured = True
+        if p < 1.0:
+            x = self.rng
+            x ^= (x >> 12) & M64
+            x ^= (x << 25) & M64
+            x ^= (x >> 27) & M64
+            self.rng = x & M64
+            u = ((self.rng >> 11) & ((1 << 53) - 1)) / 9007199254740992.0
+            captured = u < p
+            if not captured and name not in self.risc_escaped:
+                self.risc_escaped.add(name)
+                self.note(4, f"RISC escape: '{name}' escaped silencing (strength {entries[0][2]!r}, sites {entries[0][3]})")
+        if not captured:
+            return "proceed"
+        to = entries[0][1]
+        if to is not None:
+            self.note(4, f"RISC: call to '{name}' silenced → '{to}'")
+            return ("redirect", to)
+        # reg-bio (F-4): pure degradation, no replacement executes
+        self.note(4, f"RISC: call to '{name}' degraded (no replacement)")
+        return "degrade"
+
+    def call_named(self, env, name, args, _risc_pre=False):
         if name in BUILTIN_SYNONYMS:
             return self.builtin(env, BUILTIN_SYNONYMS[name], args)
         # reg-r4 (re-audit B-4): gate ORDER is pinned SPEC-wide, RISC at the
@@ -4956,38 +5009,17 @@ class Interp:
         # reg-bio-3 (C9): stoichiometric capture, every entry for the
         # target is one binding site; per-call capture p = 1 - Π(1-s)^sites.
         # strength 1.0 / one site = legacy binary redirect (no draw).
-        entries = [e for e in self.silences if e[0] == name]
-        if entries:
-            target_gene = self.lookup(env, name)
-            immune = isinstance(target_gene, Gene) and target_gene.acetylate
-            if not immune:
-                surv = 1.0
-                for _f, _t, s_i, sites_i in entries:
-                    base = 1.0 - s_i
-                    for _k in range(sites_i):
-                        surv *= base
-                p = 1.0 - surv
-                captured = True
-                if p < 1.0:
-                    x = self.rng
-                    x ^= (x >> 12) & M64
-                    x ^= (x << 25) & M64
-                    x ^= (x >> 27) & M64
-                    self.rng = x & M64
-                    u = ((self.rng >> 11) & ((1 << 53) - 1)) / 9007199254740992.0
-                    captured = u < p
-                    if not captured and name not in self.risc_escaped:
-                        self.risc_escaped.add(name)
-                        self.note(4, f"RISC escape: '{name}' escaped silencing (strength {entries[0][2]!r}, sites {entries[0][3]})")
-                if captured:
-                    to = entries[0][1]
-                    if to is not None:
-                        self.note(4, f"RISC: call to '{name}' silenced → '{to}'")
-                        tgt = self.lookup(env, to)
-                        return self.call_value(env, tgt, args)
-                    # reg-bio (F-4): pure degradation, no replacement executes
-                    self.note(4, f"RISC: call to '{name}' degraded (no replacement)")
-                    return None
+        # Z-116 (#116 leg 3): source-level ident calls run this gate BEFORE
+        # their arguments evaluate (eval's call arm) and pass _risc_pre=True;
+        # the gate here only serves calls that arrive by other routes.
+        if not _risc_pre:
+            dec = self.risc_gate(env, name)
+            if dec == "degrade":
+                return None
+            if isinstance(dec, tuple):  # ("redirect", to) — note already emitted
+                to = dec[1]
+                tgt = self.lookup(env, to)
+                return self.call_value(env, tgt, args)
         # toggle gate: the repressed allele refuses calls
         for a, b, a_on in self.toggles:
             if a == name or b == name:

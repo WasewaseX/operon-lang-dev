@@ -150,6 +150,28 @@ pub enum Instr {
     /// the result. Only Expr::Call over a bare identifier compiles to this;
     /// method calls, gene-value calls and every exotic callee stay bridged.
     CallNamed(u32, u32),
+    /// Z-116 (#116 leg 3): run the RISC silencing gate BEFORE the argument
+    /// insns (the tree-walk gates pre-args: "a degraded call is not
+    /// expression"). Stashes the decision for the paired CallNamed; on a
+    /// DEGRADE decision the args must never execute, so the insn pushes the
+    /// null result itself and jumps to the patched target (the instruction
+    /// after the call). When no silences are configured the gate is a no-op
+    /// and the stash stays empty — the paired CallNamed then falls back to
+    /// the gate-inside funnel, which is observationally inert (A5).
+    /// Doubles as the pre-arg line stamp (sits beside the Nop at this
+    /// site: same line table entry, no net tick cost).
+    CallGateRisc(u32, u32),
+    /// Z-116 (#116 legs 1+2): the compiled back-end of every general
+    /// compound assignment (`x op= rhs`). Pops the rhs (its insns already
+    /// ran — side effects first), raises frozen (E1000) when the target is
+    /// const (the tree-walk's is_const check sits between the rhs eval and
+    /// the binop), reads the target with the EXACT quiet read (slot-aware),
+    /// applies `target op rhs` through the shared apply_binop and pushes.
+    /// AssignName stores after it. The target read happens AFTER the rhs
+    /// evaluated (leg 1: the tree-walk reads the slot post-rhs) and the
+    /// const check BEFORE the binop (leg 2: frozen, never the binop's own
+    /// overflow) — the tree-walk's order, one insn instead of three.
+    CompoundBin(u32, BinOp),
     /// compat-matrix fix (rt_p22a, 2026-09-30): a line stamp that executes
     /// as nothing. The tree-walk stamps Expr::Call's line at ARM ENTRY,
     /// before any argument evaluates, and never re-stamps after; the per-
@@ -409,12 +431,22 @@ impl<'a> Compiler<'a> {
                 // never re-stamps after (its builtin diagnostics carry the
                 // LAST argument's line — rt_p22a's strengthen note). The
                 // pre-arg Nop carries the stamp; the call insn itself must
-                // not re-stamp post-args.
+                // not re-stamp post-args. (Z-116: CallGateRisc below carries
+                // the same stamp — stamps are idempotent — and additionally
+                // runs the RISC gate pre-args.)
                 self.emit(Instr::Nop, *call_line as u32);
+                // Z-116: the gate runs BEFORE the arg insns (pre-args line
+                // stamp included — this insn carries the call line exactly
+                // like the Nop it sits next to). The degrade jump target is
+                // patched to the instruction after the CallNamed below.
+                self.emit(Instr::CallGateRisc(nidx, 0), *call_line as u32);
+                let gate_site = self.code.len() - 1;
                 for a in args {
                     self.expr_or_bridge(a, line);
                 }
                 self.emit(Instr::CallNamed(nidx, args.len() as u32), 0);
+                let after = self.code.len() as u32;
+                self.code[gate_site] = Instr::CallGateRisc(nidx, after);
             }
             // W08r: the parser's transparent position marker compiles as its
             // inner expression, attributed to the marker's line (this also
@@ -490,20 +522,23 @@ impl<'a> Compiler<'a> {
                     self.emit(Instr::AppendName(nidx, false), line);
                     return Vec::new();
                 }
-                // compound: quiet read, binop, write (tree-walk order)
+                // compound: rhs first (side effects), then ONE superinsn
+                // that const-checks the target, reads it post-rhs (the
+                // tree-walk's exact order, Z-116 legs 1+2) and applies the
+                // binop with the target as the LEFT operand. AssignName
+                // stores; the write re-binds through the env chain.
                 let nidx = intern_name(&mut self.names, name);
-                self.emit(Instr::LoadNameQuiet(nidx), line);
                 self.expr_or_bridge(e, line);
-                self.emit(Instr::Bin(BinOp::Add), line);
+                self.emit(Instr::CompoundBin(nidx, BinOp::Add), line);
                 self.emit(Instr::AssignName(nidx), line);
                 Vec::new()
             }
             Stmt::Assign(name, Some(op), e) => {
-                // compound: quiet read, binop, write (tree-walk order)
+                // compound: same Z-116 shape as the += arm above (rhs
+                // first, post-rhs read, pre-binop const check).
                 let nidx = intern_name(&mut self.names, name);
-                self.emit(Instr::LoadNameQuiet(nidx), line);
                 self.expr_or_bridge(e, line);
-                self.emit(Instr::Bin(*op), line);
+                self.emit(Instr::CompoundBin(nidx, *op), line);
                 self.emit(Instr::AssignName(nidx), line);
                 Vec::new()
             }
@@ -1256,6 +1291,17 @@ fn exec_gene_code_inner(
                             if let Value::Str(suffix) = &r {
                                 let mut vars = env_node.vars.borrow_mut();
                                 if let Some(Value::Str(slot_s)) = vars.get_mut(&name) {
+                                    // Z-116 leg 2: the tree-walk checks the
+                                    // const target BEFORE try_str_append
+                                    // (which owns the ceiling), so a const
+                                    // target raises frozen (E1000) here too,
+                                    // never the ceiling overflow.
+                                    if cur.is_const(&name) {
+                                        return Err(Stress::new(
+                                            "frozen",
+                                            format!("cannot reassign const '{}'", name),
+                                        ));
+                                    }
                                     // Bin(Add) position: ceiling, then charge
                                     let new_len = slot_s.len().saturating_add(suffix.len());
                                     if new_len > 512 * 1024 * 1024 {
@@ -1271,13 +1317,6 @@ fn exec_gene_code_inner(
                                     // loops through the aggregate ceiling
                                     // without any real allocation growth.
                                     crate::interp::mem_charge(suffix.len() as u64)?;
-                                    // AssignName position: const check
-                                    if cur.is_const(&name) {
-                                        return Err(Stress::new(
-                                            "frozen",
-                                            format!("cannot reassign const '{}'", name),
-                                        ));
-                                    }
                                     slot_s.push_str(suffix);
                                     fast_done = true;
                                 }
@@ -1291,7 +1330,17 @@ fn exec_gene_code_inner(
                     // EXACT fallback — the read half (loud = the full
                     // LoadName arm with clone charge + unbound note; quiet
                     // = LoadNameQuiet), then Bin(Add), then AssignName
-                    // verbatim (slot write included).
+                    // verbatim (slot write included). Z-116 leg 2: the
+                    // tree-walk checks is_const BEFORE the binop, so the
+                    // const check leads the replaced sequence (slot targets
+                    // can be const too; the fast path above already caught
+                    // every const env hit).
+                    if cur.is_const(&name) {
+                        return Err(Stress::new(
+                            "frozen",
+                            format!("cannot reassign const '{}'", name),
+                        ));
+                    }
                     let l = if *loud {
                         match slot_read(slot_frame.as_ref(), *idx).or_else(|| cur.get(&name)) {
                             Some(v) => {
@@ -1308,12 +1357,6 @@ fn exec_gene_code_inner(
                             .unwrap_or_else(|| cur.get(&name).unwrap_or(Value::Null))
                     };
                     let v = interp.apply_binop(&cur, BinOp::Add, &l, &r)?;
-                    if cur.is_const(&name) {
-                        return Err(Stress::new(
-                            "frozen",
-                            format!("cannot reassign const '{}'", name),
-                        ));
-                    }
                     match slot_write(slot_frame.as_mut(), *idx) {
                         Some(dst) => {
                             *dst = v.clone();
@@ -1532,22 +1575,62 @@ fn exec_gene_code_inner(
             }
             Instr::CallNamed(name_idx, argc) => {
                 // W09 native calls: pop the args in reverse, then ride the
-                // SHARED named-call tail (RISC gate + call_named funnel).
-                // The call line was stamped pre-args by the Nop (the
-                // tree-walk stamps at arm entry and never re-stamps after
-                // the args — this insn carries line 0 on purpose).
-                // The name is borrowed, not cloned: fib25 measures 242k
-                // calls and the clone was a malloc per call.
+                // SHARED named-call tail. Z-116: if the pre-args
+                // CallGateRisc already stashed a decision, that decision
+                // drives the call (no second gate draw); with no stash
+                // entry (silences never configured) the legacy gate-inside
+                // funnel runs, where the gate is observationally inert.
                 let name = code.names[*name_idx as usize].as_str();
                 let n = *argc as usize;
                 let base = stack.len() - n;
                 let argvs: Vec<Value> = stack.drain(base..).collect();
-                let v = interp.named_call_tail_vm(
-                    &cur,
-                    name,
-                    argvs,
-                    Some((code as *const GeneCode as usize, (ip - 1) as u32)),
-                )?;
+                let site = Some((code as *const GeneCode as usize, (ip - 1) as u32));
+                let v = match interp.risc_stash.pop() {
+                    Some(dec) => interp.named_call_tail_vm_pre(&cur, name, argvs, site, dec)?,
+                    None => interp.named_call_tail_vm(&cur, name, argvs, site)?,
+                };
+                stack.push(v);
+            }
+            Instr::CallGateRisc(name_idx, degrade_target) => {
+                // Z-116: the RISC gate runs BEFORE the argument insns, in
+                // the same position the tree-walk runs it ("a degraded call
+                // is not expression"). No silences configured = the gate is
+                // observationally inert (A5): nothing stashed, nothing
+                // drawn, the paired CallNamed takes its legacy path.
+                if !interp.silences.is_empty() {
+                    let name = code.names[*name_idx as usize].as_str();
+                    let dec = interp.risc_gate(&cur, name)?;
+                    match dec {
+                        crate::interp::RiscDecision::Proceed
+                        | crate::interp::RiscDecision::Redirect(_) => {
+                            interp.risc_stash.push(dec);
+                        }
+                        crate::interp::RiscDecision::Degrade => {
+                            // the gate emitted the degraded note; the args
+                            // must never execute — yield null here and jump
+                            // past the arg insns + the paired CallNamed.
+                            stack.push(Value::Null);
+                            ip = *degrade_target as usize;
+                        }
+                    }
+                }
+            }
+            Instr::CompoundBin(idx, op) => {
+                // Z-116 legs 1+2 (sync): pop the rhs (its insns already
+                // ran), const-check the target (frozen BEFORE the binop),
+                // read it with the EXACT quiet read (slot-aware, post-rhs),
+                // apply target op rhs through the shared apply_binop.
+                let name = code.names[*idx as usize].as_str();
+                let r = stack.pop().unwrap_or(Value::Null);
+                if cur.is_const(name) {
+                    return Err(Stress::new(
+                        "frozen",
+                        format!("cannot reassign const '{}'", name),
+                    ));
+                }
+                let l = slot_read(slot_frame.as_ref(), *idx)
+                    .unwrap_or_else(|| cur.get(name).unwrap_or(Value::Null));
+                let v = interp.apply_binop(&cur, *op, &l, &r)?;
                 stack.push(v);
             }
         }
@@ -1958,6 +2041,15 @@ fn fiber_run_inner(interp: &mut Interp, fiber: &mut Fiber) -> Result<FiberOutcom
                         if let Value::Str(suffix) = &r {
                             let mut vars = env_node.vars.borrow_mut();
                             if let Some(Value::Str(slot_s)) = vars.get_mut(&name) {
+                                // Z-116 leg 2: const check BEFORE the
+                                // ceiling (the tree-walk checks is_const
+                                // before try_str_append, which owns it).
+                                if cur.is_const(&name) {
+                                    return Err(Stress::new(
+                                        "frozen",
+                                        format!("cannot reassign const '{}'", name),
+                                    ));
+                                }
                                 // Bin(Add) position: ceiling, then charge
                                 let new_len = slot_s.len().saturating_add(suffix.len());
                                 if new_len > 512 * 1024 * 1024 {
@@ -1969,13 +2061,6 @@ fn fiber_run_inner(interp: &mut Interp, fiber: &mut Fiber) -> Result<FiberOutcom
                                 // perf-xlang-r2: retained-bytes charge (see
                                 // the sync arm) — same accounting both arms.
                                 crate::interp::mem_charge(suffix.len() as u64)?;
-                                // AssignName position: const check
-                                if cur.is_const(&name) {
-                                    return Err(Stress::new(
-                                        "frozen",
-                                        format!("cannot reassign const '{}'", name),
-                                    ));
-                                }
                                 slot_s.push_str(suffix);
                                 fast_done = true;
                             }
@@ -1985,6 +2070,15 @@ fn fiber_run_inner(interp: &mut Interp, fiber: &mut Fiber) -> Result<FiberOutcom
                     node = env_node.parent.clone();
                 }
                 if !fast_done {
+                    // Z-116 leg 2 (fiber mirror): the const check leads the
+                    // replaced sequence — is_const BEFORE the binop, exactly
+                    // the tree-walk's general-arm order.
+                    if cur.is_const(&name) {
+                        return Err(Stress::new(
+                            "frozen",
+                            format!("cannot reassign const '{}'", name),
+                        ));
+                    }
                     let l = if *loud {
                         match cur.get(&name) {
                             Some(v) => {
@@ -2000,12 +2094,6 @@ fn fiber_run_inner(interp: &mut Interp, fiber: &mut Fiber) -> Result<FiberOutcom
                         cur.get(&name).unwrap_or(Value::Null)
                     };
                     let v = interp.apply_binop(cur, BinOp::Add, &l, &r)?;
-                    if cur.is_const(&name) {
-                        return Err(Stress::new(
-                            "frozen",
-                            format!("cannot reassign const '{}'", name),
-                        ));
-                    }
                     if !cur.set(&name, v) {
                         interp.note(0, 4, format!("'{}' was not declared; auto-declared", name));
                     }
@@ -2238,18 +2326,29 @@ fn fiber_run_inner(interp: &mut Interp, fiber: &mut Fiber) -> Result<FiberOutcom
                 // SHARED funnel runs with the hook armed — whatever gene
                 // body it resolves to (direct, RISC-redirected, wobble-
                 // repaired) pushes a heap frame; builtins, vetoed calls and
-                // guard returns return values inline.
+                // guard returns return values inline. Z-116: a stashed
+                // pre-args gate decision (CallGateRisc) drives the call;
+                // no stash entry = the legacy gate-inside funnel (inert).
                 let name = code.names[*name_idx as usize].as_str();
                 let n = *argc as usize;
                 let base = stack.len() - n;
                 let argvs: Vec<Value> = stack.drain(base..).collect();
                 interp.fiber_hook = true;
-                let r = interp.named_call_tail_vm(
-                    cur,
-                    name,
-                    argvs,
-                    Some((std::rc::Rc::as_ptr(code) as usize, cur_ip as u32)),
-                );
+                let r = match interp.risc_stash.pop() {
+                    Some(dec) => interp.named_call_tail_vm_pre(
+                        cur,
+                        name,
+                        argvs,
+                        Some((std::rc::Rc::as_ptr(code) as usize, cur_ip as u32)),
+                        dec,
+                    ),
+                    None => interp.named_call_tail_vm(
+                        cur,
+                        name,
+                        argvs,
+                        Some((std::rc::Rc::as_ptr(code) as usize, cur_ip as u32)),
+                    ),
+                };
                 interp.fiber_hook = false;
                 let v = r?;
                 match interp.fiber_hook_out.take() {
@@ -2258,6 +2357,41 @@ fn fiber_run_inner(interp: &mut Interp, fiber: &mut Fiber) -> Result<FiberOutcom
                     }
                     None => stack.push(v),
                 }
+            }
+            Instr::CallGateRisc(name_idx, degrade_target) => {
+                // Z-116: the RISC gate runs BEFORE the argument insns, in
+                // the same position the tree-walk runs it. No silences
+                // configured = inert no-op (A5); a Degrade decision pushes
+                // the null result itself and jumps past args + call.
+                if !interp.silences.is_empty() {
+                    let name = code.names[*name_idx as usize].as_str();
+                    let dec = interp.risc_gate(cur, name)?;
+                    match dec {
+                        crate::interp::RiscDecision::Proceed
+                        | crate::interp::RiscDecision::Redirect(_) => {
+                            interp.risc_stash.push(dec);
+                        }
+                        crate::interp::RiscDecision::Degrade => {
+                            stack.push(Value::Null);
+                            *ip = *degrade_target as usize;
+                        }
+                    }
+                }
+            }
+            Instr::CompoundBin(idx, op) => {
+                // Z-116 legs 1+2 (fiber mirror): pop rhs, const-check,
+                // quiet post-rhs read, target op rhs.
+                let name = code.names[*idx as usize].as_str();
+                let r = stack.pop().unwrap_or(Value::Null);
+                if cur.is_const(name) {
+                    return Err(Stress::new(
+                        "frozen",
+                        format!("cannot reassign const '{}'", name),
+                    ));
+                }
+                let l = cur.get(name).unwrap_or(Value::Null);
+                let v = interp.apply_binop(cur, *op, &l, &r)?;
+                stack.push(v);
             }
         }
     }
@@ -2367,6 +2501,8 @@ fn mnemonic(i: &Instr) -> &'static str {
         Instr::EnterScope => "EnterScope",
         Instr::ExitScope => "ExitScope",
         Instr::CallNamed(_, _) => "CallNamed",
+        Instr::CallGateRisc(..) => "CallGateRisc",
+        Instr::CompoundBin(..) => "CompoundBin",
     }
 }
 
@@ -2400,6 +2536,8 @@ pub fn all_mnemonics() -> &'static [&'static str] {
         "EnterScope",
         "ExitScope",
         "CallNamed",
+        "CallGateRisc",
+        "CompoundBin",
         "Nop",
     ]
 }
@@ -2450,6 +2588,16 @@ fn render(i: &Instr, code: &GeneCode) -> String {
                 argc
             )
         }
+        Instr::CallGateRisc(idx, target) => format!(
+            "'{}' degrade -> {}",
+            code.names.get(*idx as usize).cloned().unwrap_or_default(),
+            target
+        ),
+        Instr::CompoundBin(idx, op) => format!(
+            "'{}' {:?}",
+            code.names.get(*idx as usize).cloned().unwrap_or_default(),
+            op
+        ),
         _ => String::new(),
     }
 }
@@ -2672,6 +2820,15 @@ pub fn optimize_with(code: &GeneCode, passes: PassSet) -> GeneCode {
                     targets[t] = true;
                 }
             }
+            // Z-116: the degrade jump is a real join edge — the fallback
+            // (degraded) path arrives at the post-call point with nothing
+            // evaluated, so facts must not flow across it linearly.
+            if let Instr::CallGateRisc(_, t) = instr {
+                let t = *t as usize;
+                if t < n {
+                    targets[t] = true;
+                }
+            }
         }
         let mut facts: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
         let mut last_push: Option<u32> = None;
@@ -2717,7 +2874,8 @@ pub fn optimize_with(code: &GeneCode, passes: PassSet) -> GeneCode {
                 Instr::EvalExpr(_)
                 | Instr::BridgeStmt(_)
                 | Instr::BridgeStmtInLoop(..)
-                | Instr::CallNamed(..) => {
+                | Instr::CallNamed(..)
+                | Instr::CallGateRisc(..) => {
                     facts.clear();
                     last_push = None;
                 }
@@ -2792,6 +2950,11 @@ pub fn optimize_with(code: &GeneCode, passes: PassSet) -> GeneCode {
                         Instr::Jmp(t) | Instr::JmpIfF(t) | Instr::Brk(t) | Instr::Cont(t) => {
                             *t = map[*t as usize];
                         }
+                        // Z-116: the degrade-jump target rides the same
+                        // old->new table (a removal before it shifts it).
+                        Instr::CallGateRisc(_, t) => {
+                            *t = map[*t as usize];
+                        }
                         // W011 (#117): the bridged statement's break/continue
                         // operands ride the same old->new table as every other
                         // loop boundary
@@ -2864,6 +3027,16 @@ fn remap_after_removal(code: &mut GeneCode, at: usize, count: usize) {
     for instr in code.code.iter_mut() {
         match instr {
             Instr::Jmp(t) | Instr::JmpIfF(t) | Instr::Brk(t) | Instr::Cont(t) => {
+                let tt = *t as usize;
+                if tt > at + count - 1 {
+                    *t = (tt - count) as u32;
+                }
+            }
+            // Z-116: CallGateRisc's degrade-jump target is a real jump
+            // destination — a removal before it shifts it exactly like a
+            // Jmp target (left stale, the degraded path would resume at a
+            // mid-sequence offset on every folded program).
+            Instr::CallGateRisc(_, t) => {
                 let tt = *t as usize;
                 if tt > at + count - 1 {
                     *t = (tt - count) as u32;
@@ -3415,10 +3588,11 @@ mod tests {
         }
         let mut prog = VmProgram::default();
         let raw = compile_body("f", &body, &mut prog, &[]);
-        // the raw body carries the dead call (Nop stamp + CallNamed print +
-        // Pop); the pre-arg Nop stamp (rt_p22a fix) shifts the call to [4]
+        // the raw body carries the dead call (Nop stamp + CallGateRisc +
+        // CallNamed print + Pop); the pre-arg stamps (rt_p22a fix + the
+        // Z-116 gate insn) shift the call to [5]
         assert!(
-            render(&raw.code[4], &raw).starts_with("'print'"),
+            render(&raw.code[5], &raw).starts_with("'print'"),
             "fixture stale"
         );
         let opt = optimize(&raw);
@@ -3636,6 +3810,8 @@ gene main() {
             (&Instr::EnterScope, "EnterScope"),
             (&Instr::ExitScope, "ExitScope"),
             (&Instr::CallNamed(0, 0), "CallNamed"),
+            (&Instr::CallGateRisc(0, 0), "CallGateRisc"),
+            (&Instr::CompoundBin(0, BinOp::Add), "CompoundBin"),
             (&Instr::Nop, "Nop"),
         ];
         assert_eq!(
