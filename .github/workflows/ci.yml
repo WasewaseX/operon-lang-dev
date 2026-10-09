@@ -40,6 +40,8 @@ jobs:
         run: ./bin/operon test tests/
       - name: Red-team containment suite (67 payloads, R1-F5 + sec-r2)
         run: bash scripts/redteam.sh
+      - name: Diagnostic golden gate (W101; the repair_notes golden rotted invisibly because this gate was local-only — caught at the v2.10.0 release round 2026-10-09)
+        run: bash scripts/diag_golden.sh
       - name: Differential harness (Rust core vs Python oracle)
         run: python3 bootstrap/harness.py
       - name: Oracle proof suite (both implementations green — SPEC §18 enforced)
