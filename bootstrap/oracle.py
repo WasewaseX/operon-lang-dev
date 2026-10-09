@@ -863,12 +863,20 @@ def lex(src):
                         j += 1
                     raw = src[i:j]
                     digits = raw[2:].replace("_", "")
-                    val = int(digits, radix)
-                    toks.append(("INT", val, line))
-                    # i64 parity: out-of-range treated as 0 with the same note
-                    if not (-2**63 <= val <= 2**63 - 1):
+                    # Z-132 (#132 class C): a radix lexeme of only `_`
+                    # separators (0x_, 0b_, 0o_) has NO digits — the engine's
+                    # documented repair path treats it as out-of-range: value
+                    # 0 + the E2008 note, never a ValueError crash.
+                    if digits:
+                        val = int(digits, radix)
+                        toks.append(("INT", val, line))
+                        # i64 parity: out-of-range treated as 0 with the same note
+                        if not (-2**63 <= val <= 2**63 - 1):
+                            notes.append(Note(4, f"integer '{raw}' out of range treated as 0", line))
+                            toks[-1] = ("INT", 0, line)
+                    else:
                         notes.append(Note(4, f"integer '{raw}' out of range treated as 0", line))
-                        toks[-1] = ("INT", 0, line)
+                        toks.append(("INT", 0, line))
                     i = j; continue
             j = i
             isf = False
@@ -4787,6 +4795,13 @@ class Interp:
                     # SPEC/parity: floor division, ALWAYS int (i64)
                     q = l // r
                     if isinstance(q, float):
+                        # Z-132 (#132 class B): Python's float // IS the
+                        # CPython float_divmod law (the Rust core's
+                        # divmod_f64); an infinite or i64-overflowing
+                        # quotient is the engine's CONTAINED overflow
+                        # stress, never a Python crash.
+                        if not math.isfinite(q) or q >= 9.223372036854776e18 or q <= -9.223372036854776e18:
+                            raise Stress("overflow", "int overflow in '//'")
                         q = int(q)
                     if not (-(2**63) <= q <= 2**63 - 1):
                         raise Stress("overflow", "int overflow in '//'")
@@ -5916,7 +5931,7 @@ class Interp:
                     (0, float(x), "") if isinstance(x, (int, float)) and not isinstance(x, bool)
                     else ((0, float(int(x)), "") if isinstance(x, bool)
                           else ((1, 0.0, x) if isinstance(x, str)
-                                else (2, 0.0, repr_of(x))))
+                                else (2, 0.0, v_repr(x))))
                 ))
             if name == "reverse": return list(reversed(recv))
             if name == "contains": return any(deep_eq(x, args[0]) for x in recv)
@@ -8003,7 +8018,7 @@ class Interp:
                     (0, float(x), "") if isinstance(x, (int, float)) and not isinstance(x, bool)
                     else ((0, float(int(x)), "") if isinstance(x, bool)
                           else ((1, 0.0, x) if isinstance(x, str)
-                                else (2, 0.0, repr_of(x))))
+                                else (2, 0.0, v_repr(x))))
                 ))
             return out
         if name == "reversed":
@@ -8710,10 +8725,28 @@ def run(path, cell=None, variant=None, rna=None, entry=None, frame=None, args=No
         if e:
             argv = list(args or [])
             g = it.globals.get(e)
+            # the entry frame is an AUTO-invocation: no call-site line (the
+            # engines render a bare `at main` for the entry frame)
+            it.cur_line = 0
+            # Z-132 (#132 class D) NOTE: the entry-call stress does NOT get
+            # contained here — the engines escape it to the CLI boundary,
+            # which renders the W101 fatal block and exits 1 (the run cmd's
+            # handler below mirrors that render). Containing it here would
+            # make every gene-body failure look like a top-level note.
             if isinstance(g, Gene) and g.params:
-                it.call_gene(g, [argv])
+                try:
+                    it.call_gene(g, [argv])
+                except Stress as err:
+                    # the buffered notes ride to the CLI handler (the engines
+                    # flush them AFTER the fatal render — order pinned)
+                    err.oracle_interp = it
+                    raise
             elif isinstance(g, Gene):
-                it.call_gene(g, [])
+                try:
+                    it.call_gene(g, [])
+                except Stress as err:
+                    err.oracle_interp = it
+                    raise
             else:
                 it.call_named(it.globals, e, [argv])
     return it
@@ -8767,7 +8800,36 @@ def main():
     if cmd == "version":
         print("Operon 2.0.0 (python-oracle)")
     elif cmd == "run":
-        it = run(pos[0], cell_dict, opts["variant"], opts["rna"], opts["entry"], opts["frame"], pos[1:], caps=opts.get("caps"))
+        # Z-132 (#132 class D): a stress that escapes the entry call is the
+        # engines' W101 fatal path — the compact render on stderr (header +
+        # W007 chain, call-site lines when known) and exit 1. A Python
+        # traceback here turned every would-be honest differential into an
+        # anonymous crash wall (both sides non-zero, class rides through).
+        try:
+            it = run(pos[0], cell_dict, opts["variant"], opts["rna"], opts["entry"], opts["frame"], pos[1:], caps=opts.get("caps"))
+        except Stress as err:
+            code = {"missing": "E1002", "unfolded": "E1003", "unwrap": "E1004",
+                    "overflow": "E1020", "burned": "E1021"}.get(err.kind, "E1000")
+            block = f"error[{code}]: {err.message}\n"
+            if err.chain:
+                block += "\n"
+                for gname, gline in err.chain:
+                    if gline:
+                        block += f"  at {gname} ({pos[0]}:{gline})\n"
+                    else:
+                        block += f"  at {gname}\n"
+            print(block, file=sys.stderr, end="")
+            _it = getattr(err, "oracle_interp", None)
+            if _it is not None:
+                for nt in _it.notes:
+                    _tag = {1: "info", 2: "synonym", 3: "wobble"}.get(nt.rung, "fallback")
+                    _code = note_code(nt.message)
+                    _tag_s = f"{_tag} {_code}" if _code else _tag
+                    if getattr(nt, "line", 0) > 0:
+                        print(f"[{_tag_s}] {pos[0]}:{nt.line}: {nt.message}", file=sys.stderr)
+                    else:
+                        print(f"[{_tag_s}] {nt.message}", file=sys.stderr)
+            sys.exit(1)
         for nt in it.notes:
             tag = {1: "info", 2: "synonym", 3: "wobble"}.get(nt.rung, "fallback")
             # W101 slice 7 mirror: derived E2xxx code rides the tag when the

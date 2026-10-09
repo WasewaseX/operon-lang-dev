@@ -1,0 +1,14 @@
+# Z-132 (#132 class D): a stress raised inside a gene body escapes the
+# entry-call boundary — the engines render the W101 fatal block (compact
+# chain form) and exit 1; the oracle used to die with a raw Python
+# traceback. stdout is EMPTY on both sides; the differential contract
+# (stdout + rc) holds with rc 1 on every lane.
+gene inner() {
+    print(9 / 0)
+}
+gene outer() {
+    inner()
+}
+gene main() {
+    outer()
+}

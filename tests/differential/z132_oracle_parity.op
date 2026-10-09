@@ -1,0 +1,24 @@
+# Z-132 (#132): oracle-robustness parity pins — the four oracle crash
+# classes, each once a Python traceback (an anonymous divergence wall for
+# every differential gate), now byte-identical with the engines.
+#
+# class A: default sort over mixed-type lists (null/map/list/bytes group)
+# class B: extreme-float // — infinite / i64-overflowing quotients are the
+#          engines' CONTAINED overflow stress, never OverflowError
+# class C: 0x_-style radix lexemes with no digits — the documented
+#          out-of-range repair (value 0 + E2008 note), never ValueError
+print([null, 1].sort())
+print(["b", 2, "a", 1].sort())
+print([[2], [1]].sort())
+print(1e308 // 1e-308)
+print(1e18 // 1e-10)
+print(0x_)
+print(0b_)
+print(0o_)
+print(7.9 // 2)
+print(-7.9 // 2)
+
+# class D (separate pin below this file's rc-0 contract): the gene-body
+# stress escape lives in tests/differential/z132_oracle_fatal.op — an
+# escaped entry stress is the W101 fatal path on BOTH sides (rc 1).
+print("z132 rc0 leg done")
