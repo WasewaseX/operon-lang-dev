@@ -1,0 +1,8 @@
+# R0.8 scaling twin (L-039): loops.op with the main work loop doubled
+# (200000 -> 400000). Everything else is byte-equal to the base fixture;
+# the scaling table reports t(2N)/t(N) from base vs this file.
+main {
+    let acc = 0
+    for i in range(400000) { acc = acc + i % 7 }
+    promote("acc = {acc}")
+}

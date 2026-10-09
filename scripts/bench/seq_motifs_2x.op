@@ -1,0 +1,39 @@
+# bench: sequences — motif scanning + composition over a synthetic genome
+# (W083). A deterministic pseudo-genome is built from a seeded LCG (no
+# random() — the bench must be reproducible), then GC content, k-mer
+# counting, and motif locating run over it.
+# R0.8 scaling twin (L-039): seq_motifs.op with the main work loop doubled
+# (6000 -> 12000). Everything else is byte-equal to the base fixture;
+# the scaling table reports t(2N)/t(N) from base vs this file.
+main {
+    # LCG genome: 6000 bases
+    let seed = 42
+    let genome = ""
+    let alpha = "ACGT"
+    for i in range(12000) {
+        seed = (seed * 1103515245 + 12345) % 2147483648
+        genome = genome + alpha[seed % 4]
+    }
+    let gc = 0
+    for ch in genome {
+        if ch == "G" or ch == "C" {
+            gc = gc + 1
+        }
+    }
+    # 3-mer scan
+    let kmers = 0
+    for i in range(len(genome) - 3) {
+        if genome[i] + genome[i + 1] + genome[i + 2] == "ACG" {
+            kmers = kmers + 1
+        }
+    }
+    # motif locate (split-free scan)
+    let motifs = 0
+    let pat = "GT"
+    for i in range(len(genome) - 2) {
+        if genome[i] + genome[i + 1] == pat {
+            motifs = motifs + 1
+        }
+    }
+    promote("gc={gc} acg={kmers} gt={motifs}")
+}

@@ -1,0 +1,26 @@
+# bench: collections — map churn + list append/index (builder-B, B1)
+# Exercises the everyday dict/list workload a CS engineer expects:
+# key insert-or-increment, membership checks, list push, index reads,
+# and a full map-key pass. Native CPython mirror lives in
+# scripts/bench_compare.py (native_collections).
+# R0.8 scaling twin (L-039): collections.op with the main work loop doubled
+# (20000 -> 40000). Everything else is byte-equal to the base fixture;
+# the scaling table reports t(2N)/t(N) from base vs this file.
+main {
+    let m = {}
+    let xs = []
+    for i in range(40000) {
+        let k = "k" + str(i % 2000)
+        if has(m, k) {
+            m[k] = m[k] + 1
+        } else {
+            m[k] = 1
+        }
+        push(xs, i % 97)
+    }
+    let total = 0
+    for v in xs { total = total + v }
+    let distinct = 0
+    for k in m { distinct = distinct + 1 }
+    promote("total = {total}, distinct = {distinct}, k1 = {m[\"k1\"]}")
+}
