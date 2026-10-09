@@ -65,8 +65,10 @@ frame proof {
     # separator equal to a CR-adjacent char, and sep == "\n"
     assert(csv.csv_parse("a" + chr(13) + "b", "r") == [["ab"]])
     assert(csv.csv_parse("arb", "r") == [["a", "b"]])
-    assert(csv.csv_parse("a\nb\n", "\n") == [["a"], ["b"]])
-    assert(csv.csv_parse("a\nb", "\n") == [["a"], ["b"]])
+    # sep == "\n" routes to the machine (#106 routing law): the machine's
+    # sep arm precedes the newline row-flush, so newlines flush FIELDS
+    assert(csv.csv_parse("a\nb\n", "\n") == [["a", "b", ""]])
+    assert(csv.csv_parse("a\nb", "\n") == [["a", "b"]])
     # multi-char separator: never matches a char, so each LINE is one field
     # (rows still break at newlines — machine semantics, fast path falls through)
     assert(csv.csv_parse("a,b\nc,d", ",,") == [["a,b"], ["c,d"]])
@@ -92,6 +94,29 @@ frame proof {
     assert(csv.csv_parse("say \"\"hi\"\" there\n", ",") == csv.csv_parse_machine("say \"\"hi\"\" there\n", ","))
     assert(csv.csv_parse("\"multi\nline\nfields\",x\ny,z\n", ",") == csv.csv_parse_machine("\"multi\nline\nfields\",x\ny,z\n", ","))
     assert(csv.csv_parse("plain,line\nalso,plain\n", ",") == csv.csv_parse_machine("plain,line\nalso,plain\n", ","))
+
+    # ---- separator-collusion classes route to the machine (#106) ----
+    # The machine's arm order is quote-open -> sep -> newline -> CR-swallow;
+    # a sep that IS one of those characters has machine semantics the fast
+    # path cannot mirror (pre-fix the hybrid returned [["a\"b"]] / [["abc"]]
+    # for the first two rows — the sep was reclassified or erased).
+    assert(csv.csv_parse("a\"b", "\"") == [["a", "b"]])
+    assert(csv.csv_parse("a\"b", "\"") == csv.csv_parse_machine("a\"b", "\""))
+    let cr = chr(13)
+    assert(csv.csv_parse("a" + cr + cr + "b" + cr + cr + "c", cr) == [["a", "", "b", "", "c"]])
+    assert(csv.csv_parse("a" + cr + "b" + cr + "c", cr) == [["a", "b", "c"]])
+    assert(csv.csv_parse("a" + cr + cr + "b" + cr + cr + "c", cr) == csv.csv_parse_machine("a" + cr + cr + "b" + cr + cr + "c", cr))
+    assert(csv.csv_parse("a\nb\n", "\n") == csv.csv_parse_machine("a\nb\n", "\n"))
+
+    # ---- csv_escape CR law (#106): CR-bearing fields are quoted, and the
+    # round trip preserves the CR (the first cut tested f.contains("\r")
+    # — "\r" is the two-char literal backslash-r, never a real CR) ----
+    assert(csv.csv_escape("a" + cr + "b", ",") == "\"a" + cr + "b\"")
+    assert(csv.csv_escape("plain", ",") == "plain")
+    assert(csv.csv_row(["a" + cr + "b", "c"], ",") == "\"a" + cr + "b\",c")
+    assert(csv.csv_parse(csv.csv_row(["a" + cr + "b", "c"], ","), ",") == [["a" + cr + "b", "c"]])
+    # CR inside a quoted field survives the machine too (data, not CRLF)
+    assert(csv.csv_parse("\"a" + cr + "b\",c", ",") == [["a" + cr + "b", "c"]])
 }
 main {
     promote("std/csv: ok")

@@ -66,37 +66,56 @@ def main():
     ok = 0
     fails = []
     batch = 40
-    for start in range(0, len(docs), batch):
-        chunk = docs[start:start + batch]
-        lines = ["use std/csv as c", "gene run() {"]
-        for idx, d in enumerate(chunk):
-            e = op_str(d)
-            lines.append(f'    if c.csv_parse({e}, ",") != c.csv_parse_machine({e}, ",") {{')
-            lines.append(f'        print("MISMATCH {start + idx}")')
-            lines.append(f'        print(c.csv_parse({e}, ","))')
-            lines.append(f'        print(c.csv_parse_machine({e}, ","))')
-            lines.append("    }")
-        lines.append("    print(\"BATCH-OK\")")
-        lines.append("}")
-        lines.append("run()")
-        open("/tmp/fuzz.op", "w").write("\n".join(lines) + "\n")
-        r = subprocess.run(["./bin/operon", "run", "--vm", "/tmp/fuzz.op"],
-                           capture_output=True, text=True)
-        if "MISMATCH" in r.stdout or "MISMATCH" in r.stderr:
-            for idx_l in r.stdout.splitlines():
-                pass
-            fails.append((chunk, r.stdout, r.stderr))
+    # #106: the equivalence contract covers EVERY separator, not just ",".
+    # The collusion seps (quote, CR, LF) route to the machine wholesale,
+    # but the pins must still hold csv_parse == csv_parse_machine for them
+    # — a future fast-path change that re-claims those classes must fail
+    # here first, not in production. Sep-collusion docs put the sep char
+    # itself into the generator alphabet so the collisions actually occur.
+    for sep, sname in ((",", ","), ('"', "quote"), ("\r", "CR"), ("\n", "LF")):
+        if sep == ",":
+            sep_docs = docs
         else:
-            ok += len(chunk)
+            alpha = ["a", "b", ",", '"', "\r", "\n"]
+            w = [3, 3, 3, 4, 1, 3]
+            if sep in alpha:
+                i = alpha.index(sep)
+                w[i] = 8  # bias the colliding char way up
+            sep_docs = ["".join(rng.choices(alpha, weights=w, k=rng.randrange(0, 24))) for _ in range(120)]
+            sep_docs += [
+                'a"b', '"a"b"', 'a\r\rb\r\rc', 'a\r\nb\r\n',
+                'a\nb\n', 'a\nb', 'a\n\nb\n', '"a\r\nb"\r\nc\r\n',
+            ]
+        for start in range(0, len(sep_docs), batch):
+            chunk = sep_docs[start:start + batch]
+            lines = ["use std/csv as c", "gene run() {"]
+            for idx, d in enumerate(chunk):
+                e = op_str(d)
+                es = op_str(sep)
+                lines.append(f'    if c.csv_parse({e}, {es}) != c.csv_parse_machine({e}, {es}) {{')
+                lines.append(f'        print("MISMATCH sep={sname} {start + idx}")')
+                lines.append(f'        print(c.csv_parse({e}, {es}))')
+                lines.append(f'        print(c.csv_parse_machine({e}, {es}))')
+                lines.append("    }")
+            lines.append('    print("BATCH-OK")')
+            lines.append("}")
+            lines.append("run()")
+            open("/tmp/fuzz.op", "w").write("\n".join(lines) + "\n")
+            r = subprocess.run(["./bin/operon", "run", "/tmp/fuzz.op"],
+                               capture_output=True, text=True)
+            if "MISMATCH" in r.stdout or "MISMATCH" in r.stderr:
+                fails.append((sname, chunk, r.stdout, r.stderr))
+            else:
+                ok += len(chunk)
     if fails:
-        chunk, out, err = fails[0]
-        print("FAILURES PRESENT — first batch:")
+        sname, chunk, out, err = fails[0]
+        print(f"FAILURES PRESENT — first batch (sep={sname}):")
         print(out[:2000])
         print(err[:500])
         for i, d in enumerate(chunk):
             print(f"{i}: {d!r}")
         return 1
-    print(f"fuzz: {ok} documents, hybrid == machine everywhere")
+    print(f"fuzz: {ok} documents across 4 separators, hybrid == machine everywhere")
     return 0
 
 if __name__ == "__main__":
