@@ -1,0 +1,23 @@
+# bench: file-I/O micro, within caps (W083) — run with:
+#   operon run scripts/bench/file_io.op --allow-write /tmp --allow-read /tmp
+# Rewrites a deterministic 2 KiB payload 300 times, verifying content each
+# pass. Without grants this program stresses (by design — it is the only
+# bench needing one, and bench_compare.py passes the grants itself).
+# R0.8 scaling twin (L-039): file_io.op with the main work loop doubled
+# (300 -> 600). Everything else is byte-equal to the base fixture;
+# the scaling table reports t(2N)/t(N) from base vs this file.
+main {
+    let payload = ""
+    for i in range(256) {
+        payload = payload + "0123456789abcdef"
+    }
+    let ok = 0
+    for i in range(600) {
+        write_file("/tmp/operon_bench_io.txt", payload + str(i))
+        let back = read_file("/tmp/operon_bench_io.txt")
+        if len(back) == len(payload) + len(str(i)) {
+            ok = ok + 1
+        }
+    }
+    promote("io ok = {ok}")
+}

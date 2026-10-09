@@ -36,6 +36,23 @@ run in the proof suite on every CI push (`tests/bench/bench_correctness.op`)
 — a benchmark that measures the wrong answer fails CI before it can mislead
 anyone.
 
+## The standard bars (R0.8)
+
+The three-bar standard report lives in **[docs/perf/BARS.md](docs/perf/BARS.md)**
+(R0.8, Task-ID R08-BARABC): per workload, Bar A = the previous RELEASE
+binary (downloaded + sha256-verified against the release's own SHA256SUMS),
+Bar B = CPython same-machine (the native-py mirrors here, imported), Bar C =
+native Rust twins (`rustc -O`) — plus t(2N)/t(N) scaling tables and a
+pointer-audit checker. Run it with:
+
+```sh
+python3 scripts/bench/bars.py --json docs/perf/bars.json
+python3 scripts/bench/bars_check.py    # the audit; must stay green
+```
+
+Everything below is the historical suite report this bars structure grew
+out of (methodology shared: the timing law in `scripts/bench_compare.py`).
+
 ## Methodology (and honesty notes)
 
 - **Three runners on identical algorithms**: `operon` (the Rust core, VM lane
