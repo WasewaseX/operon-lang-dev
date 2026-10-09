@@ -656,6 +656,23 @@ pub struct CallSpan {
 /// otherData — an honest limit, never a silent truncation).
 pub const SPAN_CAP: usize = 1_000_000;
 
+/// Z-116 (#116 leg 3): the RISC silencing gate's decision, produced
+/// pre-args so BOTH engines evaluate arguments at the same point of the
+/// call sequence (a degraded call never evaluates its arguments — the
+/// documented tree-walk contract — and the gate draw precedes any argument
+/// side effect, keeping the shared xorshift stream aligned across lanes).
+pub enum RiscDecision {
+    /// no capture: evaluate args, run the call normally
+    Proceed,
+    /// pure degradation: the call yields null, args are never evaluated
+    /// (the degraded note is emitted by the gate before this surfaces)
+    Degrade,
+    /// captured with a replacement: resolve `to` in the caller's env and
+    /// call it with the evaluated args (the redirect note is emitted by
+    /// the gate before this surfaces)
+    Redirect(String),
+}
+
 pub struct Interp {
     pub notes: Vec<Note>,
     /// sec-r3: notes suppressed past the cap (surfaced once).
@@ -710,6 +727,13 @@ pub struct Interp {
     /// 1 - (1-s)^sites over all entries for the target. strength 1.0 with
     /// one site = the legacy binary redirect, bit-identical.
     pub silences: Vec<(String, Option<String>, f64, u32)>,
+    /// Z-116 (#116 leg 3): pre-args RISC gate decisions stashed by the VM's
+    /// CallGateRisc instruction, consumed by the immediately-following
+    /// CallNamed (LIFO: call nesting is properly bracketed within each
+    /// frame, so a push/pop pair per call site survives arbitrary nesting
+    /// and fiber interleaving). Empty whenever no silences are configured
+    /// (the gate insn is a no-op then) — see src/vm.rs CallGateRisc.
+    pub risc_stash: Vec<RiscDecision>,
     /// reg-bio-3 (A1/A7): polycistronic transcription units, the namesake
     /// construct. One promoter drives N cistrons on ONE transcript; member
     /// order is load-bearing (RBS gradient + polarity exposure).
@@ -1021,6 +1045,7 @@ impl Interp {
             trace_grn: None,
             trace_grn_tick: 0,
             silences: Vec::new(),
+            risc_stash: Vec::new(),
             operons: Vec::new(),
             risc_escaped: std::collections::HashSet::new(),
             m6a_levels: HashMap::new(),
@@ -4829,6 +4854,103 @@ impl Interp {
         pre: Option<Vec<Value>>,
         site: Option<(usize, u32)>,
     ) -> Result<Value, Stress> {
+        // Z-116 (#116 leg 3): the RISC gate runs BEFORE argument evaluation
+        // on this lane ("a degraded call is not expression"), so a degraded
+        // call never evaluates its arguments and the shared xorshift stream
+        // draws in gate order, not arg side-effect order. The VM now does
+        // the same via the CallGateRisc instruction (pre-args) + the stash.
+        match self.risc_gate(env, name)? {
+            RiscDecision::Degrade => return Ok(Value::Null),
+            RiscDecision::Redirect(to) => {
+                let target = env.get(&to).unwrap_or(Value::Null);
+                let argvs = match pre {
+                    Some(v) => v,
+                    None => {
+                        let mut argvs = Vec::with_capacity(args.len());
+                        for a in args {
+                            argvs.push(self.eval(env, a)?);
+                        }
+                        argvs
+                    }
+                };
+                return self.call_value(env, &target, argvs);
+            }
+            RiscDecision::Proceed => {}
+        }
+        let argvs = match pre {
+            Some(v) => v,
+            None => {
+                let mut argvs = Vec::with_capacity(args.len());
+                for a in args {
+                    argvs.push(self.eval(env, a)?);
+                }
+                argvs
+            }
+        };
+        self.named_call_proceed(env, name, argvs, site)
+    }
+
+    /// Z-116 (#116 leg 3): the VM's CallNamed arm lands here when the
+    /// pre-args CallGateRisc instruction already ran the gate and stashed
+    /// its decision — the gate must NOT run twice (a second draw would
+    /// desync the shared xorshift stream relative to the tree-walk).
+    pub fn named_call_tail_vm_pre(
+        &mut self,
+        env: &Rc<Env>,
+        name: &str,
+        argvs: Vec<Value>,
+        site: Option<(usize, u32)>,
+        decision: RiscDecision,
+    ) -> Result<Value, Stress> {
+        match decision {
+            RiscDecision::Degrade => {
+                // defensive: the degrade path jumps past args + call inside
+                // the machine and pushes its own null; it never reaches the
+                // CallNamed instruction.
+                Ok(Value::Null)
+            }
+            RiscDecision::Redirect(to) => {
+                let target = env.get(&to).unwrap_or(Value::Null);
+                self.call_value(env, &target, argvs)
+            }
+            RiscDecision::Proceed => self.named_call_proceed(env, name, argvs, site),
+        }
+    }
+
+    /// The post-gate call funnel (Z-116 extraction): everything
+    /// named_call_tail does AFTER the RISC gate decided "proceed" —
+    /// call_named plus the W101 interference line attach. Shared verbatim
+    /// by the tree-walk tail and the VM's Proceed arm.
+    fn named_call_proceed(
+        &mut self,
+        env: &Rc<Env>,
+        name: &str,
+        argvs: Vec<Value>,
+        site: Option<(usize, u32)>,
+    ) -> Result<Value, Stress> {
+        let mut result = self.call_named(env, name, argvs, site);
+        if let Err(s) = &mut result {
+            // W101: capability denials raised inside builtins carry line 0
+            // (Caps::denied is a static constructor without interp access),
+            // so the fatal block degraded to a header-only render for the
+            // most common fatal in the language. The call funnel knows the
+            // call site: attach it ONCE here for the interference family;
+            // both the interp and the VM (named_call_tail_vm) funnel through
+            // this line, and a stress that already carries a line (raise
+            // statements) is never overwritten.
+            if s.kind == "interference" && s.line == 0 {
+                s.line = self.cur_line;
+            }
+        }
+        result
+    }
+
+    /// Z-116 (#116 leg 3): the RISC silencing gate, extracted verbatim from
+    /// named_call_tail's head so BOTH engines can run it at the exact same
+    /// point of the call sequence (pre-args). Emits the same notes (escape,
+    /// degraded, redirect) in the same order and consumes the same draws;
+    /// the decision return lets the VM defer the call itself.
+    pub fn risc_gate(&mut self, env: &Rc<Env>, name: &str) -> Result<RiscDecision, Stress> {
         // reg-bio-3 (C9): stoichiometric RISC, every entry for
         // the target is one binding site; the per-call capture
         // probability is 1 − Π(1−s_i)^sites_i. strength 1.0 /
@@ -4899,25 +5021,14 @@ impl Interp {
                     }
                 };
                 if captured {
-                    match first_to {
+                    return Ok(match first_to {
                         Some(to) => {
                             self.note(
                                 0,
                                 4,
                                 format!("RISC: call to '{}' silenced → '{}'", name, to),
                             );
-                            let target = env.get(&to).unwrap_or(Value::Null);
-                            let argvs = match pre {
-                                Some(v) => v,
-                                None => {
-                                    let mut argvs = Vec::with_capacity(args.len());
-                                    for a in args {
-                                        argvs.push(self.eval(env, a)?);
-                                    }
-                                    argvs
-                                }
-                            };
-                            return self.call_value(env, &target, argvs);
+                            RiscDecision::Redirect(to)
                         }
                         // reg-bio (F-4): pure degradation, the transcript
                         // is destroyed, no replacement executes. A degraded
@@ -4929,37 +5040,13 @@ impl Interp {
                                 4,
                                 format!("RISC: call to '{}' degraded (no replacement)", name),
                             );
-                            return Ok(Value::Null);
+                            RiscDecision::Degrade
                         }
-                    }
+                    });
                 }
             }
         }
-        let argvs = match pre {
-            Some(v) => v,
-            None => {
-                let mut argvs = Vec::with_capacity(args.len());
-                for a in args {
-                    argvs.push(self.eval(env, a)?);
-                }
-                argvs
-            }
-        };
-        let mut result = self.call_named(env, name, argvs, site);
-        if let Err(s) = &mut result {
-            // W101: capability denials raised inside builtins carry line 0
-            // (Caps::denied is a static constructor without interp access),
-            // so the fatal block degraded to a header-only render for the
-            // most common fatal in the language. The call funnel knows the
-            // call site: attach it ONCE here for the interference family;
-            // both the interp and the VM (named_call_tail_vm) funnel through
-            // this line, and a stress that already carries a line (raise
-            // statements) is never overwritten.
-            if s.kind == "interference" && s.line == 0 {
-                s.line = self.cur_line;
-            }
-        }
-        result
+        Ok(RiscDecision::Proceed)
     }
 
     /// VM entry to the shared named-call tail: args are already on the
