@@ -32,12 +32,13 @@ fn contained_depth_pin(p: &std::path::Path) -> bool {
     // contract, loudly, until the fixer-lane depth discipline lands (option
     // a, coordinator incident post cfe5beb). Their PARSE-side contract is
     // asserted in fix_corpus law1 (big-stack thread).
-    const CONTAINED: &[&str] = &[
-        "tests/differential/parser_depth_leak_pin.op",
-        "tests/differential/parser_depth_calls_pin.op",
-    ];
-    let rel = p.to_string_lossy();
-    CONTAINED.iter().any(|c| rel.ends_with(c))
+    // Match on FILE NAME: Windows paths use backslashes, so path-suffix
+    // matching would silently miss on the windows CI legs.
+    const CONTAINED: &[&str] = &["parser_depth_leak_pin.op", "parser_depth_calls_pin.op"];
+    match p.file_name().and_then(|n| n.to_str()) {
+        Some(name) => CONTAINED.contains(&name),
+        None => false,
+    }
 }
 
 fn with_big_stack<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> T {
