@@ -254,14 +254,26 @@ fn main() {
                 if let Some(p) = &params {
                     if let Some(td) = get(p, "textDocument") {
                         if let Some(uri) = get_str(&td, "uri") {
-                            let text = get_str(p, "text")
+                            // Z-121 (#121): didOpen carries the document at
+                            // params.textDocument.text (LSP spec §
+                            // didOpen). The old read went straight to
+                            // params.text (a top-level field NO real client
+                            // sends), fell through to contentChanges
+                            // (absent in didOpen) and stored the EMPTY
+                            // document — every feature dead until the
+                            // client happened to send a didChange. The
+                            // lsp_smoke gate had the same bug: it validated
+                            // the buggy shape, so the gate passed while
+                            // real editors starved. Spec position first,
+                            // legacy top-level kept for hand-rolled
+                            // clients, then the last FULL-TEXT didChange,
+                            // then (Z-121) a ranged-only didChange KEEPS
+                            // the previous document instead of blanking
+                            // it (ranged edits are still not applied —
+                            // that remains the declared sync=1 limitation).
+                            let text = get_str(&td, "text")
+                                .or_else(|| get_str(p, "text"))
                                 .or_else(|| {
-                                    // didChange carries contentChanges[] with .text.
-                                    // lsp-r1: a RANGED change (sync=1 means none
-                                    // should arrive) used to silently replace the
-                                    // WHOLE document with the fragment — corrupting
-                                    // editor state. Ranged changes are ignored;
-                                    // the last full-text change wins.
                                     get(p, "contentChanges").and_then(|c| match c {
                                         Value::List(items) => items
                                             .borrow()
@@ -272,6 +284,7 @@ fn main() {
                                         _ => None,
                                     })
                                 })
+                                .or_else(|| docs.get(&uri).map(|d| d.src.clone()))
                                 .unwrap_or_default();
                             let base = doc_base_dir(&uri);
                             let analyzed = analyze_doc(&text, base.as_deref());
