@@ -132,7 +132,7 @@ def native_regex():
     for _ in range(600):
         for p in pats:
             for s in strs:
-                if _re.fullmatch(p, s):
+                if _re.match(p, s):  # SPEC §9.9: re_match is an ANCHORED PREFIX test
                     hits += 1
                 if _re.search(p, s):
                     hits += 1
