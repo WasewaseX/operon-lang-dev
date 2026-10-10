@@ -97,8 +97,8 @@ fn corpus() -> Vec<std::path::PathBuf> {
 }
 
 fn assert_stable(src: &str, cfg: &FmtConfig, path: &std::path::Path) {
-    let once = format_program_with(&parser::parse(src), cfg);
-    let twice = format_program_with(&parser::parse(&once), cfg);
+    let once = format_program_with(&parser::parse(src), &cfg);
+    let twice = format_program_with(&parser::parse(&once), &cfg);
     assert_eq!(
         once,
         twice,
@@ -277,4 +277,60 @@ fn fmt_config_parser_keys_bounds_and_unknowns() {
     assert_eq!(cfg2.quotes, QuoteMode::Double);
     assert_eq!(cfg2.width, Some(80)); // W47-v2: width is a real key now
     assert_eq!(unk2.len(), 3, "all three problems reported: {unk2:?}");
+}
+
+// ---- #126 item 4: infinite float literals re-emit as LITERALS ----
+//
+// 1e999 parses to Float(inf); the pre-fix fmt emitted the DISPLAY word
+// "inf" (Python repr parity), which re-parses as an unbound identifier —
+// `let a = 1e999` -> fmt -> `let a = inf` -> type(a) null, `a + 1` raises.
+// That violated fmt law 2 (never alter the token stream's meaning) for any
+// file carrying an infinite literal; the corpus law only held because no
+// checked-in file contained one. The fix emits the re-parsable literal
+// form 1e999 / -1e999 (NaN is unrepresentable from source: no literal or
+// arithmetic path — div/mod by zero stress — so no NaN case exists here).
+#[test]
+fn fmt_infinite_float_literal_round_trips() {
+    with_big_stack(move || {
+        let cfg = FmtConfig::default();
+
+        // the display word must not appear as emitted source
+        let src = "let a = 1e999\nprint(a)\n";
+        let once = format_program_with(&parser::parse(src), &cfg);
+        assert!(
+            once.contains("1e999"),
+            "fmt must re-emit the literal form, got: {once}"
+        );
+        assert!(
+            !once.contains(" inf"),
+            "fmt must not emit the display word inf as source, got: {once}"
+        );
+
+        // law 2: the formatted output re-parses with no rung>=3 notes, and
+        // the re-parsed literal carries the same +inf value (fmt of fmt is
+        // byte-stable, so the second pass proves the form is a fixed point)
+        let twice = format_program_with(&parser::parse(&once), &cfg);
+        assert_eq!(once, twice, "infinite-literal fmt must be idempotent");
+        let reparsed = parser::parse(&once);
+        let severe: Vec<String> = reparsed
+            .notes
+            .iter()
+            .filter(|n| n.rung >= 3)
+            .map(|n| n.message.clone())
+            .collect();
+        assert!(
+            severe.is_empty(),
+            "fmt output produced rung>=3 notes: {severe:?}"
+        );
+
+        // the AST value survives: the re-parsed program still prints the
+        // runtime display form "inf" (display surface untouched, Python
+        // parity preserved) — meaning-preservation, end to end
+        let neg_src = "let b = 0 - 1e999\nprint(b)\n";
+        let neg_fmt = format_program_with(&parser::parse(neg_src), &cfg);
+        assert!(
+            neg_fmt.contains("1e999"),
+            "negative infinite literal must re-emit as -1e999 form, got: {neg_fmt}"
+        );
+    });
 }
