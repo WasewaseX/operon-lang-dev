@@ -3929,29 +3929,24 @@ impl Interp {
                             mem_charge(s.len() as u64)?;
                             out.push_str(s);
                         }
-                        InterpPart::Expr(e) => match self.eval(env, e) {
-                            Ok(v) => {
-                                let piece = v.display();
-                                mem_charge(piece.len() as u64)?;
-                                out.push_str(&piece);
-                            }
-                            // W06 (D-014): propagation is a return, it leaves
-                            // the interpolation and heads for the gene boundary.
-                            Err(s) if s.prop.is_some() => return Err(s),
-                            Err(s) => {
-                                // a stressed interpolation degrades to "null",
-                                // the surrounding statement still produces output
-                                self.note(
-                                    0,
-                                    4,
-                                    format!(
-                                        "interpolation stress contained: [{}] {}",
-                                        s.kind, s.message
-                                    ),
-                                );
-                                out.push_str("null");
-                            }
-                        },
+                        InterpPart::Expr(e) => {
+                            // #213 (oracle-referee law): a stressed piece
+                            // propagates as a catchable stress — the D-014
+                            // hierarchy has NO special containment inside
+                            // interpolation. The old degrade-to-"null" here
+                            // diverged from the oracle byte-for-byte (note
+                            // text + control flow) and made a stressed while
+                            // condition truthy FOREVER: `while "{q*w}" { }`
+                            // burned the whole fuel pool in 12s of tree-walk
+                            // (the #213 class-S grind) where the oracle exits
+                            // the loop in 0.1s. Containment stays the caller's
+                            // job (statement/frame/rescue), exactly like every
+                            // other stressed expression position.
+                            let v = self.eval(env, e)?;
+                            let piece = v.display();
+                            mem_charge(piece.len() as u64)?;
+                            out.push_str(&piece);
+                        }
                     }
                 }
                 Ok(Value::Str(out))

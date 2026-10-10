@@ -1,0 +1,55 @@
+# z213-interpstress (#213): a stressed interpolation propagates as a catchable
+# stress — the D-014 hierarchy has NO special containment inside interpolation.
+# The old engine-only degrade-to-"null" piece diverged from the oracle (note
+# text AND control flow) and made a stressed while condition truthy FOREVER:
+# `while "{q*w}" { }` burned the whole fuel pool in 12s of tree-walk (the
+# class-S grind behind the fuzz wall reds) where the oracle exits in 0.1s.
+# Byte-identical on all three lanes: VM, tree-walk, oracle.
+
+# --- the #213 grind shape: stressed interp in a while condition ------------
+# iteration 1's condition stresses -> the loop EXITS (the stress propagates
+# past the while) -> the top-level containment notes it -> "after" prints.
+while "{q*w}" { }
+print("after")
+
+# --- stressed interp in a print argument: same law, next statement runs ----
+print("pre {q/w} post")
+print("done1")
+
+# --- the stress/rescue boundary contains it (ordinary hierarchy) -----------
+stress {
+    let msg = "value {q*w} tail"
+    print("unreachable")
+} rescue any {
+    print("rescued")
+}
+
+# --- ?! inside interpolation propagates as the documented RETURN -----------
+gene prop_out() {
+    return "{err(7)?!}"
+}
+let r = prop_out()
+print(type(r))
+print(r)
+
+# --- gene-boundary containment: uncaught stress leaves the gene ------------
+gene stressed_gene() {
+    return "{q*w}"
+}
+print("before-gene")
+print(stressed_gene())
+print("after-gene")
+
+# --- negative controls: clean interpolation untouched ----------------------
+let a = 1
+print("a{a}c")
+print("{a + 2}")
+print("{'lit'}")
+
+# --- unbound reads inside interp are STILL the soft tier (null + note) -----
+# (the unbound-read containment is a DIFFERENT, pinned law — unchanged here)
+print("u{missing_var}v")
+
+# --- mixed pieces: lit + clean expr + stressed expr in ONE string ----------
+print("x{a}y{q*z}z")
+print("done2")
