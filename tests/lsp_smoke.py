@@ -483,6 +483,40 @@ assert r["id"] == 10, r
 edit = r["result"][0]
 assert "newText" in edit and "range" in edit, edit
 assert "gene boost" in edit["newText"], edit["newText"][:200]
+# z-lsp-format-fix (#126.17): the edit range must cover the TRAILING
+# NEWLINE — the demo doc ends with \n, so the end position is one line
+# PAST the last real line (line index 2, col 0), not (1, last-col).
+assert edit["range"]["end"]["line"] == 2, edit["range"]
+assert edit["range"]["end"]["character"] == 0, edit["range"]
+# self-healing: after applying the edit, a SECOND formatting request on
+# the formatted text must produce byte-identical output (no blank line
+# appended per format — the old range grew the doc by one \n each run)
+formatted = edit["newText"]
+send({
+    "jsonrpc": "2.0",
+    "method": "textDocument/didChange",
+    "params": {
+        "textDocument": {"uri": "file:///demo.op", "version": 2},
+        "contentChanges": [{"text": formatted}],
+    },
+})
+send({
+    "jsonrpc": "2.0",
+    "id": 10,
+    "method": "textDocument/formatting",
+    "params": {
+        "textDocument": {"uri": "file:///demo.op"},
+        "options": {"tabSize": 4},
+    },
+})
+# skip the didChange publishDiagnostics notification before the response
+while True:
+    r = recv()
+    if r.get("id") == 10:
+        break
+edit2 = r["result"][0]
+assert edit2["newText"] == formatted, (
+    "formatting is not idempotent: %r -> %r" % (formatted[:120], edit2["newText"][:120]))
 
 # 5. hover over a non-identifier (the `{`) → null result
 send({
