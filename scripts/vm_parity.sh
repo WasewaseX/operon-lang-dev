@@ -19,7 +19,7 @@ BIN="${BIN:-./bin/operon}"
 # dependent (containment itself is deterministic; verified x3 x3 engines
 # serially). Same documented class as rt_p4a/rt_p4b; rt_p20a joined after
 # a 5-run flake measurement (1/5 divergent note ordering, 5/5 contained).
-LOAD_SENSITIVE="tests/redteam/rt_p4a_threadbomb.op tests/redteam/rt_p4b_threadbomb_join.op tests/redteam/rt_p20a_cancel_storm.op tests/redteam/rt_p17b_scope_cancel.op"
+LOAD_SENSITIVE="tests/redteam/rt_p4a_threadbomb.op tests/redteam/rt_p4b_threadbomb_join.op tests/redteam/rt_p20a_cancel_storm.op tests/redteam/rt_p17b_scope_cancel.op tests/redteam/rt_p15b_quorum_unjoined.op"
 
 # F6/#50 (iteration 4, residual extraction from PR #56): the scope-reap
 # containment note RACES with cancel-vs-finish ordering — '[fallback] task N
@@ -41,6 +41,14 @@ LOAD_SENSITIVE="tests/redteam/rt_p4a_threadbomb.op tests/redteam/rt_p4b_threadbo
 # 8 tasks resolves as cancel-requested OR already-finished by race, so the
 # normalized line count itself varies. The variant set is not finite —
 # normalization cannot honestly pin it — so the payload rides
+# rt_p15b_quorum_unjoined (2026-10-10, CI run on the ls-bytechar PR): the
+# UNJOINED quorum read is documented in the payload header itself as
+# outside the deterministic contract (the read VALUE is explicitly not
+# pinned; differential coverage stops at the join boundary). The spawned
+# secretor races the host read: 12/12 local runs byte-identical on both
+# engines, but the CI debug-build axis hit the opposite ordering once.
+# Containment stays redteam.sh's contract (109/0). Same class as the
+# storm siblings above.
 # LOAD_SENSITIVE like its storm siblings: stdout is deterministic across
 # modes (9/9 serial runs byte-identical locally) and containment is
 # redteam.sh's contract, which passes (109/0).
