@@ -104,12 +104,32 @@ jobs:
           FRESH: "300"
 
       - name: Parser fuzzer
+        if: matrix.target != 'i686-unknown-linux-gnu'
         shell: bash
         # z-fuzz-infra (#138.3): the FAST pre-merge fuzz seed derives from
         # (base SHA, PR number) so every PR explores a FRESH but
         # REPRODUCIBLE stream instead of replaying the constant 20260930
         # stream forever after its first green. Non-PR runs fall back to
         # the head SHA.
+        run: |
+          SEED_SRC="${{ github.event.pull_request.base.sha || github.sha }}"
+          SEED=$(( 16#${SEED_SRC:0:8} + ${{ github.event.number || 0 }} ))
+          python3 scripts/fuzz_parser.py --n 500 --seed $((SEED % 1000000000)) --exec
+
+      - name: Parser fuzzer (i686 calibrated wall)
+        if: matrix.target == 'i686-unknown-linux-gnu'
+        shell: bash
+        # compat-r3 (z, PR #209 review): same seed, same contract — the WALL
+        # is calibrated for the leg, exactly the windows TIMEOUT calibration
+        # class (L-012). The PR-209 seed surfaced two class-S tree-walk
+        # grinds measured 6.2s / 12.2s on the x86_64 release build (both
+        # contained, rc=0; the 114-byte in_499 is the pathological slow
+        # cousin of the #111 deep-nesting family — tracked as its own
+        # issue). 15s tipped over on this leg's 32-bit codegen; 45s = 3x
+        # the measured x64 worst. The engine contract (containment, rc,
+        # panic text) is UNCHANGED — only the wall scales with hardware.
+        env:
+          FUZZ_TIMEOUT: "45"
         run: |
           SEED_SRC="${{ github.event.pull_request.base.sha || github.sha }}"
           SEED=$(( 16#${SEED_SRC:0:8} + ${{ github.event.number || 0 }} ))
