@@ -17,6 +17,17 @@ Run:  python3 scripts/check_docs_sync.py   (from repo root; exit 1 on drift)
 import json, os, re, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# z-docssync-perf (#47): the standing docs-sync gate calls compute() ONLY
+# for the seven pure-walk drift fields (version, keyword/std/redteam/
+# proof/test_op counts, keywords). The non-FAST mode additionally re-runs
+# the full proof suite + differential harness (~10 min, session-26 note)
+# for INFORMATIONAL fields this checker never reads — that is what pushed
+# the gate past every timeout window (two 530s+ exit-124s on 2026-10-02).
+# FAST mode changes none of the drift-checked fields (both modes walk the
+# same files; the W006 wave-2 contract), it only skips the recounts this
+# checker does not use. The harness itself is still run separately by
+# scripts/test.sh on every gate.
+os.environ.setdefault("GEN_DOC_STATS_FAST", "1")
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 from gen_doc_stats import compute  # noqa: E402
 
