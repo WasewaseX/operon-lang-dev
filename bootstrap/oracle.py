@@ -310,8 +310,12 @@ def channel_wire(v, _d=0):
     if isinstance(v, list):
         return [channel_wire(x, _d + 1) for x in v]
     if isinstance(v, dict):
-        return {(k if isinstance(k, str) else v_display(k)): channel_wire(x, _d + 1)
-                for k, x in v.items()}
+        # #214: side entries ride the wire under the same display-key law
+        # (the Rust SendValue::Map k.display() contract)
+        return {**{(k if isinstance(k, str) else v_display(k)): channel_wire(x, _d + 1)
+                   for k, x in v.items()},
+                **{(k if isinstance(k, str) else v_display(k)): channel_wire(x, _d + 1)
+                   for k, x in _map_items_side(v)}}
     if isinstance(v, Variant):
         return Variant(v.tag, None if v.payload is None else channel_wire(v.payload, _d + 1))
     if isinstance(v, ObjInst):
@@ -335,7 +339,10 @@ def channel_degrade_result(v, _d=0):
     if isinstance(v, list):
         return [channel_degrade_result(x, _d + 1) for x in v]
     if isinstance(v, dict):
-        return {k: channel_degrade_result(x, _d + 1) for k, x in v.items()}
+        return {**{(k if isinstance(k, str) else v_display(k)): channel_degrade_result(x, _d + 1)
+                   for k, x in v.items()},
+                **{(k if isinstance(k, str) else v_display(k)): channel_degrade_result(x, _d + 1)
+                   for k, x in _map_items_side(v)}}
     if isinstance(v, Variant):
         return Variant(v.tag, None if v.payload is None
                        else channel_degrade_result(v.payload, _d + 1))
@@ -648,6 +655,116 @@ def _nkey(k):
     return k
 
 
+# ---- #214: map container keys key by VALUE (mirror of the Rust MapStore) --
+# Rust's MapStore is a Vec of (key, value) pairs scanned with deep_eq — any
+# Value is a legal key and equal-content keys hit the same slot. Plain
+# Python dicts cannot key by list/dict (unhashable), and the old fallback
+# canonicalized container keys to v_display TEXT at insert while every
+# lookup scanned with deep_eq against the RAW query — a stored text key can
+# never deep_eq-match a container query, so container-key inserts were
+# WRITE-ONLY on the oracle (Rust found them; verified divergence, issue
+# #214). The fix: non-hashable keys live in a side pair-list attached to
+# the map by id (dicts are not weakref-able in CPython; the registry holds
+# a STRONG ref alongside the id so a recycled id can never cross-attach —
+# the pin-everything cost applies only to maps that actually receive
+# container keys, and the process-lifetime model mirrors the Rust CLI's
+# documented Rc-graph teardown law). Every lookup/has/del/len/iterate/
+# display consumer consults BOTH stores. Equality on the side list is
+# deep_eq with its seen-pair cycle law — the EXACT Rust semantics
+# (canonical-frozen wrappers would mis-render nested-cycle-depth shapes
+# the pair law calls equal). Known residual deviation: MIXED scalar+
+# container maps order dict-entries before side-entries on iteration/
+# display (Rust is pure insertion order across both kinds); single-kind
+# maps are byte-exact. No corpus exposure either way (the differential
+# corpus has zero container keys — which is why this stayed invisible).
+_MAP_SIDE = {}  # id(map) -> (map, side_list)
+
+
+def _side(tv, create=False):
+    """The map's side pair-list; readers get a read-only empty tuple when
+    the map has none (only the insert path creates an entry)."""
+    ent = _MAP_SIDE.get(id(tv))
+    if ent is not None and ent[0] is tv:
+        return ent[1]
+    if create:
+        side = []
+        _MAP_SIDE[id(tv)] = (tv, side)
+        return side
+    return ()
+
+
+def _map_insert_key(tv, key, val):
+    """Store key -> val on map tv. Scalars (str/int/float/bool/bytes/None)
+    and ObjInst (id-hashable, the pinned pheno_equality path) go in the
+    dict with the scalar upsert law (replace in place, MapStore::insert's
+    position_h hit); containers (list/dict/Variant) mirror the KC_OTHER
+    arm EXACTLY: ALWAYS APPEND, never replace — equal-content container
+    keys coexist and the linear scan finds the first (verified against the
+    Rust core: two [3,4] inserts -> len 2, lookup returns "a")."""
+    if isinstance(key, (list, dict, Variant)) and not isinstance(key, (str, bytes)):
+        _side(tv, create=True).append([key, val])
+    else:
+        tv[_nkey(key)] = val
+
+
+_MAP_MISS = object()
+
+
+def _map_lookup(tv, key):
+    """deep_eq scan across BOTH stores; returns the value or _MAP_MISS."""
+    for kk, vv in tv.items():
+        if deep_eq(kk, key):
+            return vv
+    for pair in _side(tv):
+        if deep_eq(pair[0], key):
+            return pair[1]
+    return _MAP_MISS
+
+
+def _map_has(tv, key):
+    return _map_lookup(tv, key) is not _MAP_MISS
+
+
+def _map_del(tv, key):
+    """Remove deep_eq matches: the dict side keeps its established
+    all-matches loop (scalar keys are deduped by the upsert anyway, so the
+    loop is the _NanKey-era behavior — pinned, not touched); the side list
+    mirrors MapStore::del EXACTLY: position_h -> remove the FIRST match
+    only (container keys can coexist as dups, del pops one)."""
+    for kk in list(tv.keys()):
+        if deep_eq(kk, key):
+            del tv[kk]
+    ent = _MAP_SIDE.get(id(tv))
+    if ent is not None and ent[0] is tv:
+        side = ent[1]
+        for i, p in enumerate(side):
+            if deep_eq(p[0], key):
+                del side[i]
+                break
+
+
+def _map_len(tv):
+    return len(tv) + len(_side(tv))
+
+
+def _map_keys(tv):
+    return list(tv.keys()) + [p[0] for p in _side(tv)]
+
+
+def _map_values(tv):
+    return list(tv.values()) + [p[1] for p in _side(tv)]
+
+
+def _map_items(tv):
+    return list(tv.items()) + [(p[0], p[1]) for p in _side(tv)]
+
+
+def _map_items_side(tv):
+    """Only the SIDE entries (for wire/display merges that must not drop
+    container-key entries; dict entries are rendered by the caller)."""
+    return [(p[0], p[1]) for p in _side(tv)]
+
+
 def deep_eq(a, b, _pairs=None):
     # reg-r4: cycle-safe, a pair of containers already being compared is
     # treated as equal (mirror of the Rust deep_eq's seen-pair set); the
@@ -716,10 +833,18 @@ def deep_eq(a, b, _pairs=None):
             if isinstance(a, list):
                 return len(a) == len(b) and all(
                     deep_eq(x, y, _pairs) for x, y in zip(a, b))
-            if len(a) != len(b):
+            # #214: compare BOTH stores — container keys live in the side
+            # pair-list, so a dict-vs-dict walk that only iterated the
+            # Python dict would call two all-container-key maps equal the
+            # moment both dicts were empty (vacuous all-over-empty; caught
+            # by deep_eq_exact_pin p3/p4/p5 the moment the side store
+            # landed). _map_items merges both stores in the documented
+            # order; equality itself is order-independent (any-pair scan).
+            ia, ib = _map_items(a), _map_items(b)
+            if len(ia) != len(ib):
                 return False
             return all(any(deep_eq(k, k2, _pairs) and deep_eq(v, v2, _pairs)
-                           for k2, v2 in b.items()) for k, v in a.items())
+                           for k2, v2 in ib) for k, v in ia)
         finally:
             _pairs.discard(key)
     return a == b
@@ -2674,7 +2799,7 @@ class P:
             if (t[0] == "IDENT" and t[1] == "or") or (t[0] == "SYM" and t[1] == "||"):
                 self.next()
                 self.eat_nl()
-                left = ("bin", "or", left, self.nullish_expr(), self.peek()[2])  # W07: line = right-operand start (Rust stamps after next())
+                left = ("bin", "or", left, self.nullish_expr(), t[2])  # #125.8: op line (mirror of the Rust or_line fix)
             else:
                 return left
 
@@ -2697,7 +2822,7 @@ class P:
             if (t[0] == "IDENT" and t[1] == "and") or (t[0] == "SYM" and t[1] == "&&"):
                 self.next()
                 self.eat_nl()
-                left = ("bin", "and", left, self.not_expr(), self.peek()[2])  # W07: line = right-operand start
+                left = ("bin", "and", left, self.not_expr(), t[2])  # #125.8: op line (mirror of the Rust and_line fix)
             else:
                 return left
 
@@ -3736,6 +3861,9 @@ class Interp:
                 for k, val in cur.items():
                     work.append(k)
                     work.append(val)
+                for k, val in _map_items_side(cur):
+                    work.append(k)
+                    work.append(val)
 
     def is_frozen(self, v):
         return isinstance(v, (list, dict)) and id(v) in self.frozen_ids
@@ -3770,6 +3898,9 @@ class Interp:
                     parked.add(id(v))
                     self.frozen_ids.discard(id(v))
                 for k, val in v.items():
+                    walk(k)
+                    walk(val)
+                for k, val in _map_items_side(v):
                     walk(k)
                     walk(val)
 
@@ -4044,7 +4175,9 @@ class Interp:
                 # W029 mirror: iterating bytes yields ints 0..=255
                 items = list(itv)
             elif isinstance(itv, dict):
-                items = list(itv.keys())
+                # #214: iteration yields BOTH stores' keys (side order after
+                # dict order — the documented mixed-map order deviation)
+                items = _map_keys(itv)
             else:
                 self.note(4, f"cannot iterate {type_name(itv)}; loop skipped")
                 items = []
@@ -4109,8 +4242,8 @@ class Interp:
                         elif isinstance(tv, dict):
                             if self.is_frozen(tv):
                                 raise self._frozen_stress("map")
-                            key = iv if isinstance(iv, (str, int, float, bool)) else v_display(iv)
-                            tv[_nkey(key)] = val
+                            # #214: container keys key by VALUE (side store)
+                            _map_insert_key(tv, iv, val)
                         else:
                             self.note(4, "index assignment on non-container ignored")
                     elif t[0] == "member":
@@ -4164,24 +4297,21 @@ class Interp:
             elif isinstance(tv, dict):
                 if self.is_frozen(tv):
                     raise self._frozen_stress("map")
-                cur = None
-                for kk, vv in tv.items():
-                    if deep_eq(kk, iv):
-                        cur = vv; break
+                cur = _map_lookup(tv, iv)
+                if cur is _MAP_MISS:
+                    cur = None
                 nv = self.binop(op, cur, v) if op else v
                 # pheno_equality pin: instance keys store AS INSTANCES (the
                 # Rust core keys maps by the actual value; v_display here
                 # stringified them into "<phenotype P>", found by the
                 # builder-B parity-finding resolution differential).
                 # ObjInst is hashable (id-based), so dict storage works.
-                # Container keys (list/map) still fall back to display text,
-                # pre-existing divergence, no corpus exposure, filed for a
-                # future session.
+                # #214: container keys (list/map) now key by VALUE via the
+                # side pair-list — the write-only-key display-text path is
+                # retired; equality is the deep_eq seen-pair law, exact.
                 # W029 mirror: bytes are scalar keys (native hashable, exact).
-                key = iv if isinstance(iv, (str, int, float, bool, bytes)) else (
-                    iv if isinstance(iv, ObjInst) else v_display(iv))
                 self._cycle_note_insert(tv, nv)  # W013: value edge (keys not walked)
-                tv[_nkey(key)] = nv
+                _map_insert_key(tv, iv, nv)
             else:
                 self.note(4, "index assignment on non-container ignored")
         elif k == "mem_assign":
@@ -4292,7 +4422,7 @@ class Interp:
                 # W029 mirror: iterating bytes yields ints 0..=255
                 items = list(itv)
             elif isinstance(itv, dict):
-                items = list(itv.keys())
+                items = _map_keys(itv)
             else:
                 self.note(4, f"cannot iterate {type_name(itv)}; loop skipped")
             for item in items:
@@ -4601,8 +4731,10 @@ class Interp:
                 kv = self.eval(env, ke)
                 # W029 mirror: bytes are scalar keys (Rust key_scalar includes
                 # Bytes), never stringified
-                key = kv if isinstance(kv, (str, int, float, bool, bytes)) else v_display(kv)
-                m[_nkey(key)] = self.eval(env, ve)
+                val = self.eval(env, ve)
+                # #214: container keys key by VALUE (side pair-list), the
+                # Rust MapStore law — no more display-text canonicalization
+                _map_insert_key(m, kv, val)
             return m
         if k == "ident":
             v = self.lookup(env, e[1])
@@ -4702,7 +4834,7 @@ class Interp:
                     return tv[idx]
                 raise Stress("missing", f"index {idx} out of range")
             if isinstance(tv, dict):
-                for kk, vv in tv.items():
+                for kk, vv in _map_items(tv):
                     if deep_eq(kk, iv):
                         return vv
                 raise Stress("missing", "key not found")
@@ -4756,7 +4888,8 @@ class Interp:
                         break
                     items.append(v)
             else:
-                items = itv if isinstance(itv, list) else (list(itv) if isinstance(itv, str) else (list(itv.keys()) if isinstance(itv, dict) else []))
+                # #214: collect over a map iterates BOTH stores' keys
+                items = itv if isinstance(itv, list) else (list(itv) if isinstance(itv, str) else (_map_keys(itv) if isinstance(itv, dict) else []))
             out = []
             for item in items:
                 self.tick()
@@ -5000,7 +5133,7 @@ class Interp:
             if isinstance(r, str) and isinstance(l, str):
                 return l in r
             if isinstance(r, dict):
-                return any(deep_eq(k, l) for k in r.keys())
+                return _map_has(r, l)
             raise Stress("unfolded", f"'in' not defined for {type_name(r)}")
         raise Stress("unfolded", f"unknown op {op}")
 
@@ -6056,34 +6189,28 @@ class Interp:
                 self.note(4, "index out of range; null")
                 return None
         elif isinstance(recv, dict):
-            if name == "keys": return list(recv.keys())
-            if name == "values": return list(recv.values())
-            if name == "items": return [[k, v] for k, v in recv.items()]
+            if name == "keys": return _map_keys(recv)
+            if name == "values": return _map_values(recv)
+            if name == "items": return [[k, v] for k, v in _map_items(recv)]
             if name == "get":
                 # L1a: safe key access with an optional default
-                t = args[0] if args else None
-                hit = None
-                found = False
-                for k in recv.keys():
-                    if deep_eq(k, t):
-                        hit = recv[k]
-                        found = True
-                        break
-                if found:
-                    return hit
+                # #214: _map_lookup already covers BOTH stores with the
+                # deep_eq law — the old duplicate scan is retired
+                key_q = args[0] if args else None
+                t = _map_lookup(recv, key_q)
+                if t is not _MAP_MISS:
+                    return t
                 if len(args) > 1:
                     return args[1]
-                self.note(4, f"key '{v_display(t)}' missing; null")
+                self.note(4, f"key '{v_display(key_q)}' missing; null")
                 return None
-            if name == "has": return any(deep_eq(k, args[0]) for k in recv.keys())
+            if name == "has": return _map_has(recv, args[0])
             if name == "del":
                 if self.is_frozen(recv):
                     raise self._frozen_stress("map")
-                for k in list(recv.keys()):
-                    if deep_eq(k, args[0]):
-                        del recv[k]
+                _map_del(recv, args[0])
                 return None
-            if name == "len": return len(recv)
+            if name == "len": return _map_len(recv)
             if name in recv and isinstance(recv[name], (Gene,)):
                 return self.call_value(env, recv[name], args)
         self.note(4, f"{type_name(recv)} has no method '{name}'; null")
@@ -6149,6 +6276,9 @@ class Interp:
             return
         stack, seen = [], set()
         stack.extend(target.values() if isinstance(target, dict) else target)
+        if isinstance(target, dict):
+            # #214: side values are children too (the containment walk)
+            stack.extend(p[1] for p in _map_items_side(target))
         # budgeted dedupe walk: an inconclusive dedupe registers anyway,
         # the detection at the insertion already proved a cycle at the
         # target (mirror of the Rust dedupe budget)
@@ -6261,8 +6391,10 @@ class Interp:
             return None
         if name == "len":
             v = args[0] if args else None
-            if isinstance(v, (str, bytes, list, dict)):
+            if isinstance(v, (str, bytes, list)):
                 return len(v)
+            if isinstance(v, dict):
+                return _map_len(v)
             self.note(4, "len() of non-container is 0")
             return 0
         # ---- W029: bytes conversions (UTF-8-only, explicit encoding)
@@ -6335,18 +6467,16 @@ class Interp:
                 return args[0].pop(idx)
             raise Stress("missing", "remove index out of range")
         if name == "keys":
-            return list(args[0].keys()) if isinstance(args[0], dict) else []
+            return _map_keys(args[0]) if isinstance(args[0], dict) else []
         if name == "values":
-            return list(args[0].values()) if isinstance(args[0], dict) else []
+            return _map_values(args[0]) if isinstance(args[0], dict) else []
         if name == "has":
-            return isinstance(args[0], dict) and any(deep_eq(k, args[1]) for k in args[0].keys())
+            return isinstance(args[0], dict) and _map_has(args[0], args[1])
         if name == "del":
             if isinstance(args[0], dict):
                 if self.is_frozen(args[0]):
                     raise self._frozen_stress("map")
-                for k in list(args[0].keys()):
-                    if deep_eq(k, args[1]):
-                        del args[0][k]
+                _map_del(args[0], args[1])
             return None
         if name == "range":
             # P2P3P5 pin found the latent gap: the Rust engine notes and
@@ -8300,10 +8430,14 @@ class Interp:
             if isinstance(v, list):
                 out = "[" + ",".join(Interp._json_str(x, _seen, _depth + 1) for x in v) + "]"
             else:
+                # #214: BOTH stores; non-str keys render through v_repr (the
+                # Rust json_stringify_g key law — container keys stringify
+                # via the display form, e.g. {"[1, 2]":5}), never Python str()
+                # (dict keys would render with Python quoting)
                 out = "{" + ",".join(
-                    _json.dumps(str(k) if not isinstance(k, str) else k) + ":"
-                    + Interp._json_str(val, _seen, _depth + 1)
-                    for k, val in v.items()) + "}"
+                    _json.dumps(k if isinstance(k, str) else v_repr(k, _seen, _depth + 1))
+                    + ":" + Interp._json_str(val, _seen, _depth + 1)
+                    for k, val in _map_items(v)) + "}"
             _seen.discard(marker)
             return out
         # W06 (D-014) mirror: variants serialize as single-key objects,
