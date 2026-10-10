@@ -2693,7 +2693,13 @@ impl Interp {
                         .unwrap_or(true);
                     if cancel_on_err {
                         for id in &ids {
-                            let _ = crate::genes::cancel_task(self, vec![Value::Int(*id)]);
+                            // #59: the reap cancel is MECHANICAL containment,
+                            // not a user action — cancel-vs-finish here is a
+                            // real thread race (the qemu legs flipped the
+                            // note between the tree-walk and VM lanes), so
+                            // the reap narrates nothing. The join below is
+                            // the observable signal.
+                            let _ = crate::genes::cancel_task_quiet(self, *id);
                         }
                     }
                 }

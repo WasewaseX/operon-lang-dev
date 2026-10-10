@@ -2235,6 +2235,29 @@ pub fn cancel_task(interp: &mut Interp, args: Vec<Value>) -> Result<Value, Stres
         interp.note(0, 4, "cancel() needs a task id");
         return Ok(Value::Bool(false));
     }
+    let landed = cancel_task_quiet(interp, id);
+    if landed {
+        interp.note(0, 4, format!("cancel requested for task {}", id));
+    } else if interp.tasks.contains_key(&id) || interp.task_tombstones.contains_key(&id) {
+        interp.note(0, 4, format!("task {} already finished", id));
+    } else {
+        interp.note(0, 4, format!("task {} unknown or already joined", id));
+    }
+    Ok(Value::Bool(landed))
+}
+
+/// #59: the cancel MECHANISM without the user-facing narration. The
+/// scope-reap containment path uses this: whether the child already
+/// finished or the cancel flag lands first is a REAL thread race (the
+/// qemu aarch64 legs flip the note deterministically between the
+/// tree-walk and VM lanes — the vm_parity RACY_NOTE class), so the reap
+/// must not narrate the race winner. The join that follows is the
+/// observable signal (the cancelled stress map / the task's return
+/// value); the explicit cancel() builtin keeps its documented notes.
+pub fn cancel_task_quiet(interp: &mut Interp, id: i64) -> bool {
+    if id <= 0 {
+        return false;
+    }
     if let Some(handle) = interp.tasks.get(&id) {
         let flag = handle.cancel.clone();
         let phase_cell = handle.state.clone();
@@ -2242,18 +2265,11 @@ pub fn cancel_task(interp: &mut Interp, args: Vec<Value>) -> Result<Value, Stres
         if *phase == crate::interp::TaskState::Running {
             flag.store(true, Ordering::Relaxed);
             *phase = crate::interp::TaskState::Cancelled;
-            interp.note(0, 4, format!("cancel requested for task {}", id));
-            return Ok(Value::Bool(true));
+            return true;
         }
-        interp.note(0, 4, format!("task {} already finished", id));
-        return Ok(Value::Bool(false));
+        return false;
     }
-    if interp.task_tombstones.contains_key(&id) {
-        interp.note(0, 4, format!("task {} already finished", id));
-        return Ok(Value::Bool(false));
-    }
-    interp.note(0, 4, format!("task {} unknown or already joined", id));
-    Ok(Value::Bool(false))
+    false
 }
 
 /// W18: read a task's lifecycle phase without joining. Live tasks answer
