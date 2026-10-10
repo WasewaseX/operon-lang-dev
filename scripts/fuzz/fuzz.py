@@ -260,12 +260,54 @@ def main():
         # batch-2 WIP lane; the surface is stable now and its --json shape is
         # contract-pinned). Parse-only by construction: explain never runs
         # the program, so redteam seeds stay contained here too.
+        # z-fuzz-infra (#138.5): --write integrity leg on a SANDBOX COPY
+        # (never repo paths). Invariant: when the tool exits non-zero
+        # (parse failure), the target bytes must be UNCHANGED — the #113
+        # class (fmt --write truncating unreadable/non-UTF-8 files to 0
+        # bytes at exit 0) was invisible to every lane by construction
+        # because no writing surface was ever fuzzed with before/after
+        # hashes.
+        WRITETMP = TMP + ".fuzzwrite"
         for argv in (["check", TMP], ["ast", TMP, "--json"], ["fmt", TMP],
                      ["explain", TMP], ["explain", TMP, "--json"]):
             rc, out, err = probe([binpath] + argv, args.per_input_timeout)
             kind, detail = classify(rc, err)
             stats[kind] += 1
             execs += 1
+            # the --write leg itself: copy the current input, hash, run
+            # fmt --write on the COPY, hash again — a non-zero exit must
+            # leave the bytes identical (a zero exit may rewrite freely)
+            if execs % 4 == 0:
+                try:
+                    import shutil
+                    with open(WRITETMP, "wb") as wfh:
+                        wfh.write(mut)
+                    before = hashlib.sha256(mut).hexdigest()
+                    wrc, wout, werr = probe([binpath, "fmt", WRITETMP, "--write"],
+                                            args.per_input_timeout)
+                    after_bytes = open(WRITETMP, "rb").read()
+                    after = hashlib.sha256(after_bytes).hexdigest()
+                    if isinstance(wrc, int) and wrc != 0 and after != before:
+                        kind2, _ = classify(wrc, werr)
+                        stats[kind2] += 1
+                        unique_findings += 1
+                        name = f"write_integrity_{args.seed}_{execs}.op"
+                        path2 = os.path.join(args.corpus_dir, name)
+                        with open(path2, "wb") as wfh:
+                            wfh.write(mut)
+                        with open(manifest, "a", encoding="utf-8") as wfh:
+                            wfh.write(json.dumps({
+                                "kind": "write-integrity",
+                                "input": os.path.relpath(path2, ROOT),
+                                "bytes": len(mut),
+                                "seed": args.seed,
+                                "exec": execs,
+                                "argv": ["fmt", "<copy>", "--write"],
+                                "exit_code": wrc,
+                                "detail": f"rc!=0 but bytes changed: {before[:12]} -> {after[:12]}",
+                            }))
+                except OSError:
+                    pass
             if kind in ("crash", "hang"):
                 h = hashlib.sha256(mut).hexdigest()
                 if h in seen_hashes:

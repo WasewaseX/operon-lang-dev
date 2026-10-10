@@ -42,7 +42,12 @@ TIMEOUT = int(os.environ.get("FUZZ_TIMEOUT", "30" if sys.platform == "win32" els
 # (the cap must sit above the fuel bound so a fuel-contained runaway counts
 # as contained; only genuinely unbounded behavior trips the timeout class)
 
-BAD_RCS = {101, 134, 139, 136, 138}  # panic / abort / segv / fpe family
+# z-fuzz-infra (#138.1): 137 (SIGKILL — the container/OOM kill) was
+# missing, so an OOM kill recorded as "contained" (false pass). The fatal
+# signal family is complete now: 132 SIGILL, 133 SIGTRAP, 134 SIGABRT,
+# 135 SIGBUS, 136 SIGFPE, 137 SIGKILL, 139 SIGSEGV. 101 stays the Rust
+# panic/abort exit.
+BAD_RCS = {101, 132, 133, 134, 135, 136, 137, 138, 139}
 
 _TMPDIR = tempfile.mkdtemp(prefix="opfuzz_")
 _COUNTER = [0]
@@ -163,11 +168,16 @@ def check(seed, data, exec_mode):
     if b"panicked at" in err:
         return f"panic text in stderr: {err[:200]!r} input={path}"
     if exec_mode:
-        rc2, out2, err2 = run_engine(["run", "--vm", path], None)
+        # z-fuzz-infra (#60): the second run MUST be the tree-walk
+        # (--no-vm) for the C4 engine-divergence contract. Since W09 A6
+        # the VM is the DEFAULT engine, so `--vm` executed the SAME
+        # engine twice and the check could never see a divergence
+        # (vacuous). Flip the leg to --no-vm per C4.
+        rc2, out2, err2 = run_engine(["run", "--no-vm", path], None)
         if rc2 == "timeout":
-            return f"vm timeout input={path}"
+            return f"tree-walk timeout input={path}"
         if rc2 in BAD_RCS or b"panicked at" in err2:
-            return f"vm crash rc={rc2} stderr={err2[:200]!r} input={path}"
+            return f"tree-walk crash rc={rc2} stderr={err2[:200]!r} input={path}"
         if (rc, out, err) != (rc2, out2, err2):
             return f"engine divergence: rc {rc} vs {rc2} input={path}"
     return None
@@ -176,12 +186,18 @@ def check(seed, data, exec_mode):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--n", type=int, default=2000)
-    ap.add_argument("--seed", type=int, default=0)
+    # z-fuzz-infra (#138.2): default None (not 0) so "no --seed" replays
+    # the canonical 20260930 stream while an EXPLICIT --seed 0 is honored
+    # as its own stream (the old `args.seed or 20260930` aliased them).
+    ap.add_argument("--seed", type=int, default=None)
     ap.add_argument("--exec", action="store_true",
                     help="also run each input on the VM and require agreement")
     args = ap.parse_args()
 
-    rng = random.Random(args.seed or 20260930)
+    # z-fuzz-infra (#138.2): `args.seed or DEFAULT` aliased --seed 0 to
+    # the default stream (0 is falsy) — a requested seed-0 run silently
+    # replayed 20260930. Respect the explicit 0; only None falls back.
+    rng = random.Random(20260930 if args.seed is None else args.seed)
     corpus = load_corpus_seeds()
     findings = []
     buckets = {"R": 0, "U": 0, "T": 0, "D": 0, "S": 0}
