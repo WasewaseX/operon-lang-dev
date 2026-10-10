@@ -332,10 +332,13 @@ fn requirement_lookup_equal_versions_keep_the_later_line() {
     let pkg_b = make_dir_package(sb.join("pkgs").join("v2").as_path(), "tie", "SECOND");
     let line = |dir: &std::path::Path| {
         // git+rev are required fields on every registry line (parse_registry
-        // validates both); the dir branch wins when dir is non-empty
+        // validates both); the dir branch wins when dir is non-empty.
+        // Forward slashes: a backslash inside a jsonl string is an ESCAPE
+        // (\t literally ate the \tie directory name on windows), and
+        // std::path accepts / on every platform.
         format!(
             "{{\"name\":\"tie\",\"version\":\"1.2.0\",\"git\":\"local\",\"rev\":\"content-local\",\"dir\":\"{}\"}}",
-            dir.display()
+            dir.to_string_lossy().replace('\\', "/")
         )
     };
     write_local_registry(&reg_file, &[line(&pkg_a), line(&pkg_b)]);
@@ -376,9 +379,18 @@ fn symlink_in_package_tree_is_refused_not_followed() {
     let pkg = make_dir_package(sb.join("pkgs").as_path(), "loopy", "x");
     #[cfg(unix)]
     std::os::unix::fs::symlink(&pkg, pkg.join("loop")).expect("make loop symlink");
+    #[cfg(windows)]
+    {
+        // windows symlink creation needs privileges the runner may lack;
+        // the refusal path is e2e-asserted on unix — skip, don't fail,
+        // when the link cannot be made
+        if std::os::windows::fs::symlink_dir(&pkg, pkg.join("loop")).is_err() {
+            return;
+        }
+    }
     let line = format!(
         "{{\"name\":\"loopy\",\"version\":\"1.0.0\",\"git\":\"local\",\"rev\":\"content-local\",\"dir\":\"{}\"}}",
-        pkg.display()
+        pkg.to_string_lossy().replace('\\', "/")
     );
     write_local_registry(&reg_file, &[line]);
     let root = sb.join("proj").join("app");
