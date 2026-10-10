@@ -1,0 +1,79 @@
+# ============================================================
+# Edge stack , cookbook #22
+# you already know: Pop() on an empty stack, index bounds checks
+# teaches: the edge try_* family in one small machine — try_num
+#          (tokens), try_get (map), try_pop/try_index (list),
+#          try_first/try_last (sequences) — every expected failure
+#          is an Err VALUE, so the machine keeps running
+# run: operon run examples/cookbook/edge_stack.op
+# expected output: examples/cookbook/expected/edge_stack.out
+# verified by scripts/cookbook.sh on the Rust core AND the Python oracle
+# ============================================================
+# A stack machine driven by a "script" of tokens. Bad tokens, bad
+# lookups, pops on empty — all just Err values the loop reports.
+# ops: push <n> | add | dup | total
+use std/strings as s
+let ops = { "push": 1, "add": 2, "dup": 3, "total": 4 }
+gene step(stack, line) {
+    let words = s.words(line)
+    let head = try_first(words)
+    if (is_err(head)) {
+        return err("blank line")
+    }
+    let op = try_get(ops, unwrap(head))
+    if (is_err(op)) {
+        return err("unknown op '" + unwrap(head) + "'")
+    }
+    match unwrap(op) {
+        case 1 {
+            let n = try_num(unwrap_or(try_index(words, 1), ""))
+            if (is_err(n)) {
+                return err("push needs a number")
+            }
+            push(stack, unwrap(n))
+        }
+        case 2 {
+            let a = try_pop(stack)
+            if (is_err(a)) {
+                return err("add on empty stack")
+            }
+            let b = try_pop(stack)
+            if (is_err(b)) {
+                push(stack, unwrap(a))
+                return err("add needs two operands")
+            }
+            push(stack, unwrap(a) + unwrap(b))
+        }
+        case 3 {
+            let top = try_last(stack)
+            if (is_err(top)) {
+                return err("dup on empty stack")
+            }
+            push(stack, unwrap(top))
+        }
+        case 4 {
+            let t = 0
+            for v in stack {
+                t = t + v
+            }
+            print("total=" + str(t))
+        }
+    }
+    return ok(len(stack))
+}
+let stack = []
+let script = [
+    "push 10", "push 32", "add", "total", "dup",
+    "push x", "add", "total", "divide", ""
+]
+for line in script {
+    match step(stack, line) {
+        case Ok(depth) {
+            print("depth=" + str(depth))
+        }
+        case Err(why) {
+            print("ERR " + why)
+        }
+    }
+}
+print("final depth=" + str(len(stack)) + " first=" + str(unwrap_or(try_first(stack), -1)))

@@ -1,0 +1,38 @@
+# ============================================================
+# GOTCHA: braces in strings , cookbook #15
+# you already know: f-strings only interpolate inside { }
+# teaches: in Operon EVERY { inside a double-quoted string starts
+#          interpolation - even after an escaped quote. To emit a
+#          literal brace, build it with chr(123) / chr(125).
+#          Bonus: "\r" is NOT an escape - chr(13) is.
+# run: operon run examples/cookbook/gotcha_braces.op
+# expected output: examples/cookbook/expected/gotcha_braces.out
+# verified by scripts/cookbook.sh on the Rust core AND the Python oracle
+# ============================================================
+gene brace(text) {
+    # wrapping braces into a helper keeps call sites readable
+    return chr(123) + text + chr(125)
+}
+
+gene main() {
+    # interpolation is the feature: the {expr} hole renders the value
+    let version = 2
+    promote("operon {version} renders the value: 2")
+
+    # the same brace is a trap when you want RAW braces (JSON, config
+    # snippets, LaTeX): the { opens a hole instead of printing itself.
+    # Build raw braces from character codes:
+    let lb = chr(123)
+    let rb = chr(125)
+    let raw_json = lb + "\"a\": 1, \"b\": [true, null]" + rb
+    promote("raw json: {raw_json}")
+    promote("round trip: {json_str(json_parse(raw_json))}")
+    promote("helper: {brace("key: value")}")
+
+    # same story for carriage return: \n and \t are real escapes,
+    # but backslash-r is NOT - it stays two literal characters.
+    let nl_text = "a" + chr(10) + "b"      # chr(10) is what \n means
+    let with_cr = "a" + chr(13) + "b"      # there is no \r escape
+    let fake_cr = "a\rb"                   # two chars: backslash and r
+    promote("lengths: newline {len(nl_text)}, real CR {len(with_cr)}, fake CR {len(fake_cr)}")
+}

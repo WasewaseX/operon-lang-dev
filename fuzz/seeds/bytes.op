@@ -1,0 +1,98 @@
+# W029: first-class bytes, literal syntax, indexing, slicing, concat,
+# repeat ceilings, conversions (UTF-8-only, explicit), iteration, map
+# keys, JSON view, and the spawn-membrane. Pinned on BOTH engines;
+# companion: tests/differential/bytes.op (byte-identical stdout).
+
+frame proof {
+    # --- literals + escapes
+    let b = b"hello"
+    assert(type(b) == "bytes", "type is bytes")
+    assert(len(b) == 5, "len is the byte count")
+    assert(b == b"hello", "equality")
+    assert(b != b"world", "inequality")
+    assert(b"\x00\x01\xff" == bytes_from_list([0, 1, 255]), "\\xNN escapes")
+    assert(b"a\nb\tc\\d\"e" == bytes_from_list([97, 10, 98, 9, 99, 92, 100, 34, 101]), "short escapes")
+    assert(b"" == bytes_from_list([]), "empty bytes")
+
+    # --- indexing: ints, negative from the end, out of range is missing
+    assert(b[0] == 104 && b[1] == 101, "index ints")
+    assert(b[-1] == 111, "negative index")
+    stress {
+        let x = b[5]
+        assert(false, "index must raise")
+    } rescue (e) {
+        assert(e.kind == "missing", "index kind")
+    }
+
+    # --- slicing: Python-style negatives, clamped, new bytes
+    assert(b.slice(1, 3) == b"el", "slice")
+    assert(b.slice(-3, -1) == b"ll", "negative slice")
+    assert(b.slice(3, 100) == b"lo", "clamped slice")
+    assert(b.slice(0, 0) == b"", "empty slice")
+
+    # --- concat + repeat (and their ceilings)
+    assert(b + b" world" == b"hello world", "concat")
+    assert(b"ab" * 3 == b"ababab", "repeat")
+    assert(3 * b"ab" == b"ababab", "left repeat")
+    stress {
+        let boom = b"a" * 600000000
+        assert(false, "huge repeat must raise")
+    } rescue (e) {
+        assert(e.kind == "overflow", "repeat ceiling contained")
+    }
+    stress {
+        let boom = b + "text"
+        assert(false, "bytes+str must raise")
+    } rescue (e) {
+        assert(e.kind == "unfolded", "no silent coercion")
+    }
+
+    # --- conversions: UTF-8-only, explicit encoding names
+    assert(bytes_from_str("héllo") == b"h\xc3\xa9llo", "utf-8 encode")
+    assert(str_from_bytes(bytes_from_str("héllo")) == "héllo", "utf-8 decode round-trip")
+    assert(bytes_from_str("x", "utf-8") == b"x", "explicit utf-8")
+    assert(bytes_from_str("x", "UTF8") == b"x", "case/dash-insensitive name")
+    assert(str_from_bytes(b"\xff\xfe") == null, "invalid UTF-8 is the soft tier: null + note")
+    stress {
+        let x = bytes_from_str("x", "latin-1")
+        assert(false, "unknown encoding must raise")
+    } rescue (e) {
+        assert(e.kind == "unfolded", "unknown encoding is a contract violation")
+    }
+    stress {
+        let x = bytes_from_list([300])
+        assert(false, "byte range must be enforced")
+    } rescue (e) {
+        assert(e.kind == "unfolded", "byte range kind")
+    }
+    assert(bytes_to_list(b"AB") == [65, 66], "to list")
+    assert(bytes_from_list([104, 105]) == b"hi", "from list")
+
+    # --- iteration yields ints
+    let acc = 0
+    for x in b"AB" {
+        acc += x
+    }
+    assert(acc == 131, "for over bytes sums ints")
+
+    # --- bytes are legal scalar map keys (content equality)
+    let m = {}
+    m[b"k"] = 1
+    m[b"k"] = 2
+    assert(m[b"k"] == 2, "bytes key upsert")
+    assert(len(m) == 1, "one entry, not two")
+    assert({b"key": 7}[b"key"] == 7, "literal bytes key")
+
+    # --- JSON view is the lossless int list
+    assert(json_str(b"AB") == "[65,66]", "json int-list view")
+
+    # --- truthiness follows emptiness (like strings)
+    assert(!b"" && b"a", "truthiness")
+
+    # --- bytes cross the spawn membrane losslessly (named gene travels)
+    gene echo_bytes(bb) {
+        return bb + b"!"
+    }
+    let child = spawn(echo_bytes, [b"hi"])
+    assert(join(child) == b"hi!", "spawn membrane carries bytes")
+}

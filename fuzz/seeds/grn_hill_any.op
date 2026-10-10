@@ -1,0 +1,70 @@
+# reg-bio (F-2/F-3), per-edge Hill cooperativity + cis-regulatory OR logic
+#
+# `hill n` shapes the dose-response: strength × p^n/(p^n + t^n), cooperative
+# binding (real TF oligomers give n = 1..4+). For p > t a higher exponent
+# saturates harder toward full influence (ultrasensitivity); for p < t it
+# collapses toward 0. The default (no hill keyword) keeps the historical n=2
+# shape bit-identically. Edge keyword order: strength -> threshold -> hill -> any.
+#
+# `any` marks an edge as an OR member, an ALTERNATIVE activator that alone
+# suffices: the gate opens iff (every AND member passes) OR (any OR member
+# passes). Networks without `any` keep the exact conjunctive behavior.
+regulate {
+    s activates a strength 1.0 threshold 0.5
+    s activates b strength 1.0 threshold 0.5 hill 1
+    s activates c strength 1.0 threshold 0.5 hill 4
+    x activates g strength 1.0 threshold 0.5
+    y activates g strength 1.0 threshold 0.3 any
+    u activates h strength 1.0 threshold 0.5
+    v activates h strength 1.0 threshold 0.3
+    p1 activates o1 strength 1.0 threshold 0.3 any
+    p2 activates o1 strength 1.0 threshold 0.3 any
+}
+frame proof {
+    # --- Hill exponent shapes the dose-response (parent level 0.6 > t 0.5)
+    grn_set("s", 0.6)
+    grn_fire("z")
+    let na = grn_get("a")
+    let nb = grn_get("b")
+    let nc = grn_get("c")
+    # n=2 (default): 0.36/(0.36+0.25), the historical shape, unchanged
+    let ea = 0.36 / (0.36 + 0.25)
+    assert(na - ea < 1e-12 && ea - na < 1e-12, "default edge keeps the n=2 dose-response")
+    # n=1: 0.6/(0.6+0.5), the graded Michaelis shape (no cooperativity)
+    let eb = 0.6 / (0.6 + 0.5)
+    assert(nb - eb < 1e-12 && eb - nb < 1e-12, "hill 1 gives the Michaelis shape")
+    # n=4: 0.1296/(0.1296+0.0625), ultrasensitive saturation
+    let ec = 0.1296 / (0.1296 + 0.0625)
+    assert(nc - ec < 1e-12 && ec - nc < 1e-12, "hill 4 saturates near 1")
+    # cooperativity sharpens the switch above threshold
+    assert(nc > na && na > nb, "higher exponent saturates harder above threshold")
+
+    # --- OR member: an alternative activator alone suffices
+    grn_set("x", 0.0)
+    grn_set("y", 0.6)
+    assert(g() != null, "OR member passing alone fires the gene")
+    grn_set("y", 0.2)
+    assert(g() == null, "no route: AND member off AND OR member off")
+    grn_set("x", 0.8)
+    assert(g() != null, "AND route complete suffices while the OR member fails")
+
+    # --- plain conjunctive behavior unchanged (both members are AND)
+    grn_set("u", 0.8)
+    grn_set("v", 0.1)
+    assert(h() == null, "AND members: one below threshold vetoes")
+    grn_set("v", 0.5)
+    assert(h() != null, "AND members: both above threshold pass")
+
+    # --- an all-OR promoter: either input drives expression
+    grn_set("p1", 0.0)
+    grn_set("p2", 0.0)
+    assert(o1() == null, "all-OR promoter with both inputs off: gate blocks")
+    grn_set("p2", 0.5)
+    assert(o1() != null, "all-OR promoter fires on either input")
+}
+gene g() { return "g-expressed" }
+gene h() { return "h-expressed" }
+gene o1() { return "o1-expressed" }
+main {
+    promote("hill/OR proofs done")
+}

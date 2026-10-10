@@ -1,0 +1,119 @@
+# std/biocore, R0.1 proof: the Bio-Core IR substrate's semantic invariants,
+# exercised as executable assertions. INV numbering matches
+# docs/spec/BIO-CORE-IR.md §3:
+#   INV1 determinism        — same seed, same trace (stoch_produce replay)
+#   INV2 snapshot isolation — guards read the tick-start snapshot
+#   INV3 declared order     — effects apply in declaration order, always
+#   INV4 declared writes    — a write outside the declared species set is
+#                             refused at add time, never discovered at tick
+#   INV5 append-only log    — the event log only grows, and replays
+# Plus the decay/produce/activate/inhibit law arithmetic and the ring
+# (repressilator-shape) oscillation demonstration.
+use std/biocore as bc;
+
+frame proof {
+    # --- construction + validation -------------------------------------
+    let r = bc.biocore_new({"x": 10.0, "y": 0.0})
+    assert(is_ok(r), "numeric species construction is ok")
+    let bad = bc.biocore_new({"x": "ten"})
+    assert(is_err(bad), "non-numeric species level refused")
+    match bad {
+        case Err(msg) {
+            assert(msg == "species 'x' must start at a number, got str", "exact refusal text")
+        }
+        case Ok(v) {
+            assert(false, "bad species must be Err")
+        }
+    }
+
+    # --- the law arithmetic (exact values) ------------------------------
+    let core = unwrap(bc.biocore_new({"x": 10.0, "y": 0.0}))
+    let c1 = unwrap(bc.biocore_add_reaction(core, {"name": "d", "law": "decay", "species": "x", "reads": [], "writes": ["x"], "guard": null, "rate": 0.5, "weight": 0}))
+    let c2 = unwrap(bc.biocore_add_reaction(c1, {"name": "p", "law": "produce", "species": "y", "reads": [], "writes": ["y"], "guard": null, "rate": 2, "weight": 0}))
+    # two ticks: decay is multiplicative on the SNAPSHOT (10 -> 5 -> 2.5),
+    # produce is additive on the working copy (0 -> 2 -> 4)
+    let out = bc.biocore_run(c2, 2)
+    assert(bc.biocore_species(out, "x") == 2.5, "decay halves per tick: 10 -> 5 -> 2.5")
+    assert(bc.biocore_species(out, "y") == 4, "produce adds rate per tick: 0 -> 2 -> 4")
+    # INV3: the event log carries BOTH events per tick, in declaration order
+    let trace = bc.biocore_trace(out)
+    assert(len(trace) == 4, "two reactions x two ticks = four events")
+    assert(trace[0]["reaction"] == "d" && trace[1]["reaction"] == "p", "declared order d then p")
+    assert(trace[0]["before"] == 10.0 && trace[0]["after"] == 5.0, "exact before/after on the log")
+
+    # --- INV4: undeclared writes refused EAGERLY ------------------------
+    let v = bc.biocore_add_reaction(core, {"name": "bad", "law": "produce", "species": "x", "reads": [], "writes": ["ghost"], "guard": null, "rate": 1, "weight": 0})
+    assert(is_err(v), "writing an undeclared species is refused at add time")
+    match v {
+        case Err(msg) {
+            assert(msg == "reaction 'bad' writes undeclared species 'ghost' (INV4)", "the refusal names INV4")
+        }
+        case Ok(v) {
+            assert(false, "ghost write must be Err")
+        }
+    }
+    # unknown law refused (L1: no stated lowering, no entry)
+    let ul = bc.biocore_add_reaction(core, {"name": "u", "law": "teleport", "species": "x", "reads": [], "writes": ["x"], "guard": null, "rate": 1, "weight": 0})
+    assert(is_err(ul), "unknown law refused at add time (L1)")
+
+    # --- INV2: snapshot isolation ---------------------------------------
+    # two reactions write z: the first doubles it via decay's negative? no —
+    # decay floors at 0. Use produce x2: both read the SAME snapshot z=1,
+    # both add rate=10 -> final 21, not 1+10=11 then 11+10=21 — identical?
+    # The distinguishing shape: make the SECOND reaction's GUARD read z.
+    # Guard "z > 15" on the snapshot (z=1) is FALSE even though the first
+    # reaction lifts z to 11 mid-tick — the reaction must NOT fire this tick.
+    let s = unwrap(bc.biocore_new({"z": 1.0}))
+    let s1 = unwrap(bc.biocore_add_reaction(s, {"name": "lift", "law": "produce", "species": "z", "reads": [], "writes": ["z"], "guard": null, "rate": 10, "weight": 0}))
+    let s2 = unwrap(bc.biocore_add_reaction(s1, {"name": "big", "law": "produce", "species": "z", "reads": ["z"], "writes": ["z"], "guard": {"lhs": "z", "op": ">", "rhs": 15}, "rate": 100, "weight": 0}))
+    let st = bc.biocore_tick(s2)
+    assert(bc.biocore_species(st, "z") == 11.0, "big did NOT fire: its guard read the snapshot (1 > 15 false)")
+    assert(len(bc.biocore_trace(st)) == 1, "only lift logged an event this tick")
+    # next tick the snapshot is 11 — still not > 15; tick 3 snapshot is 21 —
+    # fires, and because effects apply to the WORKING copy in declared order,
+    # lift runs first (21->31) and big adds 100 on top: 31+100=131
+    let st3 = bc.biocore_run(st, 2)
+    assert(bc.biocore_species(st3, "z") == 131.0, "tick3: guard saw snapshot 21, big applied after lift on the working copy: 131")
+    assert(len(bc.biocore_trace(st3)) == 4, "3 lifts (unguarded, every tick) + 1 big = four events")
+
+    # --- ring oscillation (the repressilator SHAPE as an IR program) ----
+    # three species in an activation/inhibit ring; the honest claim is
+    # OSCILLATION (a peak after a trough), not the builtin's exact law —
+    # the builtin repressilator is class C1 engine-native (BIO-CORE-IR §4)
+    let ring0 = unwrap(bc.biocore_new({"a": 3.0, "b": 0.0, "c": 0.0}))
+    let ring1 = unwrap(bc.biocore_add_reaction(ring0, {"name": "grow_a", "law": "produce", "species": "a", "reads": [], "writes": ["a"], "guard": null, "rate": 1, "weight": 0}))
+    let ring2 = unwrap(bc.biocore_add_interaction(ring1, {"from": "a", "to": "b", "sign": 1, "weight": 0.5}))
+    let ring3 = unwrap(bc.biocore_add_reaction(ring2, {"name": "grow_b", "law": "activate", "species": "b", "reads": ["a"], "writes": ["b"], "guard": null, "rate": 0, "weight": 0}))
+    let ring4 = unwrap(bc.biocore_add_interaction(ring3, {"from": "b", "to": "c", "sign": 1, "weight": 0.5}))
+    let ring5 = unwrap(bc.biocore_add_reaction(ring4, {"name": "grow_c", "law": "activate", "species": "c", "reads": ["b"], "writes": ["c"], "guard": null, "rate": 0, "weight": 0}))
+    let ring6 = unwrap(bc.biocore_add_interaction(ring5, {"from": "c", "to": "a", "sign": -1, "weight": 0.5}))
+    let ring7 = unwrap(bc.biocore_add_reaction(ring6, {"name": "cut_a", "law": "inhibit", "species": "a", "reads": ["c"], "writes": ["a"], "guard": null, "rate": 0, "weight": 0}))
+    let ringn = bc.biocore_run(ring7, 30)
+    let peak_a = 0.0
+    for e in bc.biocore_trace(ringn) {
+        if e["species"] == "a" && e["after"] > peak_a {
+            peak_a = e["after"]
+        }
+    }
+    assert(peak_a > 4.0, "the ring drives a past its start (oscillation candidate), peak=" + str(peak_a))
+    assert(peak_a < 100.0, "the inhibit edge keeps the ring bounded, peak=" + str(peak_a))
+
+    # --- INV1: seeded stochastic replay (the telegraph precedent) -------
+    randomize(20261008)
+    let q0 = unwrap(bc.biocore_new({"pulse": 0.0}))
+    let q1 = unwrap(bc.biocore_add_reaction(q0, {"name": "fire", "law": "stoch_produce", "species": "pulse", "reads": [], "writes": ["pulse"], "guard": null, "rate": 0.5, "weight": 1}))
+    let ra = bc.biocore_render(bc.biocore_run(q1, 12))
+    randomize(20261008)
+    let rb = bc.biocore_render(bc.biocore_run(q1, 12))
+    assert(ra == rb, "same seed, same trace (INV1)")
+    assert(len(ra) > 0, "the seeded run actually fired some reactions")
+
+    # --- INV5: the log only grows; inputs never mutate -------------------
+    let g0 = unwrap(bc.biocore_new({"m": 5.0}))
+    let g1 = unwrap(bc.biocore_add_reaction(g0, {"name": "dm", "law": "decay", "species": "m", "reads": [], "writes": ["m"], "guard": null, "rate": 0.1, "weight": 0}))
+    let before_len = len(bc.biocore_trace(g1))
+    let g2 = bc.biocore_tick(g1)
+    assert(len(bc.biocore_trace(g1)) == before_len, "the INPUT core's log is untouched (copy law)")
+    assert(len(bc.biocore_trace(g2)) == before_len + 1, "the OUTPUT core's log grew by one (INV5)")
+    assert(bc.biocore_species(g1, "m") == 5.0, "the input species level is untouched")
+}

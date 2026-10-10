@@ -1,0 +1,31 @@
+# T2a, GRN level gates gene execution (SPEC §11, v2.2 honesty pass)
+# A gene with an incoming activating edge carrying an explicit threshold
+# only executes while the regulator's level is at/above that threshold.
+# This file FAILS on pre-T2a cores: the first proof assertion is false
+# there because the gated call runs despite level(signal) = 0.0.
+regulate {
+    signal activates gated strength 0.9 threshold 0.5
+    signal activates leaky strength 0.9
+    toxin inhibits shut strength 0.8 threshold 0.25
+}
+gene gated() { return "gated-ran" }
+gene leaky() { return "leaky-ran" }
+gene shut() { return "shut-ran" }
+frame proof {
+    # before any fire: level(signal) = 0 < 0.5 → gated call suppressed
+    assert(gated() == null, "threshold gate suppresses call before activation")
+    # edges without thresholds stay declarative: leaky keeps running
+    assert(leaky() == "leaky-ran", "no threshold → always on (back-compat)")
+    # firing the regulator raises its level above the threshold → call passes
+    let lv = grn_fire("signal")
+    assert(lv.signal == 1.0, "fire seeds regulator to 1.0")
+    assert(gated() == "gated-ran", "call passes once regulator level >= threshold")
+    # inhibiting edge with explicit threshold: level(toxin) = 0 < 0.25 → no veto
+    assert(shut() == "shut-ran", "inhibitor below threshold does not silence")
+}
+main {
+    let lv = grn_fire("signal")
+    promote("gated: {gated()}")
+    promote("leaky: {leaky()}")
+    promote("shut: {shut()}")
+}

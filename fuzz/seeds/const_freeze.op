@@ -1,0 +1,113 @@
+# W05 - const bindings + deep-freeze semantics (SPEC §7d).
+# Immutable binding: the value is deep-frozen (every reachable list/map),
+# the name can never be reassigned. Mutation and reassignment raise the
+# catchable `frozen` stress. Freezing draws nothing from the entropy stream.
+
+frame proof {
+    # back-compat: a const that is never mutated behaves like a plain value
+    const x = 10
+    assert(x == 10, "const binds its value")
+
+    # let mut is documentation-only in v2.x - consumed, binds normally
+    let mut y = 20
+    y = y + 1
+    assert(y == 21, "let mut binds a mutable value")
+
+    # reassignment of a const name is a catchable frozen stress
+    stress {
+        x = 55
+        assert(false, "reassignment must not complete")
+    } rescue (s) {
+        assert(s.kind == "frozen", "reassign stress kind is frozen")
+        assert(s.message == "cannot reassign const 'x'", "reassign message exact")
+    }
+
+    # compound assignment is still reassignment
+    stress {
+        x += 1
+        assert(false, "compound reassignment must not complete")
+    } rescue (s) {
+        assert(s.kind == "frozen", "compound reassign is frozen too")
+    }
+
+    # top-level freeze: push on a const list stresses, value unmodified
+    const L = [1, 2, 3]
+    stress {
+        push(L, 9)
+        assert(false, "push must not complete")
+    } rescue (s) {
+        assert(s.kind == "frozen", "push stress kind is frozen")
+        assert(s.message == "cannot modify frozen list", "push message exact")
+    }
+    assert(len(L) == 3, "frozen list is unmodified after push")
+    assert(L == [1, 2, 3], "frozen list content unchanged")
+
+    # method form mutates the same store - also frozen
+    stress {
+        L.push(4)
+        assert(false, "method push must not complete")
+    } rescue (s) {
+        assert(s.kind == "frozen", "method push is frozen")
+    }
+
+    # index write, pop, insert, remove - all frozen
+    stress { L[0] = 99 } rescue (s) { assert(s.kind == "frozen", "index write is frozen") }
+    stress { pop(L) } rescue (s) { assert(s.kind == "frozen", "pop is frozen") }
+    stress { insert(L, 0, 7) } rescue (s) { assert(s.kind == "frozen", "insert is frozen") }
+    stress { remove(L, 0) } rescue (s) { assert(s.kind == "frozen", "remove is frozen") }
+    assert(L == [1, 2, 3], "frozen list survives all mutation attempts")
+
+    # maps: index write, member write, del - frozen
+    const M = {"a": 1, "b": 2}
+    stress { M["c"] = 3 } rescue (s) {
+        assert(s.kind == "frozen", "map index write is frozen")
+        assert(s.message == "cannot modify frozen map", "map message exact")
+    }
+    stress { M.a = 42 } rescue (s) { assert(s.kind == "frozen", "map member write is frozen") }
+    stress { del(M, "a") } rescue (s) { assert(s.kind == "frozen", "map del is frozen") }
+    stress { M.del("a") } rescue (s) { assert(s.kind == "frozen", "map method del is frozen") }
+    assert(M == {"a": 1, "b": 2}, "frozen map content unchanged")
+
+    # DEEP freeze: a nested list inside a const map is frozen too
+    const deep = {"inner": [1], "nest": {"k": [2]}}
+    stress { deep["inner"][0] = 7 } rescue (s) {
+        assert(s.kind == "frozen", "nested list write is frozen")
+    }
+    stress { push(deep["nest"]["k"], 9) } rescue (s) {
+        assert(s.kind == "frozen", "doubly-nested push is frozen")
+    }
+    assert(deep["inner"] == [1], "nested list unmodified")
+    assert(deep["nest"]["k"] == [2], "doubly-nested list unmodified")
+
+    # the freeze follows ALIASES: handing the frozen list to another name
+    # does not unfreeze it (frozen-ness lives on the container)
+    let alias = L
+    stress { push(alias, 5) } rescue (s) {
+        assert(s.kind == "frozen", "alias of a frozen list is frozen")
+    }
+
+    # non-const containers stay fully mutable
+    let free = [1, 2]
+    push(free, 3)
+    assert(free == [1, 2, 3], "non-const list still mutates")
+    let mfree = {"n": 0}
+    mfree["n"] = mfree["n"] + 1
+    assert(mfree["n"] == 1, "non-const map still mutates")
+
+    # const inside a gene body; per-call binding re-runs the freeze
+    gene frozen_local() {
+        const inner = [1]
+        stress { push(inner, 2) } rescue (s) {
+            return s.kind == "frozen"
+        }
+        return false
+    }
+    assert(frozen_local(), "gene-local const freezes per call")
+
+    # a const re-DEFINITION (not reassignment) rebinds like let does
+    const x2 = 1
+    const x2 = 2
+    assert(x2 == 2, "const redefinition rebinds (with rebinding note)")
+
+    print("const_freeze: all assertions passed")
+}

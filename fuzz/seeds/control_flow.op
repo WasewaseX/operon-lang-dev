@@ -1,0 +1,79 @@
+frame proof {
+    # if/elif/else
+    let grade = 88
+    let band = ""
+    if grade >= 90 {
+        band = "A"
+    } elif grade >= 80 {
+        band = "B"
+    } else {
+        band = "C"
+    }
+    assert(band == "B", "if-elif chain")
+
+    # while
+    let i = 0
+    let acc = 0
+    while i < 5 {
+        acc += i
+        i += 1
+    }
+    assert(acc == 10, "while sum")
+
+    # loop + break/continue
+    let n = 0
+    loop {
+        n += 1
+        if n % 2 == 0 {
+            continue
+        }
+        if n > 7 {
+            break
+        }
+    }
+    assert(n == 9, "loop break/continue")
+
+    # for over list/string/map
+    let total = 0
+    for v in [10, 20, 30] {
+        total += v
+    }
+    assert(total == 60, "for list")
+    let letters = ""
+    for c in "gene" {
+        letters += c
+    }
+    assert(letters == "gene", "for string chars")
+    let m = {x: 1, y: 2}
+    let keysum = 0
+    for k in m {
+        keysum += m[k]
+    }
+    assert(keysum == 3, "for map keys")
+
+    # match
+    let http = 404
+    let label = ""
+    match http {
+        case 200, 201 { label = "ok" }
+        case 404 { label = "missing" }
+        case other { label = "code {other}" }
+    }
+    assert(label == "missing", "match literal case")
+    match 500 {
+        case 200 { label = "ok" }
+        case other { label = "bound {other}" }
+    }
+    assert(label == "bound 500", "match binds")
+    match "x" {
+        case 1 { label = "int" }
+        case _ { label = "wild" }
+    }
+    assert(label == "wild", "match wildcard")
+
+    # collect comprehension
+    let squares = for x in range(1, 5) collect x * x
+    assert(squares == [1, 4, 9, 16], "collect map")
+    let evens = for x in range(0, 10) if x % 2 == 0 collect x
+    assert(evens == [0, 2, 4, 6, 8], "collect filter")
+}

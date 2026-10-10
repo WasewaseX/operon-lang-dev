@@ -1,0 +1,50 @@
+# z-fuzz-libfuzzer (#49): the W051 deeper layer — in-process coverage-guided
+# libFuzzer targets on the parser/checker/evaluator surfaces. NON-BLOCKING
+# at first per the issue's acceptance ("promote on soak"): findings upload
+# as artifacts and feed the stage-4 triage pipeline (F4/#48 signature DB).
+name: fuzz-nightly
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      budget:
+        description: "seconds per target"
+        default: "300"
+
+jobs:
+  libfuzzer:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - run: cargo install cargo-fuzz --locked
+      - name: Restore corpora
+        uses: actions/cache@v4
+        with:
+          path: fuzz/corpus
+          key: fuzz-corpus-${{ github.run_id }}
+          restore-keys: fuzz-corpus-
+      - name: Build targets
+        run: cargo +nightly fuzz build
+      - name: fuzz_parse
+        run: |
+          B="${{ github.event.inputs.budget || 300 }}"
+          cargo +nightly fuzz run fuzz_parse -- -max_total_time="$B" -rss_limit_mb=4096 -timeout=25
+      - name: fuzz_check
+        run: |
+          B="${{ github.event.inputs.budget || 300 }}"
+          cargo +nightly fuzz run fuzz_check -- -max_total_time="$B" -rss_limit_mb=4096 -timeout=25
+      - name: fuzz_run (fuel-capped, leaks out of scope — process-lifetime Rc graph)
+        run: |
+          B="${{ github.event.inputs.budget || 300 }}"
+          ASAN_OPTIONS=detect_leaks=0 cargo +nightly fuzz run fuzz_run -- -max_total_time="$B" -rss_limit_mb=4096 -timeout=25 -detect_leaks=0
+      - name: Upload artifacts on any finding
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-findings
+          path: fuzz/artifacts/

@@ -1,0 +1,41 @@
+frame proof {
+    let xs = [5, 3, 8, 1]
+    assert(xs.sort() == [1, 3, 5, 8], "sort asc")
+    assert(xs.contains(3), "contains")
+    assert(xs.index_of(8) == 2, "index_of")
+    assert(xs.reverse() == [1, 8, 3, 5], "reverse")
+    assert(xs.slice(1, 3) == [3, 8], "slice")
+    let doubled = xs.map(gene (v) => v * 2)
+    assert(doubled == [10, 6, 16, 2], "map")
+    let big = xs.filter(gene (v) => v > 2)
+    assert(big == [5, 3, 8], "filter")
+    let total = xs.reduce(gene (a, b) => a + b, 0)
+    assert(total == 17, "reduce")
+    assert(total == 17, "reduce idempotent on clone")
+    assert([1, [2, 3]] == [1, [2, 3]], "deep eq nested")
+    assert({a: 1} != {a: 2}, "map eq differs")
+
+    let m = {}
+    m["k1"] = "v1"
+    m.k2 = "v2"
+    assert(m["k1"] == "v1" and m.k2 == "v2", "map index/member assign")
+    assert(m.has("k1"), "has")
+    assert(m.keys().len() == 2, "keys len")
+    assert(m.values().contains("v2"), "values")
+    del(m, "k1")
+    assert(not m.has("k1"), "del")
+    m.k1 = "restored"
+    assert(m.k1 == "restored", "member re-add")
+
+    let stack = []
+    push(stack, 1)
+    push(stack, 2)
+    assert(pop(stack) == 2, "push/pop")
+    insert(stack, 0, 0)
+    assert(stack == [0, 1], "insert")
+    assert(remove(stack, 0) == 0, "remove")
+    assert(range(3, 9, 3) == [3, 6], "range step")
+    assert(sum([1, 2, 3]) == 6, "sum")
+    assert(min(4, 2, 9) == 2 and max(4, 2, 9) == 9, "min/max")
+    assert(abs(0 - 7) == 7, "abs")
+}

@@ -1,0 +1,41 @@
+# reg-bio-2 (C2): the decay clock, time-driven decay on the call clock.
+# decay_clock(n, f) fires one GRN decay step (fraction f) every n calls and
+# integrates the translation layer on the same tick. Decay now runs as
+# expression time passes, NOT only when someone calls grn_fire, real
+# transcripts decay per unit time, not per regulatory event. n = 0
+# restores the event-driven contract (byte-identical default).
+regulate {
+    src activates constitutive strength 1.0
+}
+gene src() { return "s" }
+gene constitutive() { return "k" }
+frame proof {
+    grn_set("src", 1.0)
+    decay_clock(3, 0.5)
+    constitutive()
+    constitutive()
+    assert(abs(grn_get("src") - 1.0) < 1e-12, "no decay before the clock ticks (calls 1-2)")
+    constitutive()
+    assert(abs(grn_get("src") - 0.5) < 1e-12, "decay fires exactly ON the 3rd call (clock = 3)")
+    constitutive()
+    constitutive()
+    assert(abs(grn_get("src") - 0.5) < 1e-12, "no decay on calls 4-5 (next tick at 6)")
+    constitutive()
+    assert(abs(grn_get("src") - 0.25) < 1e-12, "second tick: 0.5 x 0.5 = 0.25 (compound decay)")
+    decay_clock(0)
+    constitutive()
+    assert(abs(grn_get("src") - 0.25) < 1e-12, "clock off: the event-driven contract is restored")
+}
+main {
+    grn_set("src", 1.0)
+    decay_clock(3, 0.5)
+    let i = 0
+    while i < 4 {
+        constitutive()
+        i += 1
+    }
+    promote("src after 4 calls: {grn_get(\"src\")}")
+    decay_clock(0)
+    constitutive()
+    promote("clock off, src stable: {grn_get(\"src\")}")
+}

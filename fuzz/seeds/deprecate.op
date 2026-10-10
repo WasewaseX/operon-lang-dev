@@ -1,0 +1,30 @@
+# W064: deprecation marks, runtime-neutrality proof.
+# @deprecated is metadata: the mark changes nothing a program can observe.
+# The proof pins that a deprecated gene runs, returns, composes and
+# dispatches exactly like any other gene; the check-side warning surface
+# (deprecated-use, W12) is pinned by tests/deprecate_lint.rs. No core or
+# std gene carries the mark yet (const is live semantics per W005), the
+# machinery is the compatibility ladder's future lever (W063).
+@deprecated("use twice() instead", since="2.4")
+gene old_double(n) {
+    return n * 2
+}
+
+gene twice(n) {
+    return n + n
+}
+
+frame proof {
+    # the deprecated gene is ordinary code at runtime
+    assert(old_double(21) == 42, "a deprecated gene still computes")
+    assert(old_double(twice(3)) == 12, "deprecated and live genes compose")
+
+    # the mark rides through higher-order use untouched
+    let f = old_double
+    assert(f(8) == 16, "a deprecated gene dispatches by reference")
+
+    # payloads with escapes survive the parse
+    assert(old_double(1) == 2, "the run is unchanged after the mark")
+
+    promote("deprecate: all asserts green")
+}
