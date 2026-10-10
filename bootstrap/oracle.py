@@ -2407,7 +2407,16 @@ class P:
                         break
                     j += 1
         if is_def:
-            self.note(self.peek()[2], 4, f"bare name block '{word}' treated as gene definition")
+            # dx-r3 mirror (#59 note-parity family): bare `main { }` is the
+            # community's most common top-level form and the formatter's own
+            # output style — canonical sugar (rung 1 info), NOT a repair.
+            # Other bare-name blocks stay rung 4 (E2017). Byte-mirrors
+            # src/parser.rs's special case; without it every bare-main
+            # program's stderr diverged ([info] vs [fallback E2017]).
+            if word == "main":
+                self.note(self.peek()[2], 1, "bare 'main' block accepted as the entry gene (canonical form: gene main())")
+            else:
+                self.note(self.peek()[2], 4, f"bare name block '{word}' treated as gene definition")
             self.next()  # consume the name
             params = []
             if self.peek() == ("SYM", "(", self.peek()[2]):
@@ -4387,8 +4396,15 @@ class Interp:
             ids = self.scope_stack.pop()
             cancel_on_err = self.cell.get("scope.cancel_on_error") != "off"
             if isinstance(err, Stress) and cancel_on_err:
-                for i in ids:
-                    self.builtin(env, "cancel", [i])
+                # #59: the reap cancel is MECHANICAL containment, not a user
+                # action — it narrates NOTHING on either engine. The Rust
+                # lanes cancel real workers here and cancel-vs-finish is a
+                # true thread race (the qemu legs flipped the note text
+                # between the tree-walk and VM modes); the sequential engine
+                # has nothing live to cancel (children are born finished).
+                # The join below is the observable signal; explicit cancel()
+                # keeps its documented notes.
+                pass
             for i in ids:
                 self.builtin(env, "join", [i])
             if err is not None:
