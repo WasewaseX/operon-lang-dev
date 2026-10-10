@@ -261,3 +261,240 @@ fn registry_help_lists_the_tooling() {
         out
     );
 }
+
+// ---- #126 pkg-integrity family (Z-126-PKGINTEG) ----
+//
+// Local dir-sourced registry helper: a one-line jsonl index naming a
+// directory package, vendored through resolve_dir_dep (staged + renamed
+// since item 10). The seed chain is bypassed with --registry FILE.
+
+fn write_local_registry(path: &std::path::Path, lines: &[String]) {
+    std::fs::write(path, lines.join("\n") + "\n").expect("write registry index");
+}
+
+fn make_dir_package(root: &std::path::Path, name: &str, word: &str) -> std::path::PathBuf {
+    // mirror the seed layout: operon.toml manifest + <name>.op source with
+    // one exported gene (the vendored `use` resolves against this shape)
+    let dir = root.join(name);
+    std::fs::create_dir_all(&dir).expect("pkg dir");
+    std::fs::write(
+        dir.join("operon.toml"),
+        format!(
+            "[package]\nname = \"{}\"\nversion = \"1.0.0\"\noperon-version = \"2.2\"\ndescription = \"test fixture\"\n",
+            name
+        ),
+    )
+    .expect("write manifest");
+    std::fs::write(
+        dir.join(format!("{}.op", name)),
+        format!("gene mod_out() {{\n    return \"{}\"\n}}\n", word),
+    )
+    .expect("write pkg source");
+    dir
+}
+
+/// item 12: a corrupt operon.lock must DIE LOUDLY on the read path — the
+/// pre-fix `unwrap_or_default()` silently treated it as EMPTY, losing every
+/// pin, and the next install re-resolved whatever it liked.
+#[test]
+fn corrupt_lockfile_dies_loudly_instead_of_losing_pins() {
+    let sb = sandbox("lockcorrupt");
+    let root = sb.join("proj").join("app");
+    let _ = in_dir(&sb.join("proj"), &["new", "app"]);
+    let (rc, _, err) = in_dir(&root, &["add", "http"]);
+    assert_eq!(rc, 0, "add http baseline (stderr: {})", err);
+    let pins = std::fs::read_to_string(root.join("operon.lock")).expect("lock");
+    assert!(pins.contains("checksum"), "the lock pins checksums");
+    // corrupt it: valid TOML-ish shape, unparseable as a lockfile
+    std::fs::write(root.join("operon.lock"), "this is not a lockfile \x01\x02").expect("corrupt");
+    let (rc, _, err) = in_dir(&root, &["install"]);
+    assert_ne!(rc, 0, "install on a corrupt lock must not exit 0");
+    assert!(
+        err.contains("operon.lock is corrupt"),
+        "the error must name the file and the corruption (stderr: {})",
+        err
+    );
+    assert!(
+        err.contains("NOT loaded") || err.contains("fix or delete"),
+        "the error must say the pins were not loaded (stderr: {})",
+        err
+    );
+}
+
+/// item 13: registry_lookup_req tie-break — equal versions keep the LATER
+/// line (last-match-wins, matching the doc comment and registry_lookup_text);
+/// the pre-fix `v > *bv` silently kept the FIRST.
+#[test]
+fn requirement_lookup_equal_versions_keep_the_later_line() {
+    let sb = sandbox("tiebreak");
+    let reg_file = sb.join("reg.jsonl");
+    let pkg_a = make_dir_package(sb.join("pkgs").join("v1").as_path(), "tie", "FIRST");
+    let pkg_b = make_dir_package(sb.join("pkgs").join("v2").as_path(), "tie", "SECOND");
+    let line = |dir: &std::path::Path| {
+        // git+rev are required fields on every registry line (parse_registry
+        // validates both); the dir branch wins when dir is non-empty.
+        // Forward slashes: a backslash inside a jsonl string is an ESCAPE
+        // (\t literally ate the \tie directory name on windows), and
+        // std::path accepts / on every platform.
+        format!(
+            "{{\"name\":\"tie\",\"version\":\"1.2.0\",\"git\":\"local\",\"rev\":\"content-local\",\"dir\":\"{}\"}}",
+            dir.to_string_lossy().replace('\\', "/")
+        )
+    };
+    write_local_registry(&reg_file, &[line(&pkg_a), line(&pkg_b)]);
+    let root = sb.join("proj").join("app");
+    let _ = in_dir(&sb.join("proj"), &["new", "app"]);
+    let (rc, _, err) = in_dir(
+        &root,
+        &[
+            "add",
+            "tie@1.2.0",
+            "--registry",
+            reg_file.to_str().expect("path"),
+        ],
+    );
+    assert_eq!(rc, 0, "add tie@1.2.0 (stderr: {})", err);
+    std::fs::write(
+        root.join("src/app.op"),
+        "use tie\ngene main() {\n    promote(tie.mod_out())\n}\n",
+    )
+    .expect("write app");
+    let (rc, out, err) = in_dir(&root, &["run", "src/app.op"]);
+    assert_eq!(rc, 0, "run (stderr: {})", err);
+    assert!(
+        out.contains("SECOND"),
+        "equal-version ties must keep the LATER registry line, got: {} {}",
+        out,
+        err
+    );
+}
+
+/// item 11: a symlink inside a package tree is REFUSED, loudly — the
+/// pre-fix walk followed links, so a loop aborted the process and a
+/// followed link hashed out-of-tree bytes (nondeterministic digests).
+#[test]
+fn symlink_in_package_tree_is_refused_not_followed() {
+    let sb = sandbox("symlink");
+    let reg_file = sb.join("reg.jsonl");
+    let pkg = make_dir_package(sb.join("pkgs").as_path(), "loopy", "x");
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(&pkg, pkg.join("loop")).expect("make loop symlink");
+    #[cfg(windows)]
+    {
+        // windows symlink creation needs privileges the runner may lack;
+        // the refusal path is e2e-asserted on unix — skip, don't fail,
+        // when the link cannot be made
+        if std::os::windows::fs::symlink_dir(&pkg, pkg.join("loop")).is_err() {
+            return;
+        }
+    }
+    let line = format!(
+        "{{\"name\":\"loopy\",\"version\":\"1.0.0\",\"git\":\"local\",\"rev\":\"content-local\",\"dir\":\"{}\"}}",
+        pkg.to_string_lossy().replace('\\', "/")
+    );
+    write_local_registry(&reg_file, &[line]);
+    let root = sb.join("proj").join("app");
+    let _ = in_dir(&sb.join("proj"), &["new", "app"]);
+    let (rc, _, err) = in_dir(
+        &root,
+        &[
+            "add",
+            "loopy",
+            "--registry",
+            reg_file.to_str().expect("path"),
+        ],
+    );
+    assert_ne!(rc, 0, "a symlinked package tree must not vendor");
+    assert!(
+        err.contains("symlink in package tree"),
+        "the refusal must name the symlink class (stderr: {})",
+        err
+    );
+}
+
+/// item 10: the install warm-check must VERIFY the pinned bytes — a
+/// corrupted cache used to pass the is_dir-only check and ship whatever
+/// sat in the directory. Post-fix: checksum mismatch re-materializes and
+/// the corrupted file is restored.
+#[test]
+fn install_re_materializes_a_corrupted_warm_cache() {
+    let sb = sandbox("warmcheck");
+    let root = sb.join("proj").join("app");
+    let _ = in_dir(&sb.join("proj"), &["new", "app"]);
+    let (rc, _, err) = in_dir(&root, &["add", "http"]);
+    assert_eq!(rc, 0, "add http baseline (stderr: {})", err);
+    // locate the vendored http package file in the deps cache and corrupt it
+    let deps = sb.join("home").join(".operon").join("deps");
+    let mut target: Option<std::path::PathBuf> = None;
+    let stack = vec![deps.clone()];
+    let mut all = Vec::new();
+    let mut stack = stack;
+    while let Some(d) = stack.pop() {
+        if let Ok(rd) = std::fs::read_dir(&d) {
+            for e in rd.flatten() {
+                let p = e.path();
+                if p.is_dir() {
+                    stack.push(p);
+                } else if p.extension().map(|x| x == "op").unwrap_or(false) {
+                    all.push(p);
+                }
+            }
+        }
+    }
+    all.sort();
+    if let Some(f) = all.first() {
+        target = Some(f.clone());
+    }
+    let victim = target.expect("a vendored .op file to corrupt");
+    let original = std::fs::read(&victim).expect("read victim");
+    std::fs::write(&victim, b"CORRUPTED BYTES").expect("corrupt cache");
+    // install must notice the drift and re-vendor (exit 0, bytes restored)
+    let (rc, _, err) = in_dir(&root, &["install"]);
+    assert_eq!(
+        rc, 0,
+        "install self-heals a drifted cache (stderr: {})",
+        err
+    );
+    let restored = std::fs::read(&victim).expect("read restored");
+    assert_eq!(
+        original, restored,
+        "the corrupted cache file must be re-materialized from the registry"
+    );
+    let (rc, _, err) = in_dir(&root, &["verify"]);
+    assert_eq!(rc, 0, "verify green after the self-heal (stderr: {})", err);
+}
+
+/// item 15: HOME="" (set but empty) must die loudly with the
+/// cannot-locate-the-registry-home message — the pre-fix fell back to a
+/// CWD-relative `.operon/registry` (the OPERON_REGISTRY_HOME empty case
+/// was guarded; HOME was not).
+#[test]
+fn empty_home_dies_loudly_not_cwd_relative() {
+    let sb = sandbox("emptyhome");
+    let root = sb.join("proj").join("app");
+    let _ = in_dir(&sb.join("proj"), &["new", "app"]);
+    let out = operon()
+        .args(["add", "http"])
+        .current_dir(&root)
+        .env("HOME", "")
+        .env_remove("OPERON_DEPS")
+        .env_remove("OPERON_REGISTRY")
+        .env_remove("OPERON_REGISTRY_HOME")
+        .output()
+        .expect("run operon with empty HOME");
+    let err = String::from_utf8_lossy(&out.stderr).into_owned();
+    assert_ne!(
+        out.status.code().unwrap_or(-1),
+        0,
+        "empty HOME must not silently resolve against the CWD"
+    );
+    assert!(
+        err.contains("registry home") || err.contains("HOME"),
+        "the error must name the registry-home/HOME cause (stderr: {})",
+        err
+    );
+    assert!(
+        !root.join(".operon").exists(),
+        "no CWD-relative .operon may be created by the empty-HOME run"
+    );
+}
