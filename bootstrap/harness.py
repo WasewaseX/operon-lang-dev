@@ -141,11 +141,25 @@ def main():
             targets += collect_op(full)
 
     passed, failed, skipped = 0, 0, 0
+    # z-fuzz-infra (#138.6): empty-both-sides rows carry almost no
+    # verification ("" == "" plus the exit code, with stderr excluded
+    # from the compare). Count them so the blind channel stays visible
+    # in every gate line instead of silently diluting the MATCH count.
+    vacuous = 0
     print(f"differential harness, {len(targets)} program(s) × 2 implementations\n")
     if args.lane in ("both", "main"):
         for t in targets:
             rel = os.path.relpath(t, root)
-            rust_out, rust_code, _ = run([binpath, "run", t])
+            # z-fuzz-infra (#138.7): the Rust leg sits under the SAME
+            # timeout contract as the oracle leg — a Rust TimeoutExpired
+            # records a TIMEOUT row instead of killing the whole harness
+            # mid-corpus (a partial differential beats no differential).
+            try:
+                rust_out, rust_code, _ = run([binpath, "run", t])
+            except subprocess.TimeoutExpired:
+                print(f"  TIMEOUT  {rel} (rust)")
+                failed += 1
+                continue
             try:
                 py_out, py_code, py_err = run([sys.executable, oracle, "run", t])
             except subprocess.TimeoutExpired:
@@ -153,6 +167,8 @@ def main():
                 failed += 1
                 continue
             if rust_out == py_out and rust_code == py_code:
+                if rust_out == "" and rust_code == 0:
+                    vacuous += 1
                 print(f"  MATCH    {rel}")
                 passed += 1
             else:
@@ -193,7 +209,13 @@ def main():
                 print(f"  FAIL     {rel_op} (missing op or cell, granted targets are checked in, a missing one is a broken tree)")
                 failed += 1
                 continue
-            rust_out, rust_code, _ = run([binpath, "run", gop, "--cell", gcell])
+            # z-fuzz-infra (#138.7): timeout parity, see the main lane
+            try:
+                rust_out, rust_code, _ = run([binpath, "run", gop, "--cell", gcell])
+            except subprocess.TimeoutExpired:
+                print(f"  TIMEOUT  {rel_op} (rust, granted)")
+                failed += 1
+                continue
             try:
                 py_out, py_code, py_err = run([sys.executable, oracle, "run", gop, "--cell", gcell])
             except subprocess.TimeoutExpired:
@@ -214,7 +236,8 @@ def main():
                     for line in py_err.strip().splitlines()[:6]:
                         print(f"    oracle stderr: {line}")
                 failed += 1
-    print(f"\nresult: {passed} match, {failed} diverge, {skipped} skipped")
+    vac = f", {vacuous} vacuous (both-sides-empty)" if vacuous else ""
+    print(f"\nresult: {passed} match, {failed} diverge, {skipped} skipped{vac}")
     # W09 A6 (post-flip): the DEFAULT run IS the bytecode machine, and the
     # main lane above pins it against the oracle. This lane keeps the OTHER
     # engine (the tree-walk, --no-vm) pinned against the same oracle
@@ -227,7 +250,13 @@ def main():
     if args.lane in ("both", "novm"):
         for t in targets:
             rel = os.path.relpath(t, root)
-            vm_out, vm_code, _ = run([binpath, "run", t, "--no-vm"])
+            # z-fuzz-infra (#138.7): timeout parity, see the main lane
+            try:
+                vm_out, vm_code, _ = run([binpath, "run", t, "--no-vm"])
+            except subprocess.TimeoutExpired:
+                print(f"  TIMEOUT  {rel} (rust, tree-walk lane)")
+                vm_fail += 1
+                continue
             try:
                 py_out, py_code, py_err = run([sys.executable, oracle, "run", t])
             except subprocess.TimeoutExpired:
