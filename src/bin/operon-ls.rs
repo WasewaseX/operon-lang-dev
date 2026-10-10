@@ -496,9 +496,24 @@ fn main() {
             "textDocument/formatting" => {
                 let response = docs.get(&doc_uri(&params)).and_then(|e| {
                     format_text(&e.src).map(|new_text| {
-                        // one full-document TextEdit: (0,0) → end of last line
-                        let last_line = e.src.lines().count().saturating_sub(1);
-                        let end_col = e.src.lines().last().map(|l| l.chars().count()).unwrap_or(0);
+                        // z-lsp-format-fix (#126.17): the full-document edit
+                        // must cover the TRAILING NEWLINE too — a range that
+                        // stops at the last non-empty line left the final \n
+                        // in place, so applying "new\n" after "old\n" yielded
+                        // "new\n\n": one blank line appended PER FORMAT,
+                        // never self-healing. The range now ends one line
+                        // PAST the last real line when the document ends
+                        // with a newline (the replacement carries its own
+                        // trailing newline, so the shape is stable).
+                        let last_real = e.src.lines().count().saturating_sub(1);
+                        let (last_line, end_col) = if e.src.ends_with('\n') {
+                            (last_real + 1, 0)
+                        } else {
+                            (
+                                last_real,
+                                e.src.lines().last().map(|l| l.chars().count()).unwrap_or(0),
+                            )
+                        };
                         full_doc_edit(last_line, end_col, new_text)
                     })
                 });
