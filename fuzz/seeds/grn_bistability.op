@@ -1,0 +1,47 @@
+# reg-bio (F-2), emergent bistability: cooperativity sharpens the switch
+#
+# The Gardner–Cantor–Collins toggle switch is TWO MUTUAL REPRESSORS with
+# cooperative (Hill n ≈ 2) binding. Operon's boolean `toggle` is a declared
+# latch; the RATE-BASED switch is emergent from mutual inhibiting edges,
+# no special form needed. This proof demonstrates the properties a boolean
+# cannot have:
+#   1. a counter-pulse pulls the dominant allele into a PARTIAL band
+#      (real repressed promoters never reach zero, basal leak);
+#   2. cooperativity DEEPENS that band (ultrasensitive switches are sharper);
+#   3. the dominant allele relaxes to a leak-equilibrium under the loser's
+#      residual dose, dose-response, not a boolean.
+regulate {
+    ta inhibits tb1 strength 1.0 threshold 0.4 hill 1
+    tb1 inhibits ta strength 1.0 threshold 0.4 hill 1
+    sa inhibits sb1 strength 1.0 threshold 0.4 hill 2
+    sb1 inhibits sa strength 1.0 threshold 0.4 hill 2
+}
+frame proof {
+    # establish dominance in both pairs
+    grn_fire("ta")
+    grn_fire("sa")
+    assert(grn_get("ta") == 1.0 && grn_get("sa") == 1.0, "fired alleles hold full level")
+    assert(grn_get("tb1") == 0.0 && grn_get("sb1") == 0.0, "opposite alleles fully repressed at dominance")
+    # counter-fire: one pulse of the losing allele pulls BOTH alleles into
+    # the mutual band whose depth the Hill exponent sets
+    grn_fire("tb1")
+    let low1 = grn_get("ta")
+    # hill 1: mutual band = 1 − 1/(1+0.4) = 0.2857...
+    assert(low1 > 0.28 && low1 < 0.29, "hill 1 counter-pulse leaves a partial band (no zero lockout)")
+    grn_fire("sb1")
+    let low2 = grn_get("sa")
+    # hill 2: mutual band = 1 − 1/(1+0.16) = 0.1379...
+    assert(low2 > 0.13 && low2 < 0.14, "hill 2 counter-pulse leaves a deeper band")
+    # the biological point: cooperativity sharpens the switch
+    assert(low2 < low1, "cooperativity deepens the suppressed state")
+    assert(low2 > 0.0, "suppression is partial, real promoters leak")
+    # restore dominance: the winner relaxes to its leak-equilibrium under
+    # the loser's residual dose (0.1379 × influence ≈ 0.106), sa ≈ 0.8937
+    grn_fire("sa")
+    let rel = grn_get("sa")
+    assert(rel > 0.89 && rel < 0.90, "dominant allele relaxes under the loser's residual dose")
+    assert(grn_get("sb1") == 0.0, "the loser's band collapses under full repression")
+}
+main {
+    promote("bistability proofs done")
+}

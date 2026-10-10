@@ -1,0 +1,35 @@
+# ============================================================
+# GOTCHA: builtins are not first-class values , cookbook #17
+# you already know: in Python even len is a function you can pass
+# teaches: reading a builtin name gives null. Wrap it in a gene
+#          when a higher-order helper needs a callable.
+# run: operon run examples/cookbook/gotcha_builtins_not_values.op
+# expected output: examples/cookbook/expected/gotcha_builtins_not_values.out
+# verified by scripts/cookbook.sh on the Rust core AND the Python oracle
+# ============================================================
+
+gene main() {
+    # the trap: a bare builtin name reads as an unbound variable -> null
+    let f = len
+    promote("len as a value: {f}")
+
+    # calling through the null is contained too (null + note, not a crash):
+    promote("f([1, 2, 3]): {f([1, 2, 3])}")
+
+    # the fix: wrap it - genes ARE first-class values; the std/iter
+    # adapters (and list .map methods) take the wrapper and just work
+    gene count(xs) {
+        return len(xs)
+    }
+    let words = ["kiwi", "fig", "watermelon"]
+    promote("lengths: {words.map(count)}")
+
+    # same pattern for anything higher-order: sort, filter, reduce...
+    gene first_char(s) {
+        return s.slice(0, 1)
+    }
+    promote("first letters: {words.map(first_char)}")
+
+    # and a lambda-style gene expression works inline when it's short
+    promote("upper lengths: {words.map(count).map(gene (n) { return n * 10 })}")
+}

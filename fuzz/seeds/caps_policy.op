@@ -1,0 +1,33 @@
+# differential: capability policy, grants validated, project imports work,
+# module use of stdlib works under default-deny
+use std/math as m
+frame proof {
+    assert(m.clamp(9, 0, 5) == 5)
+    stress {
+        read_file("/etc/passwd")
+        assert(false)
+    } rescue (e) {
+        assert(e.kind == "interference")
+    }
+    stress {
+        read_file("../../etc/passwd")
+        assert(false)
+    } rescue (e) {
+        assert(e.kind == "interference")
+    }
+    assert(7 % 3 == 1)
+    assert(type(7 % 3) == "int")
+    assert(-7 % 3 == 2)
+    let mixed = [3, "a", 1, "b"]
+    let sorted = mixed.sort()
+    assert(sorted == [1, 3, "a", "b"])
+}
+main {
+    promote("caps: deny-by-default verified")
+    stress {
+        env("HOME")
+        promote("env: leaked")
+    } rescue (e) {
+        promote("env: denied ✓")
+    }
+}
