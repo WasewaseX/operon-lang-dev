@@ -2541,6 +2541,21 @@ fn fmt_prec(e: &Expr, parent: u8) -> String {
         Expr::Bool(true) => "true".into(),
         Expr::Bool(false) => "false".into(),
         Expr::Int(i) => i.to_string(),
+        // #126 item 4: an infinite float literal (1e999 parses to Float(inf))
+        // must re-emit as a LITERAL, not as the display word "inf" — the
+        // display form re-parses as an UNBOUND identifier (type(a) null,
+        // a+1 raises) and violates fmt law 2 (never alter the meaning).
+        // 1e999 re-parses to the same +inf; NaN cannot arise from source
+        // (no literal or arithmetic path — div/mod by zero stress), so only
+        // the infinite case needs the literal form here. Display surfaces
+        // (print/repr) keep the Python-parity "inf"/"-inf" words.
+        Expr::Float(f) if f.is_infinite() => {
+            if *f > 0.0 {
+                "1e999".into()
+            } else {
+                "-1e999".into()
+            }
+        }
         Expr::Float(f) => crate::value::format_float(*f),
         Expr::Str(s) => str_lit(s), // W47: quote mode aware (single only when byte-lossless)
         // W029: bytes literals round-trip byte-exactly, the same escape set
