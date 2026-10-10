@@ -656,7 +656,17 @@ pub fn parse_lock(src: &str) -> Result<BTreeMap<String, LockEntry>, String> {
         }
         let e = match cur.as_mut() {
             Some(e) => e,
-            None => continue,
+            // #126 item 12: content OUTSIDE a [[dep]] block is corruption,
+            // not noise — the old `continue` swallowed an entire garbage
+            // file as an empty pin set (read_or_new_lock then happily
+            // re-resolved every dep). Unknown keys already error below;
+            // stray top-level lines must too.
+            None => {
+                return Err(format!(
+                    "operon.lock: content outside a [[dep]] block: '{}'",
+                    line
+                ))
+            }
         };
         let (k, v) = split_kv(line, 0)?;
         let v = unquote(&v)?;
@@ -686,6 +696,7 @@ pub fn deps_cache_dir() -> Option<PathBuf> {
     }
     std::env::var("HOME")
         .ok()
+        .filter(|h| !h.is_empty()) // #126 item 15: same CWD-relative trap as the registry home
         .map(|h| PathBuf::from(h).join(".operon").join("deps"))
 }
 
@@ -711,13 +722,14 @@ pub fn cache_dir_for(name: &str, rev: &str) -> Option<PathBuf> {
 /// tree; the digest pins the BYTES so a corrupted cache is detectable).
 pub fn checkout_checksum(dir: &Path) -> String {
     let mut rows: Vec<String> = Vec::new();
-    walk_files(dir, dir, &mut rows);
+    walk_files(dir, dir, &mut rows)
+        .unwrap_or_else(|e| die_pkg(&format!("cannot digest package tree: {}", e)));
     rows.sort();
     rows.dedup();
     sha256_hex(rows.join("\n").as_bytes())
 }
 
-fn walk_files(root: &Path, dir: &Path, rows: &mut Vec<String>) {
+fn walk_files(root: &Path, dir: &Path, rows: &mut Vec<String>) -> Result<(), String> {
     if let Ok(rd) = std::fs::read_dir(dir) {
         for e in rd.flatten() {
             let p = e.path();
@@ -725,8 +737,24 @@ fn walk_files(root: &Path, dir: &Path, rows: &mut Vec<String>) {
             if name == ".git" || name.starts_with('#') {
                 continue;
             }
-            if p.is_dir() {
-                walk_files(root, &p, rows);
+            // #126 item 11: symlinks are REFUSED, never followed. is_dir()
+            // follows links, so a loop aborted the process mid-`add`, and a
+            // followed link hashed out-of-tree bytes (nondeterministic
+            // digests — the rev must pin exactly the vendored bytes).
+            let meta = std::fs::symlink_metadata(&p)
+                .map_err(|err| format!("stat {}: {}", p.display(), err))?;
+            if meta.file_type().is_symlink() {
+                let target = std::fs::read_link(&p)
+                    .map(|l| l.display().to_string())
+                    .unwrap_or_default();
+                return Err(format!(
+                    "symlink in package tree: {} -> {} (package trees must hold real files; symlinks make content digests nondeterministic)",
+                    p.display(),
+                    target
+                ));
+            }
+            if meta.is_dir() {
+                walk_files(root, &p, rows)?;
             } else {
                 let rel = p
                     .strip_prefix(root)
@@ -737,6 +765,7 @@ fn walk_files(root: &Path, dir: &Path, rows: &mut Vec<String>) {
             }
         }
     }
+    Ok(())
 }
 
 // ---------------------------------------------------------------- registry
@@ -890,7 +919,11 @@ fn registry_lookup_req(text: &str, name: &str, req: &Req, src_label: &str) -> Re
         }
         let better = match &best {
             None => true,
-            Some((_, bv)) => v > *bv,
+            // #126 item 13: `>=`, not `>` — ties keep the LATER line (the
+            // last-match-wins convention the doc comment above pins and
+            // registry_lookup_text follows); strict `>` silently kept the
+            // first line on equal versions and contradicted both.
+            Some((_, bv)) => v >= *bv,
         };
         if better {
             best = Some((e, v));
@@ -1035,7 +1068,16 @@ fn write_manifest(m: &Manifest) {
 
 fn read_or_new_lock() -> BTreeMap<String, LockEntry> {
     match std::fs::read_to_string("operon.lock") {
-        Ok(text) => parse_lock(&text).unwrap_or_default(),
+        // #126 item 12: a corrupt lockfile used to parse as EMPTY — every pin
+        // silently lost, the next install re-resolved whatever it liked. The
+        // checker half of this module (check_locked) already dies loudly on
+        // the same input; the read path must tell the same truth.
+        Ok(text) => parse_lock(&text).unwrap_or_else(|e| {
+            die_pkg(&format!(
+                "operon.lock is corrupt: {}\n  the pins were NOT loaded — fix or delete the file (delete re-resolves from operon.toml)",
+                e
+            ))
+        }),
         Err(_) => BTreeMap::new(),
     }
 }
@@ -1196,19 +1238,41 @@ fn resolve_dir_dep(name: &str, dir: &Path) -> LockEntry {
     let checksum = checkout_checksum(dir);
     let rev = format!("content-{}", byte_prefix(&checksum, 16));
     let dest = cache_dir_for(name, &rev).unwrap_or_else(|| die_pkg("cannot locate the deps cache"));
-    let _ = std::fs::remove_dir_all(&dest);
-    if let Some(parent) = dest.parent() {
+    // #126 item 10: stage + rename, never copy into the live cache dir. The
+    // old remove-then-copy left a PARTIAL tree in the cache on any copy
+    // failure, and the is_dir-only warm check then treated it as fully
+    // vendored forever. The git path already resolved this class with
+    // tmp-checkout + rename; the dir path now does the same.
+    let staging = deps_cache_dir()
+        .unwrap_or_else(|| die_pkg("cannot locate the deps cache"))
+        .join("tmp-vendor");
+    let _ = std::fs::remove_dir_all(&staging);
+    if let Some(parent) = staging.parent() {
         std::fs::create_dir_all(parent)
             .unwrap_or_else(|e| die_pkg(&format!("cache mkdir failed: {}", e)));
     }
-    copy_tree(dir, &dest).unwrap_or_else(|e| die_pkg(&format!("cache copy failed: {}", e)));
-    let got = checkout_checksum(&dest);
+    if let Err(e) = copy_tree(dir, &staging) {
+        let _ = std::fs::remove_dir_all(&staging);
+        die_pkg(&format!("cache copy failed: {}", e));
+    }
+    let got = checkout_checksum(&staging);
     if got != checksum {
+        let _ = std::fs::remove_dir_all(&staging);
         die_pkg(&format!(
             "vendored copy of '{}' does not match its source ({} != {}): refusing to lock",
             name, got, checksum
         ));
     }
+    if dest.exists() {
+        std::fs::remove_dir_all(&dest)
+            .unwrap_or_else(|e| die_pkg(&format!("cache clear failed: {}", e)));
+    }
+    std::fs::rename(&staging, &dest)
+        .map_err(|e| format!("cache move failed: {}", e))
+        .unwrap_or_else(|e| {
+            let _ = std::fs::remove_dir_all(&staging);
+            die_pkg(&e)
+        });
     LockEntry {
         name: name.to_string(),
         git: format!("registry:{}", name),
@@ -1236,7 +1300,16 @@ fn copy_tree(src: &Path, dst: &Path) -> Result<(), String> {
             }
             let s = src.join(&name);
             let d = dst.join(&name);
-            if s.is_dir() {
+            // #126 item 11: same refusal as walk_files — vendor real bytes only
+            let meta = std::fs::symlink_metadata(&s)
+                .map_err(|err| format!("stat {}: {}", s.display(), err))?;
+            if meta.file_type().is_symlink() {
+                return Err(format!(
+                    "symlink in package tree: {} (refusing to vendor; digests must be deterministic)",
+                    s.display()
+                ));
+            }
+            if meta.is_dir() {
                 copy_tree(&s, &d)?;
             } else {
                 std::fs::copy(&s, &d).map_err(|e| format!("copy {}: {}", s.display(), e))?;
@@ -1607,13 +1680,19 @@ pub fn mod_command(rest: &[String]) -> ! {
                     lock.insert(name.clone(), e);
                 }
             }
-            // materialize every entry into the cache (no-op when warm)
+            // materialize every entry into the cache (no-op when warm).
+            // #126 item 10: warm is no longer merely is_dir() — when the
+            // lock pins a checksum, the cached bytes must MATCH it, so a
+            // corrupted or historically-partial cache re-materializes
+            // instead of shipping whatever sits in the directory. Old
+            // locks without a checksum keep the cheap shape check.
             let missing: Vec<(String, DepSpec)> = lock
                 .iter()
-                .filter(|(name, e)| {
-                    !cache_dir_for(name, &e.rev)
-                        .map(|d| d.is_dir())
-                        .unwrap_or(false)
+                .filter(|(name, e)| match cache_dir_for(name, &e.rev) {
+                    Some(d) if d.is_dir() => {
+                        !e.checksum.is_empty() && checkout_checksum(&d) != e.checksum
+                    }
+                    _ => true,
                 })
                 .map(|(name, e)| {
                     (
@@ -2021,6 +2100,7 @@ pub fn registry_home() -> Option<PathBuf> {
     }
     std::env::var("HOME")
         .ok()
+        .filter(|h| !h.is_empty()) // #126 item 15: HOME="" must die loudly, not fall back to a CWD-relative .operon
         .map(|h| PathBuf::from(h).join(".operon").join("registry"))
 }
 
