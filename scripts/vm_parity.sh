@@ -21,20 +21,9 @@ BIN="${BIN:-./bin/operon}"
 # a 5-run flake measurement (1/5 divergent note ordering, 5/5 contained).
 LOAD_SENSITIVE="tests/redteam/rt_p4a_threadbomb.op tests/redteam/rt_p4b_threadbomb_join.op tests/redteam/rt_p20a_cancel_storm.op tests/redteam/rt_p17b_scope_cancel.op tests/redteam/rt_p15b_quorum_unjoined.op"
 
-# F6/#50 (iteration 4, residual extraction from PR #56): the scope-reap
-# containment note RACES with cancel-vs-finish ordering — '[fallback] task N
-# already finished' vs '[fallback] cancel requested for task N' are the two
-# documented variants of ONE semantics (rt_p20a note-ordering class). Native
-# timing resolves it consistently on every current CI substrate (the qemu
-# leg that exposed the 2/2 split was retired by compat-r2's native arm
-# runner), but the gate must not be able to flake on a future slow substrate:
-# normalize the two variants to one token BEFORE the stderr comparison while
-# stdout and exit codes stay STRICTLY byte-compared, and any third note
-# variant still fails. The engine-lane determinism fix is tracked on #59.
-#
 # rt_p17b_scope_cancel (P2P3P5 wave, 2026-10-06): joins the storm class
-# above (rt_p4a/b, rt_p20a). The RACY_NOTE normalization first attempted
-# here did NOT survive CI (run 37451404462): this payload's stderr is
+# above (rt_p4a/b, rt_p20a). A RACY_NOTE normalization first attempted here
+# did NOT survive CI (run 37451404462): that payload's stderr is
 # timing-dependent in COUNT and SPLIT, not just note text — its busy loop
 # rebinds a name every iteration (0..N "rebinding 's'" notes by when the
 # cancel lands; the P3 lazy range shifted the race window) and each of the
@@ -52,12 +41,14 @@ LOAD_SENSITIVE="tests/redteam/rt_p4a_threadbomb.op tests/redteam/rt_p4b_threadbo
 # LOAD_SENSITIVE like its storm siblings: stdout is deterministic across
 # modes (9/9 serial runs byte-identical locally) and containment is
 # redteam.sh's contract, which passes (109/0).
-RACY_NOTE="tests/differential/scope.op"
-norm_notes() {
-    printf '%s' "$1" \
-      | sed -E 's/\[fallback\] task [0-9]+ already finished/[TASK-CONTAINED]/' \
-      | sed -E 's/\[fallback\] cancel requested for task [0-9]+/[TASK-CONTAINED]/'
-}
+#
+# #59 (2026-10-11, CLOSED): the scope-reap containment note race is fixed
+# at the ROOT — the reap cancel is mechanical containment and narrates
+# NOTHING on either engine (cancel_task_quiet in genes.rs; the oracle's
+# scope arm mirrors it), so the two variants collapsed to zero lines and
+# the RACY_NOTE normalization is RETIRED. scope.op's stderr is now
+# byte-compared strictly like every other corpus row. Explicit cancel()
+# keeps its documented notes (tests/differential/cancel.op pins them).
 pass=0; fail=0; lskip=0; failed_files=()
 for f in $(find tests apps -name '*.op' 2>/dev/null | sort); do
   skip=""
@@ -68,8 +59,6 @@ for f in $(find tests apps -name '*.op' 2>/dev/null | sort); do
     lskip=$((lskip+1))
     continue
   fi
-  is_racy=""
-  for rf in $RACY_NOTE; do [ "$f" == "$rf" ] && is_racy=1; done
   a_out=$("$BIN" run --no-vm "$f" 2>/tmp/vmp_a_err); a_rc=$?
   a_err=$(cat /tmp/vmp_a_err)
   b_out=$("$BIN" run "$f" 2>/tmp/vmp_b_err); b_rc=$?
@@ -80,19 +69,10 @@ for f in $(find tests apps -name '*.op' 2>/dev/null | sort); do
   # stay byte-identical over the whole corpus the day they land)
   d_out=$("$BIN" run --opt 2 "$f" 2>/tmp/vmp_d_err); d_rc=$?
   d_err=$(cat /tmp/vmp_d_err)
-  # normalize AFTER capture (the two documented note variants of the
-  # scope-reap race — see the RACY_NOTE comment above)
-  if [ -n "$is_racy" ]; then
-    a_err=$(norm_notes "$a_err")
-    b_err=$(norm_notes "$b_err")
-    c_err=$(norm_notes "$c_err")
-    d_err=$(norm_notes "$d_err")
-  fi
   if [ "$a_out" == "$b_out" ] && [ "$a_err" == "$b_err" ] && [ "$a_rc" == "$b_rc" ] \
      && [ "$a_out" == "$c_out" ] && [ "$a_err" == "$c_err" ] && [ "$a_rc" == "$c_rc" ] \
      && [ "$a_out" == "$d_out" ] && [ "$a_err" == "$d_err" ] && [ "$a_rc" == "$d_rc" ]; then
     pass=$((pass+1))
-    [ -n "$is_racy" ] && echo "  (racy note text normalized for $f — documented class; stdout+rc strict)"
   else
     fail=$((fail+1)); failed_files+=("$f")
     if [ "${VERBOSE:-0}" == "1" ]; then
