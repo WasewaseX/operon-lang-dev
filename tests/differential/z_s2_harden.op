@@ -1,0 +1,36 @@
+# z-s2-harden: pin for the #126 hardening batch (engine-side semantics).
+# Byte-identical on all three lanes: VM, tree-walk, oracle.
+
+# --- #126.6: collect over bytes yields the int values 0..=255, the same
+# W029 convention the for-statement uses (the comprehension used to
+# silently yield [])
+let b = bytes_from_str("abc")
+print(for x in b collect x)
+print(for x in b collect x * 2)
+
+# negative controls: the statement form was already correct
+let acc = []
+for x in b {
+    push(acc, x)
+}
+print(acc)
+
+# --- #126.7: phenotype field initializers evaluate at the `new` site.
+# The original finding's shape — a phenotype declared inside a gene body
+# reading the construction-site local — used to read null (the field init
+# was pinned to the global env). The new-site env now rides into
+# construct_obj on both engines:
+gene mk(x) {
+    phenotype P {
+        let base = x + 1
+    }
+    return new P()
+}
+print(mk(5).base)
+
+# negative controls: top-level declaration, global-reading field init
+let seed = 41
+phenotype Q {
+    let base = seed + 1
+}
+print(new Q().base)

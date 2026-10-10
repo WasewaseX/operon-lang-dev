@@ -4786,7 +4786,9 @@ class Interp:
                 self.note(4, f"phenotype '{name}' not declared; instance is an empty map")
                 return {}
             args = [self.eval(env, a) for a in args_e]
-            return self.construct_obj(p, args)
+            # z-s2-harden (#126.7): the new-site env rides into construction
+            # so field initializers evaluate where the instance is born
+            return self.construct_obj(p, args, env)
         if k == "bin":
             self.cur_line = e[4] if len(e) > 4 else 0  # W07 mirror: dx-r4 stamp
             op = e[1]
@@ -4888,8 +4890,11 @@ class Interp:
                         break
                     items.append(v)
             else:
-                # #214: collect over a map iterates BOTH stores' keys
-                items = itv if isinstance(itv, list) else (list(itv) if isinstance(itv, str) else (_map_keys(itv) if isinstance(itv, dict) else []))
+                # #214: collect over a map iterates BOTH stores' keys;
+                # z-s2-harden (#126.6): bytes collect as their int values
+                # 0..=255 (W029 mirror, the for-statement convention) — the
+                # comprehension used to yield [] for bytes
+                items = itv if isinstance(itv, list) else (list(itv) if isinstance(itv, str) else (list(itv) if isinstance(itv, bytes) else (_map_keys(itv) if isinstance(itv, dict) else [])))
             out = []
             for item in items:
                 self.tick()
@@ -8452,7 +8457,7 @@ class Interp:
             return "{" + _json.dumps(key) + ":" + Interp._json_str(v.payload, _seen, _depth + 1) + "}"
         return _json.dumps(v_display(v))
 
-    def construct_obj(self, p, args):
+    def construct_obj(self, p, args, site_env=None):
         chain = []
         d = p
         hops = 0
@@ -8463,7 +8468,9 @@ class Interp:
         fields = {}
         for dd in reversed(chain):
             for fname, fexpr in dd.fields:
-                fields[fname] = self.eval(self.globals, fexpr)
+                # z-s2-harden (#126.7): field inits evaluate at the new site
+                # (was self.globals — construction-site locals invisible)
+                fields[fname] = self.eval(site_env if site_env is not None else self.globals, fexpr)
         obj = ObjInst(p, fields)
         # W04: trait contract check, required methods must be provided by
         # the lineage; a break is a NOTE (Total Grammar), never fatal.
