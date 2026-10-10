@@ -105,7 +105,15 @@ jobs:
 
       - name: Parser fuzzer
         shell: bash
-        run: python3 scripts/fuzz_parser.py --n 500 --seed 20260930 --exec
+        # z-fuzz-infra (#138.3): the FAST pre-merge fuzz seed derives from
+        # (base SHA, PR number) so every PR explores a FRESH but
+        # REPRODUCIBLE stream instead of replaying the constant 20260930
+        # stream forever after its first green. Non-PR runs fall back to
+        # the head SHA.
+        run: |
+          SEED_SRC="${{ github.event.pull_request.base.sha || github.sha }}"
+          SEED=$(( 16#${SEED_SRC:0:8} + ${{ github.event.number || 0 }} ))
+          python3 scripts/fuzz_parser.py --n 500 --seed $((SEED % 1000000000)) --exec
 
       - name: Redteam containment
         if: matrix.profile == 'release' && !matrix.target
