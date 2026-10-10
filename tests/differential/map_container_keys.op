@@ -1,0 +1,69 @@
+# z-map-container-keys (#214): pin for the oracle side-store — map container
+# keys key by VALUE on all three lanes (the Rust MapStore law). The oracle
+# used to canonicalize container keys to display TEXT at insert while every
+# lookup scanned with deep_eq against the raw query, making container-key
+# inserts WRITE-ONLY (unfindable forever). Byte-identical on all three
+# lanes: VM, tree-walk, oracle.
+
+# --- insert/lookup round-trip (the write-only-key defect) ----------------
+let m = {}
+let k = [1, 2]
+m[k] = 5
+print(m[k])
+print(len(m))
+print(has(m, [1, 2]))
+print(has(m, [9, 9]))
+
+# --- equal-content keys hit the SAME slot (the overwrite law) ------------
+let m2 = {}
+m2[[3, 4]] = "a"
+m2[[3, 4]] = "b"
+print(len(m2))
+print(m2[[3, 4]])
+
+# --- map-valued keys ------------------------------------------------------
+let m3 = {}
+m3[{"x": 1}] = 7
+print(m3[{"x": 1}])
+print(has(m3, {"x": 1}))
+print(has(m3, {"x": 2}))
+
+# --- self-referential key (the #104 verification shape) ------------------
+let m4 = {}
+let k4 = [m4]
+m4[k4] = 1
+print(m4[k4])
+
+# --- scalar keys unchanged (negative controls) ----------------------------
+let m5 = {}
+m5["s"] = 1
+m5[42] = 2
+m5[3.5] = 3
+print(m5["s"] + m5[42] + m5[3.5])
+print(len(m5))
+print("s" in m5)
+
+# --- del + in -------------------------------------------------------------
+let m6 = {}
+m6[[8]] = 80
+m6[[9]] = 90
+print([8] in m6)
+del(m6, [8])
+print(len(m6))
+print([8] in m6)
+print([9] in m6)
+
+# --- iteration over a container-key map (single-kind: order is exact) -----
+let m7 = {}
+m7[[1]] = 10
+m7[[2]] = 20
+let acc = []
+for kk in m7 {
+    push(acc, m7[kk])
+}
+print(acc)
+
+# --- json: container keys stringify via the display form ------------------
+let m8 = {}
+m8[[1, 2]] = 5
+print(json_str(m8))

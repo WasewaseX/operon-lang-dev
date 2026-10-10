@@ -3534,10 +3534,15 @@ impl Parser {
         loop {
             let is_or = self.at_kw("or") || matches!(self.peek(), Tok::PipePipe);
             if is_or {
+                // #125.8: stamp the OPERATOR's line — the old code took
+                // self.line() AFTER consuming the operator and any
+                // continuation newlines, so a diagnostic on the Or node
+                // pointed at the right operand's line, not the `or`/`||`.
+                let or_line = self.line();
                 self.next();
                 self.eat_newlines();
                 let right = self.parse_nullish();
-                left = Expr::Binary(BinOp::Or, Box::new(left), Box::new(right), self.line());
+                left = Expr::Binary(BinOp::Or, Box::new(left), Box::new(right), or_line);
             } else {
                 break;
             }
@@ -3569,10 +3574,14 @@ impl Parser {
         loop {
             let is_and = self.at_kw("and") || matches!(self.peek(), Tok::AmpAmp);
             if is_and {
+                // #125.8: stamp the OPERATOR's line (same class as the Or
+                // fix above — the post-consumption self.line() pointed at
+                // the right operand for multiline `and`/`&&`).
+                let and_line = self.line();
                 self.next();
                 self.eat_newlines();
                 let right = self.parse_not();
-                left = Expr::Binary(BinOp::And, Box::new(left), Box::new(right), self.line());
+                left = Expr::Binary(BinOp::And, Box::new(left), Box::new(right), and_line);
             } else {
                 break;
             }
