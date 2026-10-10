@@ -144,9 +144,9 @@ fn def_line(src: &str, kind: &str, name: &str) -> Option<usize> {
     for (i, l) in src.lines().enumerate() {
         // simple scan: the needle, with the char before it not being an id char
         if let Some(pos) = l.find(&needle) {
-            let before_ok = pos == 0 || !line_char_is_id(l, pos - 1);
+            let before_ok = pos == 0 || !char_before_is_id(l, pos);
             let after = pos + needle.len();
-            let after_ok = after >= l.len() || !line_char_is_id(l, after);
+            let after_ok = after >= l.len() || !char_at_is_id(l, after);
             if before_ok && after_ok {
                 return Some(i);
             }
@@ -155,9 +155,29 @@ fn def_line(src: &str, kind: &str, name: &str) -> Option<usize> {
     None
 }
 
-fn line_char_is_id(l: &str, idx: usize) -> bool {
-    l.chars()
-        .nth(idx)
+// z-ls-bytechar (#126.18): the boundary helpers take BYTE offsets (the
+// values `str::find` returns) and look at the char that ENDS at that byte
+// (left neighbor) / STARTS at that byte (right neighbor). The old
+// `line_char_is_id(l, idx)` fed byte offsets into `chars().nth(idx)` — a
+// CHAR-indexed read: on a line with any multibyte char before the
+// boundary, the check looked at the WRONG char (a boundary fix the diag
+// of_token_word landing got; this site never backported it). Identifiers
+// are ASCII, so only the PROXIMITY check was wrong — a `café = 1` line
+// made `min`'s boundary test read the é as an id char and reject real
+// word-boundary matches.
+
+fn char_before_is_id(l: &str, byte_idx: usize) -> bool {
+    l[..byte_idx.min(l.len())]
+        .chars()
+        .next_back()
+        .map(|c| c.is_ascii_alphanumeric() || c == '_')
+        .unwrap_or(false)
+}
+
+fn char_at_is_id(l: &str, byte_idx: usize) -> bool {
+    l[byte_idx.min(l.len())..]
+        .chars()
+        .next()
         .map(|c| c.is_ascii_alphanumeric() || c == '_')
         .unwrap_or(false)
 }
@@ -171,8 +191,8 @@ fn locate_name_in_line(l: &str, name: &str) -> Option<usize> {
     while let Some(pos) = l[from..].find(name) {
         let abs = from + pos;
         let after = abs + name.len();
-        let left_ok = abs == 0 || !line_char_is_id(l, abs - 1);
-        let right_ok = after >= l.len() || !line_char_is_id(l, after);
+        let left_ok = abs == 0 || !char_before_is_id(l, abs);
+        let right_ok = after >= l.len() || !char_at_is_id(l, after);
         if left_ok && right_ok {
             return Some(l[..abs].chars().count());
         }
