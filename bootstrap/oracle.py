@@ -3274,7 +3274,10 @@ class P:
                 body = self.expr()
                 return ("collect", var, it, filt, body)
             return ("ident", val)
-        self.note(line, 4, f"unexpected token in expression; null substituted")
+        # Z-NOTEPARITY-1 (receipt item 3): rust renders the offending token
+        # (parser.rs "unexpected token '{}' in expression") -- mirror via the
+        # describe_tok mirror of Tok::describe.
+        self.note(line, 4, f"unexpected token '{describe_tok(t)}' in expression; null substituted")
         return ("null",)
 
     def build_interp(self, raw, line):
@@ -5089,6 +5092,13 @@ class Interp:
                 if not (-(2**63) <= m <= 2**63 - 1):
                     raise Stress("overflow", "int overflow in '%'")
                 return m
+            if op in ("/", "//", "%"):
+                # Z-NOTEPARITY-1 (receipt item 2): the engine routes /,//,%
+                # through as_floats (interp.rs Div/FloorDiv/Mod arms) -- a
+                # non-numeric pair renders "numeric op needs numbers, found
+                # X and Y"; '-' and '*' keep the arith "cannot apply"
+                # fallthrough (probe-verified control, byte-identical).
+                raise Stress("unfolded", f"numeric op needs numbers, found {type_name(l)} and {type_name(r)}")
             raise Stress("unfolded", f"cannot apply '{op}' to {type_name(l)} and {type_name(r)}")
         if op == "**":
             if isinstance(l, int) and isinstance(r, int) and not isinstance(l, bool) and not isinstance(r, bool) and r >= 0:
@@ -5111,7 +5121,8 @@ class Interp:
                 if (out == float("inf") or out == float("-inf")) and _m.isfinite(float(l)) and _m.isfinite(float(r)) and float(r) > 0.0:
                     raise Stress("overflow", "float '**' overflowed to infinity")
                 return out
-            raise Stress("unfolded", f"cannot apply '**' to {type_name(l)} and {type_name(r)}")
+            # Z-NOTEPARITY-1: rust Pow's fallback is as_floats too
+            raise Stress("unfolded", f"numeric op needs numbers, found {type_name(l)} and {type_name(r)}")
         if op in ("&", "|", "^", "<<", ">>"):
             def as_i(x):
                 if isinstance(x, bool):
