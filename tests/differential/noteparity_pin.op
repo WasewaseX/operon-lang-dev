@@ -1,0 +1,16 @@
+# Z-NOTEPARITY-1: stress MESSAGE TEXT is the contract (rust==oracle).
+# The engine routes /,//,%,** through as_floats (interp.rs Div/FloorDiv/Mod/Pow
+# arms) -- non-numeric operands render "numeric op needs numbers, found X and Y";
+# '-' and '*' keep the arith "cannot apply" fallthrough (probe-verified controls).
+# Filed from PR #217's note-parity receipt (items 2+3); item 1 (stress-contained
+# note line prefix) is DEFERRED-DOCUMENTED per the as_map dx-r3 design note.
+main {
+    stress { let x = null / null } rescue (e) { print("div-null: " + e.message) }
+    stress { let x = 1 / null } rescue (e) { print("div-mixed: " + e.message) }
+    stress { let x = null // null } rescue (e) { print("floordiv: " + e.message) }
+    stress { let x = null % null } rescue (e) { print("mod: " + e.message) }
+    stress { let x = null ** null } rescue (e) { print("pow: " + e.message) }
+    stress { let x = 1 - null } rescue (e) { print("sub-control: " + e.message) }
+    stress { let x = null * null } rescue (e) { print("mul-control: " + e.message) }
+    print("noteparity-done")
+}
