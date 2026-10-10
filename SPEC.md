@@ -485,6 +485,18 @@ with its own mechanism, everyday failures never touch Stress:
 4. **Hard exit**, uncaught stress at the entry boundary renders the traceback and exits 1
    (§9a).
 
+**Interpolation stresses propagate (no special containment, #213).** A stressed
+expression inside a string interpolation `"{expr}"` raises Stress exactly like the same
+expression in any other position — there is NO containment inside interpolation and NO
+degrade-to-`"null"` piece. The nearest boundary contains it per the ordinary hierarchy
+(an enclosing `stress/rescue`, the per-statement top-level loop, or hard exit at the
+entry). The retired behavior (a rung-4 `interpolation stress contained` note + the piece
+becoming the literal string `"null"`) was an engine-only special case the oracle never
+mirrored; worse, it made a stressed `while` condition truthy forever
+(`while "{q*w}" { }` burned the entire fuel pool, the #213 class-S grind). Clean pieces
+are unaffected; `?!` inside an interpolation still propagates as the documented return
+(the variant reaches the gene boundary untouched).
+
 **First-class Option/Result (D-014).** Four constructors build variant values: `some(v)`,
 `none()` (the Option family), `ok(v)`, `err(e)` (the Result family). The tag IS the
 contract, families are distinct (`some(1) != ok(1)`) and `type()` returns `option` or
