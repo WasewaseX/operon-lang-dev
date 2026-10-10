@@ -41,6 +41,7 @@ import hashlib
 import json
 import os
 import random
+import re
 import subprocess
 import sys
 import time
@@ -181,6 +182,41 @@ def classify(rc, stderr):
     return ("clean", "rc 0") if rc == 0 else ("contained", f"rc {rc}")
 
 
+# z-fuzz-dedupe (#48): persistent, deterministic crash-signature dedupe DB.
+# Within a run `seen_hashes` dedupes exact inputs; cross-run, every session
+# re-reported the same crash signatures and triage re-entered manually, and
+# a regression re-introducing an old crasher was not recognized as known.
+# The DB is stdlib JSON, deterministic (sorted keys), diffable, committed.
+CRASH_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             "crash_signatures.json")
+
+
+def signature_of(kind, detail, stderr, payload):
+    """A stable signature: normalized class + normalized top detail line +
+    a shape hash (NOT the raw bytes — mutated inputs differ every run)."""
+    top = b""
+    for line in (stderr or b"").splitlines():
+        s = line.strip()
+        if s:
+            top = s
+            break
+    txt = top.decode("utf-8", errors="replace")
+    txt = re.sub(r"0x[0-9a-fA-F]+", "0xADDR", txt)
+    txt = re.sub(r"/[\w./-]+\.op", "<PATH>", txt)
+    txt = re.sub(r"\d+", "N", txt)
+    shape = f"{kind}|{detail}|{txt}|len={len(payload)}|head={payload[:16]!r}"
+    return hashlib.sha256(shape.encode("utf-8")).hexdigest()[:24]
+
+
+def load_db(path):
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            db = json.load(fh)
+        return {s: e for s, e in db.get("signatures", {}).items()}, db.get("signatures", {})
+    except (OSError, ValueError):
+        return set(), {}
+
+
 def minimize(binpath, payload, argv, timeout, rounds=12):
     """Truncation sweep: halve while the finding survives. Cheap, not smart."""
     cur = payload
@@ -229,6 +265,12 @@ def main():
     os.makedirs(args.corpus_dir, exist_ok=True)
     manifest = os.path.join(args.corpus_dir, "MANIFEST.jsonl")
 
+    # z-fuzz-dedupe (#48): load the persistent signature DB; new signatures
+    # append at exit, re-hits report as known-dedupe (not new findings).
+    known, db_blob = load_db(CRASH_DB_PATH)
+    new_sigs = {}
+    known_dedupe = 0
+
     print(f"fuzz — seed {args.seed}, budget {args.time_budget:.0f}s, "
           f"per-input timeout {args.per_input_timeout:.0f}s")
     print(f"  binary: {binpath}")
@@ -260,17 +302,82 @@ def main():
         # batch-2 WIP lane; the surface is stable now and its --json shape is
         # contract-pinned). Parse-only by construction: explain never runs
         # the program, so redteam seeds stay contained here too.
+        # z-fuzz-infra (#138.5): --write integrity leg on a SANDBOX COPY
+        # (never repo paths). Invariant: when the tool exits non-zero
+        # (parse failure), the target bytes must be UNCHANGED — the #113
+        # class (fmt --write truncating unreadable/non-UTF-8 files to 0
+        # bytes at exit 0) was invisible to every lane by construction
+        # because no writing surface was ever fuzzed with before/after
+        # hashes.
+        WRITETMP = TMP + ".fuzzwrite"
         for argv in (["check", TMP], ["ast", TMP, "--json"], ["fmt", TMP],
                      ["explain", TMP], ["explain", TMP, "--json"]):
             rc, out, err = probe([binpath] + argv, args.per_input_timeout)
             kind, detail = classify(rc, err)
             stats[kind] += 1
             execs += 1
+            # the --write leg itself: copy the current input, hash, run
+            # fmt --write on the COPY, hash again — a non-zero exit must
+            # leave the bytes identical (a zero exit may rewrite freely)
+            if execs % 4 == 0:
+                try:
+                    import shutil
+                    with open(WRITETMP, "wb") as wfh:
+                        wfh.write(mut)
+                    before = hashlib.sha256(mut).hexdigest()
+                    wrc, wout, werr = probe([binpath, "fmt", WRITETMP, "--write"],
+                                            args.per_input_timeout)
+                    after_bytes = open(WRITETMP, "rb").read()
+                    after = hashlib.sha256(after_bytes).hexdigest()
+                    if isinstance(wrc, int) and wrc != 0 and after != before:
+                        kind2, _ = classify(wrc, werr)
+                        stats[kind2] += 1
+                        sig = signature_of("write-integrity", "bytes changed on failure",
+                                           werr, mut)
+                        if sig in known:
+                            known_dedupe += 1
+                            continue  # known signature: report at exit, not new
+                        known.add(sig)
+                        new_sigs[sig] = {
+                            "kind": "write-integrity",
+                            "detail": "bytes changed on failure",
+                            "first_seed": args.seed, "first_exec": execs,
+                        }
+                        unique_findings += 1
+                        name = f"write_integrity_{args.seed}_{execs}.op"
+                        path2 = os.path.join(args.corpus_dir, name)
+                        with open(path2, "wb") as wfh:
+                            wfh.write(mut)
+                        with open(manifest, "a", encoding="utf-8") as wfh:
+                            wfh.write(json.dumps({
+                                "kind": "write-integrity",
+                                "input": os.path.relpath(path2, ROOT),
+                                "bytes": len(mut),
+                                "seed": args.seed,
+                                "exec": execs,
+                                "argv": ["fmt", "<copy>", "--write"],
+                                "exit_code": wrc,
+                                "detail": f"rc!=0 but bytes changed: {before[:12]} -> {after[:12]}",
+                            }))
+                except OSError:
+                    pass
             if kind in ("crash", "hang"):
                 h = hashlib.sha256(mut).hexdigest()
                 if h in seen_hashes:
                     continue  # same input already saved this run
                 seen_hashes.add(h)
+                # z-fuzz-dedupe (#48): cross-run signature check — a re-hit
+                # of a KNOWN signature is counted (known_dedupe) and NOT
+                # re-saved/re-triaged; a NEW signature lands in the DB.
+                sig = signature_of(kind, detail, err, mut)
+                if sig in known:
+                    known_dedupe += 1
+                    continue
+                known.add(sig)
+                new_sigs[sig] = {
+                    "kind": kind, "detail": detail,
+                    "first_seed": args.seed, "first_exec": execs,
+                }
                 unique_findings += 1
                 saved = mut
                 min_note = "not minimized"
@@ -313,6 +420,19 @@ def main():
     print(f"\nfuzz done: {execs} exec(s) in {elapsed:.0f}s, seed {args.seed}")
     print(f"  clean={stats['clean']}  contained={stats['contained']}  "
           f"crash={stats['crash']}  hang={stats['hang']}")
+    # z-fuzz-dedupe (#48): persist new signatures (deterministic JSON,
+    # sorted keys) and report the dedupe counts.
+    if new_sigs:
+        db_blob.setdefault("signatures", {})
+        db_blob["signatures"].update(new_sigs)
+        db_blob["signatures"] = dict(sorted(db_blob["signatures"].items()))
+        with open(CRASH_DB_PATH, "w", encoding="utf-8") as dfh:
+            json.dump(db_blob, dfh, indent=1, sort_keys=True)
+            dfh.write("\n")
+    if known_dedupe:
+        print(f"  known-dedupe: {known_dedupe} re-hit(s) of {len(known) - len(new_sigs)} known signature(s), not re-triaged")
+    if new_sigs:
+        print(f"  new signatures appended to {os.path.relpath(CRASH_DB_PATH, ROOT)}: {len(new_sigs)}")
     if unique_findings:
         print(f"  unique findings saved: {unique_findings} "
               f"({os.path.relpath(args.corpus_dir, ROOT)}/, manifest: "
