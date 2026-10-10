@@ -1,0 +1,81 @@
+# edge-semantics parity + overflow containment proofs (wave-3 Critic-Q list)
+# every program here runs on BOTH implementations via the differential harness
+frame proof {
+    # negative modulo: sign follows divisor (Python parity)
+    assert(-7 % 2 == 1, "negmod a")
+    assert(7 % -2 == -1, "negmod b")
+    assert(-7 % -2 == -1, "negmod c")
+    # floor division: floor, always int
+    assert(7 // -2 == -4, "floordiv floor neg")
+    assert(-7 // -2 == 3, "floordiv both neg")
+    assert(7.5 // 2 == 3, "floordiv float is int")
+    # i64 boundary: overflow is a catchable stress, never silent
+    let mn = -9223372036854775807 - 1
+    stress {
+        promote(-mn)
+        assert(false, "neg i64min must raise")
+    } rescue (e) {
+        assert(e.kind == "overflow", "neg i64min contained")
+    }
+    stress {
+        promote(abs(mn))
+        assert(false, "abs i64min must raise")
+    } rescue (e) {
+        assert(e.kind == "overflow", "abs i64min contained")
+    }
+    # NaN ordering: comparisons with nan are false (IEEE/Python parity)
+    let nan = 1e308 * 10 * 0.0
+    assert(!(nan <= nan), "nan le")
+    assert(!(nan >= nan), "nan ge")
+    assert(!(nan < 1.0), "nan lt")
+    assert(!(nan > 1.0), "nan gt")
+    assert(nan != nan, "nan neq")
+    # pow bands: float overflow contained; int overflow contained
+    stress {
+        promote(2.0 ** 5000)
+        assert(false, "float pow overflow must raise")
+    } rescue (e) {
+        assert(e.kind == "overflow", "float pow contained")
+    }
+    stress {
+        promote(2 ** 10000)
+        assert(false, "int pow overflow must raise")
+    } rescue (e) {
+        assert(e.kind == "overflow", "int pow contained")
+    }
+    # floor/ceil out of i64 range: contained
+    stress {
+        promote(floor(1e30))
+        assert(false, "floor huge must raise")
+    } rescue (e) {
+        assert(e.kind == "overflow", "floor huge contained")
+    }
+    # Python-style negative slicing
+    assert("hello".slice(-2) == "lo", "str slice neg")
+    assert([1, 2, 3, 4].slice(-2) == [3, 4], "list slice neg")
+    assert("hello".slice(1, -1) == "ell", "str slice mixed")
+    # mixed-type sort: class-ranked (numbers, strings, others), stable
+    let mixed = ["b", 2, 1, "a"].sort()
+    assert(mixed[0] == 1 and mixed[1] == 2 and mixed[2] == "a" and mixed[3] == "b", "mixed sort order")
+    # cyclic containers: repr/json/eq contain instead of crashing
+    let cyc = [1, 2]
+    cyc[0] = cyc
+    assert(str(cyc) == "[[...], 2]", "cycle repr marker")
+    assert(json_str(cyc) == "[null,2]", "cycle json null")
+    assert(cyc == cyc, "cycle self-eq")
+    # callback re-entrancy: mutating the source inside map/each is contained
+    let src = [1, 2, 3]
+    let out = src.map(gene(x) { return x * 2 })
+    assert(out == [2, 4, 6], "map over snapshot")
+    # concat ceilings are catchable (spot-check the guard triggers near 512MiB)
+    stress {
+        let big = "x" * 536870912  # exactly at the 512 MiB line
+        let boom = big + big
+        assert(false, "concat ceiling must raise")
+    } rescue (e) {
+        assert(e.kind == "overflow", "concat ceiling contained")
+    }
+}
+main {
+    promote("edge semantics verified")
+}

@@ -1,0 +1,31 @@
+
+# coherent type-1 FFL: X -> Y -> Z, X -> Z, AND at Z
+decay_clock(1, 0.0)
+regulate {
+    x activates y strength 1.0 threshold 0.3
+    y translates yp rate 0.3 decay 0.1
+    x activates z strength 1.0 threshold 0.5
+    yp activates z strength 1.0 threshold 0.5
+}
+gene x() { return "x-tx" }
+gene y() { return "y-tx" }
+gene z() { return "z-OUT" }
+frame proof {
+    # --- persistence filter: a SHORT pulse of X never opens Z
+    grn_fire("x")
+    y()
+    assert(abs(grn_get("yp") - 0.3) < 1e-12, "one Y transcript: yp = 0.3")
+    grn_set("x", 0.0)
+    assert(y() == null, "X off: Y transcription stops")
+    assert(z() == null, "short pulse: Z NEVER fired (yp 0.3 < 0.5 forever)")
+    # --- sustained X: the delayed ON
+    grn_fire("x")
+    y()   # yp = 0.3 decayed to 0.27 at the fire point, then +0.3 - 0.027
+    assert(abs(grn_get("yp") - 0.543) < 1e-12, "second pulse: yp = 0.543 crosses 0.5")
+    assert(z() == "z-OUT", "sustained X: Z fires LATE (sign-sensitive delay)")
+    # --- OFF immediacy: the fast direct arm cuts Z on the first OFF call
+    grn_set("x", 0.0)
+    assert(z() == null, "OFF step: Z stops on the FIRST call (immediacy)")
+    assert(y() == null, "Y transcription stopped with X")
+}
+main { promote("coherent FFL done") }

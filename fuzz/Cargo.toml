@@ -1,0 +1,40 @@
+[package]
+name = "operon-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.operon]
+path = ".."
+
+[[bin]]
+name = "fuzz_parse"
+path = "fuzz_targets/fuzz_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_check"
+path = "fuzz_targets/fuzz_check.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_run"
+path = "fuzz_targets/fuzz_run.rs"
+test = false
+doc = false
+bench = false
+
+# z-fuzz-libfuzzer (#49): the fuzz crate is NOT a workspace member of the
+# root (libFuzzer needs -Cpasses sanitizer flags the release build must
+# never carry); cargo fuzz builds it standalone with its own target dir.
+[workspace]
