@@ -1,0 +1,155 @@
+# Z-MAPORDER (A4 regression matrix): mixed scalar+container map keys must
+# preserve pure INSERTION order through every ordered consumer on every
+# engine. The Rust MapStore is a Vec of (key, value) pairs — scalar keys
+# upsert-in-place (position preserved), container keys ALWAYS append — so
+# Vec order IS the contract for for-in, keys/values/items, v_repr display,
+# json_str, and the channel wire. The oracle's #214 two-store layout used
+# to order dict-entries before side-entries on mixed maps (the documented
+# residual deviation) and dropped side entries from v_repr/truthy; this
+# pin retires the deviation and locks the unified ordering contract.
+# Byte-identical on all lanes: VM, tree-walk, oracle.
+
+# --- [1] the A/B/C/D shape: iteration + display preserve insertion order --
+let m = {}
+m["A"] = 1
+m[[1, 2]] = "B"
+m["C"] = 3
+m[{"k": 4}] = "D"
+let ks = ""
+for k in m {
+    ks = ks + str(k) + ";"
+}
+print("for", ks)
+let k2 = ""
+for k in m.keys() {
+    k2 = k2 + str(k) + ";"
+}
+print("keys", k2)
+let vs = ""
+for v in m.values() {
+    vs = vs + str(v) + ";"
+}
+print("values", vs)
+let its = ""
+for kv in m.items() {
+    its = its + str(kv[0]) + "=" + str(kv[1]) + ";"
+}
+print("items", its)
+print("repr", m)
+print("json", json_str(m))
+print("len", len(m))
+if m {
+    print("truthy", "yes")
+} else {
+    print("truthy", "no")
+}
+
+# --- [2] updating scalar A does NOT move it (upsert-in-place law) --------
+m["A"] = 99
+let ks2 = ""
+for k in m {
+    ks2 = ks2 + str(k) + ";"
+}
+print("update-A", ks2, m["A"], len(m))
+
+# --- [3] equal-content container keys coexist; lookup hits the FIRST -----
+m[[1, 2]] = "B2"
+print("coexist", len(m), m[[1, 2]])
+
+# --- [4] del removes the FIRST matching entry; unrelated order kept ------
+m.del([1, 2])
+let ks3 = ""
+for k in m {
+    ks3 = ks3 + str(k) + ";"
+}
+print("del-first", ks3, len(m), m[[1, 2]])
+m.del("A")
+let ks4 = ""
+for k in m {
+    ks4 = ks4 + str(k) + ";"
+}
+print("del-scalar", ks4, len(m), "A" in m, m.has("A"))
+
+# --- [5] nested maps and lists as keys behave consistently ---------------
+let n = {}
+n[[[1], [2]]] = "deep-list"
+n[{"in": [1, {"x": 2}]}] = "deep-map"
+print("nested", n[[[1], [2]]], n[{"in": [1, {"x": 2}]}], len(n))
+let ns = ""
+for k in n {
+    ns = ns + str(k) + ";"
+}
+print("nested-order", ns)
+print("nested-json", json_str(n))
+
+# --- [6] map equality is order-independent and symmetric -----------------
+let e1 = {}
+e1["a"] = 1
+e1[[7]] = 2
+let e2 = {}
+e2[[7]] = 2
+e2["a"] = 1
+print("eq-sym", e1 == e2, e2 == e1)
+let e3 = {}
+e3["a"] = 1
+e3[[7]] = 3
+print("eq-val", e1 == e3, e3 == e1)
+let e4 = {}
+e4["a"] = 1
+print("eq-len", e1 == e4, e4 == e1)
+
+# --- [7] container-only map: truthiness sees the side store --------------
+let co = {}
+co[[5]] = 1
+if co {
+    print("side-truthy", "yes", len(co))
+} else {
+    print("side-truthy", "no", len(co))
+}
+print("side-empty", len({}), {} ? "t" : "f")
+
+# --- [8] member read/assign and destructure on a promoted map ------------
+let p = {}
+p["a"] = 1
+p[[9]] = 2
+p.b = 3
+print("member", p.a, p.b, p[[9]])
+let {a, b} = p
+print("destructure", a, b)
+match p {
+    case {b} {
+        print("pattern-b", b)
+    }
+}
+
+# --- [9] controls: unicode, bool/int, int/float (established laws) -------
+let u = {}
+u["héllo"] = 1
+u["🌍"] = 2
+print("unicode", u["héllo"], u["🌍"], len(u))
+let x = {}
+x[2] = "int"
+x[2.0] = "float"
+print("int-float", x[2], x[2.0], len(x))
+let bi = {}
+bi[true] = "t"
+print("bool-key", len(bi), bi[true], bi.has(true))
+let bi2 = {}
+bi2[1] = "one"
+print("int-key", len(bi2), bi2[1], bi2.has(1))
+let zz = {}
+zz[0.0] = "pos"
+zz[-0.0] = "neg"
+print("zeros", len(zz), zz[0.0])
+
+# --- [10] channel wire: mixed map crosses the membrane in order ----------
+let ch = channel()
+let w = {}
+w["s1"] = 1
+w[[3, 4]] = 2
+w["s2"] = 3
+send(ch, w)
+let got = recv(ch)
+print("wire", got)
+print("wire-json", json_str(got))
+print("wire-lookup", got["s1"], got["[3, 4]"])
