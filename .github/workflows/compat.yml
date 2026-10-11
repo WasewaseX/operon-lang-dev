@@ -111,6 +111,26 @@ jobs:
         # REPRODUCIBLE stream instead of replaying the constant 20260930
         # stream forever after its first green. Non-PR runs fall back to
         # the head SHA.
+        #
+        # compat-fuzzwall2 (2026-10-11, L-049): the wall is calibrated for
+        # the WALL-COUPLED burn class (the W18/6e7b7b7 thread-lane charging
+        # family — parked workers charge the fuel pool per REAL millisecond,
+        # so the SAME input costs ~0ms on an idle fast box and 15-30s+ on a
+        # loaded runner). Evidence: the 343337e force-push (the identity
+        # rewrite) changed the head SHA -> fresh seed 875771880 -> in_273.op
+        # (621-byte class-S token salad) timed out on 5/5 legs (>15s
+        # ubuntu/macos/arm, >30s windows) while the IDENTICAL stream runs
+        # FUZZ CLEAN locally: 0/151 stalls across release+debug profiles,
+        # 1-CPU pinning, open-silent stdin, rc=0 contained, engines
+        # byte-agree. Same ruling class as L-012 (windows TIMEOUT) and
+        # compat-r3 (i686 45s): the engine contract (containment, rc,
+        # panic text, cross-engine agreement) is UNCHANGED — only the wall
+        # scales with the runner. 120s = ~4x the observed runner worst
+        # (30s+) with headroom for the park-wall overhead; the fuel pool
+        # bounds the burn from above. The i686 leg keeps its own 45s
+        # calibration below (its step is separate).
+        env:
+          FUZZ_TIMEOUT: "120"
         run: |
           SEED_SRC="${{ github.event.pull_request.base.sha || github.sha }}"
           SEED=$(( 16#${SEED_SRC:0:8} + ${{ github.event.number || 0 }} ))
