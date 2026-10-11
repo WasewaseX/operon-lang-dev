@@ -310,12 +310,12 @@ def channel_wire(v, _d=0):
     if isinstance(v, list):
         return [channel_wire(x, _d + 1) for x in v]
     if isinstance(v, dict):
-        # #214: side entries ride the wire under the same display-key law
-        # (the Rust SendValue::Map k.display() contract)
-        return {**{(k if isinstance(k, str) else v_display(k)): channel_wire(x, _d + 1)
-                   for k, x in v.items()},
-                **{(k if isinstance(k, str) else v_display(k)): channel_wire(x, _d + 1)
-                   for k, x in _map_items_side(v)}}
+        # #214 + Z-MAPORDER: the WIRE is the unified insertion sequence —
+        # one walk over _map_items (the Rust SendValue::Map k.display()
+        # contract); the old {**dict, **side} merge ordered dict-entries
+        # first even when a container key was inserted before a scalar one
+        return {(k if isinstance(k, str) else v_display(k)): channel_wire(x, _d + 1)
+                for k, x in _map_items(v)}
     if isinstance(v, Variant):
         return Variant(v.tag, None if v.payload is None else channel_wire(v.payload, _d + 1))
     if isinstance(v, ObjInst):
@@ -339,10 +339,9 @@ def channel_degrade_result(v, _d=0):
     if isinstance(v, list):
         return [channel_degrade_result(x, _d + 1) for x in v]
     if isinstance(v, dict):
-        return {**{(k if isinstance(k, str) else v_display(k)): channel_degrade_result(x, _d + 1)
-                   for k, x in v.items()},
-                **{(k if isinstance(k, str) else v_display(k)): channel_degrade_result(x, _d + 1)
-                   for k, x in _map_items_side(v)}}
+        # Z-MAPORDER: unified insertion sequence (see channel_wire)
+        return {(k if isinstance(k, str) else v_display(k)): channel_degrade_result(x, _d + 1)
+                for k, x in _map_items(v)}
     if isinstance(v, Variant):
         return Variant(v.tag, None if v.payload is None
                        else channel_degrade_result(v.payload, _d + 1))
@@ -470,10 +469,12 @@ def v_repr(v, _seen=None, _depth=0):
         if marker in _seen:
             return "{...}"
         _seen.add(marker)
+        # Z-MAPORDER: _map_items is the pure insertion sequence (head+tail);
+        # the old v.items() walk dropped side entries from repr entirely
         out = "{" + ", ".join(
             (k if isinstance(k, str) and is_identlike(k) else v_repr(k, _seen, _depth + 1))
             + ": " + v_repr(val, _seen, _depth + 1)
-            for k, val in v.items()) + "}"
+            for k, val in _map_items(v)) + "}"
         _seen.discard(marker)
         return out
     if isinstance(v, Gene):
@@ -527,7 +528,7 @@ def truthy(v):
     if isinstance(v, str): return len(v) > 0
     if isinstance(v, bytes): return len(v) > 0
     if isinstance(v, list): return len(v) > 0
-    if isinstance(v, dict): return len(v) > 0
+    if isinstance(v, dict): return _map_len(v) > 0
     # W06 mirror: a carried success is truthy; a carried failure is falsy
     if isinstance(v, Variant): return v.tag in ("Some", "Ok")
     return True
@@ -655,28 +656,42 @@ def _nkey(k):
     return k
 
 
-# ---- #214: map container keys key by VALUE (mirror of the Rust MapStore) --
+# ---- #214 + Z-MAPORDER: map keys key by VALUE in pure INSERTION order ----
 # Rust's MapStore is a Vec of (key, value) pairs scanned with deep_eq — any
-# Value is a legal key and equal-content keys hit the same slot. Plain
-# Python dicts cannot key by list/dict (unhashable), and the old fallback
-# canonicalized container keys to v_display TEXT at insert while every
-# lookup scanned with deep_eq against the RAW query — a stored text key can
-# never deep_eq-match a container query, so container-key inserts were
-# WRITE-ONLY on the oracle (Rust found them; verified divergence, issue
-# #214). The fix: non-hashable keys live in a side pair-list attached to
-# the map by id (dicts are not weakref-able in CPython; the registry holds
-# a STRONG ref alongside the id so a recycled id can never cross-attach —
-# the pin-everything cost applies only to maps that actually receive
-# container keys, and the process-lifetime model mirrors the Rust CLI's
-# documented Rc-graph teardown law). Every lookup/has/del/len/iterate/
-# display consumer consults BOTH stores. Equality on the side list is
-# deep_eq with its seen-pair cycle law — the EXACT Rust semantics
-# (canonical-frozen wrappers would mis-render nested-cycle-depth shapes
-# the pair law calls equal). Known residual deviation: MIXED scalar+
-# container maps order dict-entries before side-entries on iteration/
-# display (Rust is pure insertion order across both kinds); single-kind
-# maps are byte-exact. No corpus exposure either way (the differential
-# corpus has zero container keys — which is why this stayed invisible).
+# Value is a legal key and Vec order IS the iteration contract: scalar keys
+# upsert-IN-PLACE (MapStore::insert's position_h hit keeps the position),
+# container keys mirror the KC_OTHER arm EXACTLY (ALWAYS APPEND, never
+# replace — equal-content container keys coexist and the linear scan finds
+# the first), del removes the FIRST match.
+#
+# Plain Python dicts cannot key by list/dict (unhashable), so the oracle
+# keeps a side pair-list; the ORDER law is maintained structurally:
+#
+#   PROMOTION. A map stays a plain dict until its FIRST container key
+#   (list/dict/Variant) arrives. At that moment the dict is the exact
+#   insertion-order HEAD prefix, and it FREEZES: from then on
+#     - container keys ALWAYS append to the side TAIL (KC_OTHER),
+#     - a brand-NEW scalar key (dict probe misses) appends to the TAIL,
+#     - an upsert of a dict-resident key stays in the dict IN PLACE,
+#     - an upsert of a tail-resident key updates that pair IN PLACE.
+#   dict entries therefore always precede tail entries and the
+#   concatenation IS the pure insertion sequence — the documented
+#   dict-before-side mixed-map deviation of the original #214 layout is
+#   retired structurally, not per-consumer.
+#
+# The registry holds a STRONG ref alongside the id so a recycled id can
+# never cross-attach (dicts are not weakref-able in CPython; the
+# process-lifetime model mirrors the Rust CLI's documented Rc-graph
+# teardown law). The pin-everything cost applies only to maps that
+# actually receive container keys; scalar-only maps (the whole perf
+# corpus) never promote and keep native dict speed. Equality on both
+# stores is deep_eq with its seen-pair cycle law — the EXACT Rust
+# semantics (canonical-frozen wrappers would mis-render nested-cycle-
+# depth shapes the pair law calls equal). Known pre-existing residual
+# (P1 finding (a), corpus-unexposed, unchanged here): pre-promotion
+# bool/int keys collapse through the native dict probe (True == 1);
+# post-promotion they are deep_eq-distinct in the tail exactly like the
+# Rust two-slot law.
 _MAP_SIDE = {}  # id(map) -> (map, side_list)
 
 
@@ -695,23 +710,43 @@ def _side(tv, create=False):
 
 def _map_insert_key(tv, key, val):
     """Store key -> val on map tv. Scalars (str/int/float/bool/bytes/None)
-    and ObjInst (id-hashable, the pinned pheno_equality path) go in the
-    dict with the scalar upsert law (replace in place, MapStore::insert's
-    position_h hit); containers (list/dict/Variant) mirror the KC_OTHER
-    arm EXACTLY: ALWAYS APPEND, never replace — equal-content container
-    keys coexist and the linear scan finds the first (verified against the
-    Rust core: two [3,4] inserts -> len 2, lookup returns "a")."""
+    and ObjInst (id-hashable, the pinned pheno_equality path) upsert with
+    the scalar law (replace in place, MapStore::insert's position_h hit);
+    containers (list/dict/Variant) mirror the KC_OTHER arm EXACTLY: ALWAYS
+    APPEND, never replace — equal-content container keys coexist and the
+    linear scan finds the first (verified against the Rust core: two [3,4]
+    inserts -> len 2, lookup returns "a").
+
+    Z-MAPORDER: the FIRST container key PROMOTES the map — the dict freezes
+    as the insertion-order HEAD and every brand-new scalar key lands in the
+    side TAIL (dict probe hit -> in-place dict upsert; tail deep_eq hit ->
+    in-place tail upsert; else append). dict-then-tail is therefore always
+    the pure insertion sequence (see the block comment above)."""
     if isinstance(key, (list, dict, Variant)) and not isinstance(key, (str, bytes)):
         _side(tv, create=True).append([key, val])
-    else:
-        tv[_nkey(key)] = val
+        return
+    ent = _MAP_SIDE.get(id(tv))
+    if ent is not None and ent[0] is tv and key not in tv:
+        # promoted and the dict probe missed: upsert into the TAIL when an
+        # equal key already lives there, else append (NaN keys never probe-
+        # match — each write accumulates, the z-s0-parity law)
+        for pair in ent[1]:
+            if deep_eq(pair[0], key):
+                pair[1] = val
+                return
+        ent[1].append([_nkey(key), val])
+        return
+    tv[_nkey(key)] = val
 
 
 _MAP_MISS = object()
 
 
 def _map_lookup(tv, key):
-    """deep_eq scan across BOTH stores; returns the value or _MAP_MISS."""
+    """deep_eq scan across BOTH stores; returns the value or _MAP_MISS.
+    Z-MAPORDER: dict-HEAD-then-side-TAIL IS the insertion order (the dict
+    froze at promotion, see the block comment), so the scan order is the
+    MapStore first-match law exactly."""
     for kk, vv in tv.items():
         if deep_eq(kk, key):
             return vv
@@ -721,16 +756,37 @@ def _map_lookup(tv, key):
     return _MAP_MISS
 
 
+def _map_lookup_tail(tv, key):
+    """First deep_eq match in the side TAIL only — for consumers that
+    already probed the dict (member read, destructure, pattern match)."""
+    ent = _MAP_SIDE.get(id(tv))
+    if ent is not None and ent[0] is tv:
+        for pair in ent[1]:
+            if deep_eq(pair[0], key):
+                return pair[1]
+    return _MAP_MISS
+
+
+def _map_member_get(tv, key):
+    """Member-style read (string key): dict probe first (C-speed, and the
+    hit is unique — a tail key never dict-equals a dict key by the append
+    law), then the side TAIL. Returns _MAP_MISS when absent."""
+    if key in tv:
+        return tv[key]
+    return _map_lookup_tail(tv, key)
+
+
 def _map_has(tv, key):
     return _map_lookup(tv, key) is not _MAP_MISS
 
 
 def _map_del(tv, key):
-    """Remove deep_eq matches: the dict side keeps its established
-    all-matches loop (scalar keys are deduped by the upsert anyway, so the
-    loop is the _NanKey-era behavior — pinned, not touched); the side list
-    mirrors MapStore::del EXACTLY: position_h -> remove the FIRST match
-    only (container keys can coexist as dups, del pops one)."""
+    """Remove deep_eq matches in insertion order: the dict HEAD loop first
+    (scalar keys are deduped by the upsert, so at most one match), then the
+    side TAIL mirrors MapStore::del EXACTLY: position_h -> remove the FIRST
+    match only (container keys can coexist as dups, del pops one). Z-MAPORDER:
+    head-before-tail is the insertion order, so this removes the FIRST
+    matching entry of the unified store and the survivors keep their order."""
     for kk in list(tv.keys()):
         if deep_eq(kk, key):
             del tv[kk]
@@ -748,6 +804,8 @@ def _map_len(tv):
 
 
 def _map_keys(tv):
+    # Z-MAPORDER: head-then-tail IS the insertion sequence (structurally,
+    # since the dict froze at promotion) — no per-consumer merge needed.
     return list(tv.keys()) + [p[0] for p in _side(tv)]
 
 
@@ -4003,10 +4061,13 @@ class Interp:
             keys = pat[1]
             if isinstance(v, dict):
                 for key in keys:
-                    if key in v:
+                    # Z-MAPORDER: member-style probe — dict HEAD then side
+                    # TAIL (a post-promotion string key lives in the tail)
+                    hit = _map_member_get(v, key)
+                    if hit is not _MAP_MISS:
                         if key in env:
                             self.note(4, f"rebinding '{key}'")
-                        env[key] = v[key]
+                        env[key] = hit
                     else:
                         self.note(4, f"destructure: key '{key}' missing; null")
                         if key in env:
@@ -4094,12 +4155,13 @@ class Interp:
             if not isinstance(sv, dict):
                 return False
             for key, sub in keys:
-                if key not in sv:
+                # Z-MAPORDER: member-style probe (dict HEAD then side TAIL)
+                hit = _map_member_get(sv, key)
+                if hit is _MAP_MISS:
                     return False
-                v = sv[key]
                 if sub is None:
-                    bindings[key] = v
-                elif not self.match_pat(env, bindings, v, sub):
+                    bindings[key] = hit
+                elif not self.match_pat(env, bindings, hit, sub):
                     return False
             return True
         if k == "guard":
@@ -4338,10 +4400,16 @@ class Interp:
             elif isinstance(tv, dict):
                 if self.is_frozen(tv):
                     raise self._frozen_stress("map")
-                cur = tv.get(key)
+                # Z-MAPORDER: member-style read (HEAD then TAIL) for the
+                # op-accumulator, and the write routes through the store
+                # insert (a brand-new string member of a promoted map must
+                # land in the TAIL, not the frozen HEAD)
+                cur = _map_member_get(tv, key)
+                if cur is _MAP_MISS:
+                    cur = None
                 nv = self.binop(op, cur, v) if op else v
                 self._cycle_note_insert(tv, nv)  # W013: before the edge lands
-                tv[_nkey(key)] = nv
+                _map_insert_key(tv, key, nv)
             else:
                 self.note(4, "member assignment on non-map ignored")
         elif k == "if":
@@ -4722,8 +4790,11 @@ class Interp:
             self.note(4, f"field '{key}' missing on phenotype {tv.defn.name}; null")
             return None
         if isinstance(tv, dict):
-            if key in tv:
-                return tv[key]
+            # Z-MAPORDER: dict HEAD probe first (C-speed, unique hit), then
+            # the side TAIL — a post-promotion string member lives there
+            hit = _map_member_get(tv, key)
+            if hit is not _MAP_MISS:
+                return hit
             self.note(4, f"member '{key}' missing on map; null")
             return None
         self.note(4, f"member '{key}' on {type_name(tv)} is null")
@@ -6331,7 +6402,9 @@ class Interp:
                 if a in registered: return
                 if a in seen: continue
                 seen.add(a)
+                # Z-MAPORDER: a nested promoted map carries tail values too
                 stack.extend(cur.values())
+                stack.extend(p[1] for p in _side(cur))
             elif isinstance(cur, ObjInst):
                 a = id(cur.fields)
                 if a in registered: return
@@ -6370,7 +6443,12 @@ class Interp:
             # the container itself is the pre-seen root, never the seed)
             seen, stack = {a}, []
             if isinstance(t, dict):
+                # Z-MAPORDER: the re-verify walk sees BOTH stores (the
+                # registration walk at _cycle_note_insert always did; the
+                # prune side walked the dict only and could "prove dead" a
+                # cycle living through a tail value)
                 stack.extend(t.values())
+                stack.extend(p[1] for p in _side(t))
             else:
                 stack.extend(t)
             verdict = self._cycle_walk_reaches_root(a, seen, stack, budget)
@@ -6404,7 +6482,9 @@ class Interp:
                 if a == root: return True
                 if a in seen: continue
                 seen.add(a)
+                # Z-MAPORDER: a nested promoted map carries tail values too
                 stack.extend(cur.values())
+                stack.extend(p[1] for p in _side(cur))
             elif isinstance(cur, ObjInst):
                 a = id(cur.fields)
                 if a == root: return True
@@ -7122,7 +7202,8 @@ class Interp:
         if name == "items":
             v = args[0] if args else {}
             if isinstance(v, dict):
-                return [[k, val] for k, val in v.items()]
+                # Z-MAPORDER: the unified insertion sequence (head+tail)
+                return [[k, val] for k, val in _map_items(v)]
             return []
         if name == "spawn":
             callee = args[0] if args else None
@@ -7150,7 +7231,9 @@ class Interp:
                         if isinstance(_item, list):
                             _stack.extend((x, _d + 1) for x in _item)
                         elif isinstance(_item, dict):
-                            _stack.extend((x, _d + 1) for x in _item.values())
+                            # Z-MAPORDER: the spawn-membrane depth pre-walk
+                            # sees BOTH stores (same class as the send walk)
+                            _stack.extend((x, _d + 1) for x in _map_values(_item))
                 # reg-r4 (re-audit B-2): route through call_named like the
                 # Rust worker does, a direct call_gene bypasses the
                 # toggle/RISC/GRN/methyl gates ("a repressed allele stays
@@ -7363,7 +7446,8 @@ class Interp:
                 if isinstance(_item, list):
                     _stack.extend((x, _d + 1) for x in _item)
                 elif isinstance(_item, dict):
-                    _stack.extend((x, _d + 1) for x in _item.values())
+                    # Z-MAPORDER: the depth pre-walk sees BOTH stores
+                    _stack.extend((x, _d + 1) for x in _map_values(_item))
             if ch.closed:
                 raise Stress("closed_channel", "send on a closed channel")
             ch.buf.append(channel_wire(v))
@@ -7660,9 +7744,11 @@ class Interp:
             m, k = args[0], args[1]
             if not isinstance(m, dict):
                 return Variant("Err", f"try_get needs a map, got {type_name(m)}")
-            for mk, mv in m.items():
-                if deep_eq(mk, k):
-                    return Variant("Ok", mv)
+            # Z-MAPORDER: first-match lookup across BOTH stores (the
+            # MapStore position law; the old m.items() walk missed the tail)
+            hit = _map_lookup(m, k)
+            if hit is not _MAP_MISS:
+                return Variant("Ok", hit)
             return Variant("Err", f"no key '{v_display(k)}'")
         if name == "try_pop":
             if len(args) != 1:
@@ -8170,8 +8256,10 @@ class Interp:
             m = args[0] if args else None
             if not isinstance(m, dict):
                 raise Stress("unfolded", f"object_from_map expects a map; got {type_name(m)}")
-            tag = m.get("#phenotype")
-            if tag is None:
+            # Z-MAPORDER: the identity probe and the field walk cover BOTH
+            # stores (a promoted map carries tail entries too)
+            tag = _map_member_get(m, "#phenotype")
+            if tag is None or tag is _MAP_MISS:
                 raise Stress("unfolded", 'object_from_map: map has no "#phenotype" identity key')
             decl = self.phenos.get(str(tag))
             if decl is None:
@@ -8179,7 +8267,7 @@ class Interp:
                     "unfolded",
                     f"object_from_map: phenotype '{tag}' not declared in this program",
                 )
-            return ObjInst(decl, {k: v for k, v in m.items() if k != "#phenotype"})
+            return ObjInst(decl, {k: v for k, v in _map_items(m) if k != "#phenotype"})
         # ---- env (capability-gated)
         if name == "env":
             nm = v_display(args[0]) if args else ""
