@@ -224,3 +224,138 @@ python3 scripts/bench/super/superbench.py --phase both --json out.json
 
 Suite lives in `scripts/bench/super/` (`super.op`, `super_py.py`, `super_js.js`,
 `super_rs.rs`, `superbench.py`); the Rust lane compiles with `rustc -O`.
+
+---
+
+# Super-bench r3 — 11 Oct re-run (perf-xlang-r3)
+
+**Date:** 2026-10-11 · **Engine:** operon 2.10.0-vm (main @ `354fa16`) · 
+**Host:** x86-64 Linux sandbox · **Comparators:** CPython 3.12, Node.js v24.21.0, rustc 1.99.0 (`-O`)
+
+## 1. Why a re-run
+
+Main advanced from the r2 head (`f5d2f98`+wave) to `354fa16` — the W19 package
+ecosystem, M100 wave-1/2 language surfaces, the note-parity law (Z-NOTEPARITY-1)
+and landing-race captures #8–#11 all landed in between. r3 re-runs the full
+57-aspect suite on the current tip to certify that none of that moved the
+performance needle, and to refresh the weakpoint register. Suite unchanged:
+`scripts/bench/super/` (57 aspects × 4 lanes, integer-checksum agreement gate,
+min-of-3 in-process timing). Execution note: this sandbox reaps detached
+background processes, so r3 ran as **six bounded foreground category chunks**
+merged post-hoc — same methodology, reaper-safe by construction.
+
+## 2. Verdict
+
+| score (geomean, lower is better) | r2 (10-07) | r3 (10-11) | move |
+|---|---:|---:|---:|
+| operon / CPython | 4.95x | **5.39x** | +9% |
+| operon / Node.js | 24.22x | **24.88x** | +3% |
+| operon / Rust (reference ceiling) | 326.2x | **325.54x** | -0% |
+
+**Flat.** Every one of the 53 comparable aspects moved within the
+documented ±5–15% cross-session noise band (largest operon-side moves:
+`ctl_while` +8%, `map_get` +8%, `map_mixed` +9%, `alg_json_rt` +12% — all
+inside the band, no cluster). The +9% geomean move against CPython is
+**CPython-side session drift, not engine change**: `ctl_while` py went
+81.7 → 74.4 ms while operon went 322 → 347 ms (both directions, same row);
+`map_del` operon is +1.4% while its py row moved −9.6%, flipping the ratio
+546.7x → 614.8x with no engine delta. Zero aspects regressed beyond the band;
+**zero optimizations were made or claimed in r3** — this is a certification
+run. 57/57 four-way agreement PASS, 0 failures.
+
+## 3. Full r3 results — 57 aspects
+
+Times are min-of-3 in-process ms. `r2 op` = the r2 after-wave value;
+`Δ` = r3 vs r2 operon-side. Ratios quoted per-row for context; the score
+geomeans above are the headline.
+
+| aspect | workload | r2 op | r3 op | Δ | py | node | rust | r3 op/py |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| **Numbers** | | | | | | | | |
+| `num_int_add` | int add loop (2M iters) | 481 | 485 | +1% | 88 | 3.56 | 0.00 | 5.5x |
+| `num_int_mixed` | int mul/mod/div mix (600k) | 316 | 300 | -5% | 95 | 12 | 6.28 | 3.2x |
+| `num_float_add` | float add chain (2M) | 611 | 613 | +0% | 151 | 4.56 | 3.43 | 4.1x |
+| `num_float_math` | sqrt loop + branches (300k) | 140 | 144 | +3% | 35 | 4.33 | 2.70 | 4.2x |
+| `num_trialdiv` | trial-division primes < 40000 | 283 | 281 | -1% | 33 | 2.42 | 1.43 | 8.5x |
+| `num_roundtrip` | int->str->int roundtrip (200k) | 120 | 116 | -3% | 36 | 8.76 | 4.61 | 3.3x |
+| `num_parse_float` | float parse + trunc (200k) | 111 | 107 | -3% | 29 | 8.10 | 2.55 | 3.7x |
+| `num_divmod` | modulo/branch counting (1M) | 483 | 492 | +2% | 76 | 3.82 | 1.17 | 6.5x |
+| **Control flow** | | | | | | | | |
+| `ctl_while` | while countdown (1.2M) | 322 | 347 | +8% | 74 | 2.37 | 0.95 | 4.7x |
+| `ctl_for` | for-range empty body (1.2M) | 273 | 271 | -1% | 45 | 1.74 | 0.00 | 6.0x |
+| `ctl_nested` | nested loops 600x600 | 140 | 139 | -1% | 32 | 1.94 | 0.22 | 4.4x |
+| `ctl_call` | small-fn call overhead (600k) | 344 | 348 | +1% | 47 | 1.65 | 0.00 | 7.3x |
+| `ctl_fib` | recursive fib(22) x5 | 133 | 137 | +3% | 12 | 1.23 | 0.04 | 11.5x |
+| `ctl_deep_rec` | deep recursion depth 5000 x6 | 37.7 | 37 | -2% | 3.73 | 0.70 | 0.00 | 9.9x |
+| `ctl_mutual` | mutual recursion even/odd (100k calls) | 55 | 56 | +2% | 3.98 | 0.66 | 0.00 | 14.0x |
+| `ctl_branch` | 16-arm branch ladder (1M) | 874 | 847 | -3% | 131 | 4.45 | 1.17 | 6.5x |
+| `ctl_match` | 8-arm match dispatch (500k) | 255 | 253 | -1% | 37 | 2.30 | 0.17 | 6.8x |
+| `ctl_closure` | closure create+call (200k) | 241 | 238 | -1% | 60 | 2.95 | 0.28 | 4.0x |
+| **Strings** | | | | | | | | |
+| `str_cat` | s = s + 'ab' loop (400k) | 6.7 | 6.75 | +1% | 1.57 | 2.85 | 0.06 | 4.3x |
+| `str_join` | build 200k pieces + join | 113 | 117 | +3% | 26 | 13 | 10 | 4.4x |
+| `str_slice` | substring slicing (200k) | 150 | 143 | -4% | 28 | 3.71 | 0.00 | 5.2x |
+| `str_replace` | double replace (100k) | 73 | 71 | -3% | 18 | 38 | 0.19 | 4.0x |
+| `str_split` | split 100-word line (20k) | 85.6 | 82 | -4% | 55 | 51 | 12 | 1.5x |
+| `str_case` | upper/lower/trim (60k) | 64.3 | 62 | -4% | 16 | 3.56 | 7.45 | 3.8x |
+| `str_compare` | ==/starts/ends (300k) | 269 | 269 | -0% | 67 | 6.84 | 0.00 | 4.0x |
+| `str_interp` | 3-expr interpolation (100k) | 75 | 74 | -2% | 33 | 5.42 | 10 | 2.2x |
+| `str_contains` | substring search (200k) | 112 | 113 | +1% | 15 | 6.29 | 0.00 | 7.3x |
+| `str_build` | unicode piece build + upper (60k) | 57 | 55 | -3% | 15 | 7.40 | 7.80 | 3.6x |
+| **Lists** | | | | | | | | |
+| `lst_push` | append 300k + iterate | 173 | 172 | -0% | 28 | 13 | 1.42 | 6.2x |
+| `lst_idx` | index reads (600k) | 264 | 265 | +0% | 63 | 5.33 | 0.81 | 4.2x |
+| `lst_iter` | iterate 100k x6 | 223 | 218 | -2% | 26 | 8.78 | 0.53 | 8.3x |
+| `lst_slice` | list slicing (60k) | 89.4 | 90 | +1% | 41 | 6.70 | 0.01 | 2.2x |
+| `lst_sort` | native sort 60k | 61.2 | 62 | +1% | 22 | 20 | 3.12 | 2.8x |
+| `lst_sort_lang` | in-language quicksort 3k | 40.2 | 40 | -1% | 5.04 | 1.59 | 0.16 | 7.9x |
+| `lst_comp` | filter+map comprehensions (200k) | 168 | 165 | -2% | 29 | 15 | 1.48 | 5.7x |
+| `lst_search` | linear search scans (20k x 1000) | 3888 | 3,889 | +0% | 578 | 9.93 | 1.46 | 6.7x |
+| `lst_reverse` | reverse 1000-list (30k) | 301 | 287 | -5% | 134 | 39 | 5.68 | 2.1x |
+| `lst_insert_del` | mid-list insert/remove (10k) | 19.4 | 19 | -1% | 4.67 | 3.07 | 1.55 | 4.1x |
+| **Maps / sets** | | | | | | | | |
+| `map_set` | map stores str keys (300k) | 133 | 138 | +4% | 58 | 44 | 38 | 2.4x |
+| `map_get` | map reads str keys (600k) | 356 | 385 | +8% | 154 | 97 | 82 | 2.5x |
+| `map_miss` | map miss probes (300k) | 175 | 173 | -1% | 57 | 34 | 24 | 3.0x |
+| `map_iter` | keys()+reads over 20k x10 | 111 | 107 | -4% | 17 | 13 | 6.93 | 6.2x |
+| `map_incr` | m[k] += 1 word-count (200k) | 138 | 137 | -1% | 36 | 16 | 18 | 3.8x |
+| `map_nested` | nested map chain reads (200k) | 137 | 141 | +3% | 46 | 6.36 | 16 | 3.1x |
+| `map_del` | del + re-insert cycles (50k) | 9754 | 9,891 | +1% | 16 | 10 | 7.11 | 614.8x |
+| `map_mixed` | mixed int/str key traffic (150k) | 139 | 151 | +9% | 61 | 58 | 47 | 2.5x |
+| **Sets** | | | | | | | | |
+| `set_algebra` | dedup 16k + membership (lang set idiom) | 1582 | 1,599 | +1% | 4.34 | 2.89 | 0.54 | 368.1x |
+| **Algorithms** | | | | | | | | |
+| `alg_sieve` | sieve of Eratosthenes < 50000 | 66.4 | 64 | -3% | 6.12 | 2.25 | 0.12 | 10.5x |
+| `alg_mandel` | mandelbrot 240x160 iter 50 | 1120 | 1,066 | -5% | 158 | 5.47 | 2.31 | 6.8x |
+| `alg_trees` | binary trees depth 14 x3 | 145 | 142 | -2% | 17 | 7.85 | 1.37 | 8.2x |
+| `alg_matrix` | 96x96 int matrix multiply | 544 | 545 | +0% | 73 | 5.20 | 0.77 | 7.5x |
+| `alg_wordfreq` | split + word count (2k lines) | 30.8 | 31 | +1% | 6.70 | 5.21 | 3.05 | 4.6x |
+| `alg_json_rt` | json roundtrip 120-row doc x150 | 50.1 | 56 | +12% | 31 | 15 | 12 | 1.8x |
+| `alg_json_big` | json 800-row doc, 2 parses | 12.5 | 14 | +8% | 11 | 4.10 | 3.76 | 1.2x |
+| `alg_deep_eq` | deep equality 50-elem x20k | 105 | 106 | +1% | 23 | 34 | 219 | 4.5x |
+| `alg_opt` | ok/err pipeline (200k) | 226 | 221 | -2% | 30 | 6.11 | 0.19 | 7.3x |
+| **Floor** | | | | | | | | |
+| `floor` | dispatch floor (empty workload) | n/a | 0.01 | n/a | 0.00 | 0.00 | 0.00 | 28.5x |
+
+## 4. Weakpoint register (r3 refresh)
+
+| rank | aspect | r3 op/py | mechanism | state |
+|---|---|---:|---|---|
+| 1 | `map_del` | 614.8x | ordered-map middle delete = `Vec::remove` memmove + memo position-shift walk; insertion-ordered Vec design | **deferred design note** (r2 §5.2): O(1) middle delete needs tombstoned slots + stable ids — a `MapStore` redesign, owner-gated |
+| 2 | `set_algebra` | 368.1x | `std/set` is a pure-list set algebra **by design** (`std/set.op`); membership is a linear scan | language-surface decision (native set type), not an optimization — documented, untouched |
+| 3 | `ctl_mutual` | 14.0x | call-funnel floor, mutual recursion amplifies it | P4 amendment-bounded (owner-gated) |
+| 4 | `ctl_fib` | 11.5x | same funnel per-call cost | same |
+| 5 | `alg_sieve` | 10.5x | list-store + int traffic per step | v3.0 VM arc territory |
+
+Everything else sits at ≤ 9x vs CPython with the constant factor being the
+interpreter dispatch (~200 ns/op) that the v3.0 Ribosome VM arc exists to
+attack. The r2 verdict stands unchanged on the current tip.
+
+## 5. Reproduce
+
+```sh
+bash scripts/build.sh
+# 57-aspect suite, one pass (reaper-safe sandboxes: chunk by category)
+python3 scripts/bench/super/superbench.py --phase both --json out.json
+# r3 evidence: docs/bench/2026-10-11-superbench-r3.json (+ r3chunks/)
+```
