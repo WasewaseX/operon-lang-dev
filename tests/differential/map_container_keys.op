@@ -14,12 +14,18 @@ print(len(m))
 print(has(m, [1, 2]))
 print(has(m, [9, 9]))
 
-# --- equal-content keys hit the SAME slot (the overwrite law) ------------
+# --- equal-content container keys COEXIST (the always-append law) --------
+# DOCUMENTED LAW (bootstrap/oracle.py _map_insert_key, mirroring Rust
+# MapStore's KC_OTHER arm): container keys ALWAYS APPEND, never replace —
+# equal-content keys coexist, lookups find the FIRST, del removes the
+# FIRST match. (The old comment here falsely called this "the overwrite
+# law" — the values below pin the coexistence law: len 2, first-wins.)
 let m2 = {}
 m2[[3, 4]] = "a"
 m2[[3, 4]] = "b"
 print(len(m2))
 print(m2[[3, 4]])
+print(len(keys(m2)))
 
 # --- map-valued keys ------------------------------------------------------
 let m3 = {}
