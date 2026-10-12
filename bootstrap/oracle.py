@@ -6585,10 +6585,22 @@ class Interp:
         if name == "has":
             return isinstance(args[0], dict) and _map_has(args[0], args[1])
         if name == "del":
-            if isinstance(args[0], dict):
+            # F-DELNOTE (note-parity): mirror of the Rust call_builtin "del"
+            # fallback arm — a 1-arg / 0-arg / non-map del() used to return
+            # null silently on BOTH engines while range() notes by
+            # convention. (args is the RAW list here — no padding — so the
+            # len check distinguishes an ABSENT second arg from an explicit
+            # del(m, null), exactly like Rust's args.get(1) Option.)
+            if len(args) >= 2 and isinstance(args[0], dict):
                 if self.is_frozen(args[0]):
                     raise self._frozen_stress("map")
                 _map_del(args[0], args[1])
+                return None
+            # A13/dx-r2 location law: notes carry real locations — pass the
+            # executing call's line so the flush renders `[tag] file:line: msg`
+            # byte-identically to tools::flush_notes (line=0 renders UNLOCATED,
+            # a latent asymmetry this arm would otherwise bake in).
+            self.note(4, "del() needs a map and a key; ignored", self.cur_line)
             return None
         if name == "range":
             # P2P3P5 pin found the latent gap: the Rust engine notes and
@@ -6597,7 +6609,10 @@ class Interp:
             if not all(
                 isinstance(x, int) and not isinstance(x, bool) for x in args
             ):
-                self.note(4, "range() needs ints; returned []")
+                # F-DELNOTE sibling found during the fix: the range note had
+                # the same latent line=0 rendering gap (unlocated stderr vs
+                # the engine's located render). Same one-line law.
+                self.note(4, "range() needs ints; returned []", self.cur_line)
                 return []
             if len(args) == 1:
                 a, b, st = 0, args[0], 1
