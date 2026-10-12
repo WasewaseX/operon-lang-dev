@@ -1,0 +1,91 @@
+# z104-delalias (#104 residual): the DELETE path's key scan must survive a
+# key that transitively CONTAINS the map being deleted from. Container-key
+# INSERT never scans (the KC_OTHER always-append law structurally avoids the
+# descent), but del() always probes via position_h — and when the probe's
+# deep_eq descends into the map itself while the caller holds the map's
+# RefCell mutably, the Map arm's `a.borrow()` panicked (RefCell already
+# mutably borrowed -> "[fatal] internal toolchain panic", exit 101,
+# uncatchable by rescue). The oracle descends safely and its verdicts are
+# the law; the engines must match them byte-identically. Pins the two-phase
+# contract: phase 1 probe under an IMMUTABLE borrow (re-entrant deep_eq is
+# legal), phase 2 removal under borrow_mut. Byte-identical on all three
+# lanes: VM, tree-walk, oracle.
+
+# --- r1: del with a NON-matching probe that descends into the map ---------
+# (the exact panic shape: stored key [m] aliases m; probe [{}] forces the
+# scan to compare m vs {} INSIDE the live del call -> used to panic)
+let m = {}
+let k = [m]
+m[k] = 1
+del(m, [{}])
+print("r1", len(m))
+
+# --- r2: del of the aliased key itself (identity fast path) ---------------
+# probe IS the stored key ([m] vs [m] hits Rc::ptr_eq before any descent)
+let m2 = {}
+let k2 = [m2]
+m2[k2] = 1
+del(m2, k2)
+print("r2", len(m2))
+
+# --- r3: self-key del ------------------------------------------------------
+let d = {}
+d[d] = 1
+del(d, d)
+print("r3", len(d))
+
+# --- r4: equal-content DISTINCT alias (the true-verdict corner) -----------
+# x is a different map with content equal to m (key [m] coexists by value).
+# The genuine deep_eq([m], [x]) descends m vs x and verdicts TRUE, so del
+# MUST remove — a borrow-conflict->false shortcut here would diverge from
+# the oracle (which removes). Guards fix direction 2 (try_borrow->false).
+let m4 = {}
+let k4 = [m4]
+m4[k4] = 1
+let x = {}
+x[[m4]] = 1
+del(m4, [x])
+print("r4", len(m4))
+
+# --- r5: coexistence interplay — del removes the FIRST match only ---------
+let c = {}
+let a1 = [1]
+c[a1] = "first"
+c[[1]] = "second"
+del(c, [1])
+print("r5", len(c), c[[1]])
+
+# --- r6: aliasing under a list-of-map key (deeper descent) ----------------
+# stored key [[m]] — the descent passes a list layer before reaching m
+let m6 = {}
+let k6 = [[m6]]
+m6[k6] = 1
+del(m6, [[{}]])
+print("r6", len(m6))
+
+# --- r7: aliasing through a MAP key (m nested in a map-valued key) --------
+let m7 = {}
+let k7 = [{"inner": m7}]
+m7[k7] = 1
+del(m7, [{"inner": {}}])
+print("r7", len(m7))
+
+# --- r8: del miss stays a silent null (Z-DELNOTE law unchanged) -----------
+let m8 = {"a": 1}
+let r8 = del(m8, "zz")
+print("r8", r8, len(m8))
+
+# --- r9: the .del(k) method form, same aliasing shape (silent by design) --
+let m9 = {}
+let k9 = [m9]
+m9[k9] = 1
+m9.del([{}])
+print("r9", len(m9))
+
+# --- r10: post-del lookups still work on the aliased map ------------------
+let m10 = {}
+let k10 = [m10]
+m10[k10] = 1
+m10["b"] = 2
+del(m10, "b")
+print("r10", len(m10), m10[k10])
