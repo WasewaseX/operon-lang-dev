@@ -12,5 +12,16 @@ main {
     stress { let x = null ** null } rescue (e) { print("pow: " + e.message) }
     stress { let x = 1 - null } rescue (e) { print("sub-control: " + e.message) }
     stress { let x = null * null } rescue (e) { print("mul-control: " + e.message) }
+    # --- F-DELNOTE rows (L-050): the del() fallback arm notes + nulls ------
+    # (the method form m.del(k) has its OWN dispatch arm and stays silent by
+    # design; these rows pin the FREE-FUNCTION del() misuse family only)
+    let dm = {a: 1}
+    print("del-1arg", del(dm))
+    print("del-0arg", del())
+    print("del-nonmap", del(7, 1))
+    print("del-list", del([1, 2], 0))
+    print("del-ok", del(dm, "a"), dm)
+    print("del-nullkey", del(dm, null), dm)
+    print("del-str", del("s", 1))
     print("noteparity-done")
 }
