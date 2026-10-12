@@ -1,0 +1,97 @@
+# z102/z103 adversarial probe (2026-10-12, builder-B strict-review battery)
+# NOT a pin yet: a probe to empirically compare the Rust failed-set deep_eq
+# semantics against the oracle's discard-and-recompute semantics on shapes
+# BEYOND the landed pins: failed-pair re-encounter under cycles, cyclic
+# container keys, witness-masking paths, obj/variant deep payloads, and the
+# remaining #103 boundary table (-0.0, nan/inf in containers, 2^53 edges).
+main {
+    # --- A. failed-pair re-encounter under cycles (witness at elem1) -----
+    let m = [1]
+    let m2 = [2]
+    let t = []
+    t.push(t)
+    t.push(m)      # t = [t, [1]]
+    let w = []
+    w.push(w)
+    w.push(m2)     # w = [w, [2]]
+    let p = []
+    p.push(p)
+    p.push(t)      # p = [p, t]
+    let q = []
+    q.push(q)
+    q.push(w)      # q = [q, w]
+    print("a1", t == w)
+    print("a2", t == q)
+    print("a3", p == q)
+    print("a4", q == p)
+    let x = {}
+    x[t] = 1
+    x[p] = 2
+    let y = {}
+    y[w] = 1
+    y[q] = 2
+    print("a5", x == y)
+    print("a6", y == x)
+    # list re-encounter: [t, w] vs [w, t] — (t,w) fails at elem0, then the
+    # swapped pair re-encounters both orientations
+    let lt = [t, w]
+    let lw = [w, t]
+    print("a7", lt == lw)
+    print("a8", lw == lt)
+    # the witness pair re-encountered after a genuine failure deeper out
+    let outer1 = [[t, w], m]
+    let outer2 = [[w, t], m2]
+    print("a9", outer1 == outer2)
+
+    # --- B. cyclic container keys, genuinely equal -----------------------
+    let c1 = []
+    c1.push(c1)
+    let c2 = []
+    c2.push(c2)
+    let kc1 = {}
+    kc1[c1] = 1
+    let kc2 = {}
+    kc2[c2] = 1
+    print("b1", kc1 == kc2)
+    print("b2", kc2 == kc1)
+    print("b3", kc1.has(c2))
+
+    # --- C. failed map pair then equal map pair (shared substructure) ----
+    let good = [7]
+    let badA = [8]
+    let badB = [9]
+    let e1 = {}
+    e1[good] = 1
+    e1[badA] = 2
+    let e2 = {}
+    e2[good] = 1
+    e2[badB] = 2
+    print("c1", e1 == e2)
+    let f1 = [good, good]
+    let f2 = [good, good]
+    print("c2", f1 == f2)
+
+    # --- D. #103 boundary extras -----------------------------------------
+    let nan = num("nan")
+    let inf = num("inf")
+    print("d0", nan == nan, inf > 9223372036854775807)
+    print("d1", 0 == -0.0)
+    print("d2", -0.0 == 0)
+    print("d3", 1 == nan)
+    print("d4", nan == nan)
+    print("d5", [nan] == [nan])
+    print("d6", 9223372036854775807 == 9.223372036854776e18)
+    print("d7", -9223372036854775807 - 1 == -9.223372036854776e18)
+    print("d8", 4611686018427387903 == 4611686018427387904.0)
+    print("d9", 4611686018427387904 == 4611686018427387904.0)
+    print("d10", {a: 1} == {a: 1.0})
+    print("d11", [1, [2, [3]]] == [1.0, [2.0, [3.0]]])
+    print("d12", 9007199254740993 == 9007199254740992.0)
+    print("d13", 9007199254740992 == 9007199254740992.0)
+
+    # --- E. variant + obj deep payloads (ride the same machinery) --------
+    print("e1", some([9007199254740993]) == some([9007199254740992.0]))
+    print("e2", some([1]) == some([1.0]))
+    print("e3", some([nan]) == some([nan]))
+    print("e4", [inf] == [inf])
+}
