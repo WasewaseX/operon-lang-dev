@@ -7885,7 +7885,15 @@ impl Interp {
                     m.borrow_mut().del(k);
                     Ok(Value::Null)
                 }
-                _ => Ok(Value::Null),
+                // F-DELNOTE (note-parity, builder-B finding on PR #223):
+                // the fallback arm used to return null SILENTLY while the
+                // sibling convention (range()) notes loudly — a 1-arg or
+                // non-map del() was indistinguishable from a successful
+                // delete. Note + null, the soft tier (W071 family).
+                _ => {
+                    self.note(self.cur_line, 4, "del() needs a map and a key; ignored");
+                    Ok(Value::Null)
+                }
             },
             "range" => {
                 let (a, b, step) = match (args.first(), args.get(1), args.get(2)) {
