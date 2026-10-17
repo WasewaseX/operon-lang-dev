@@ -7882,7 +7882,18 @@ impl Interp {
                     // may pay before it runs
                     let cost = m.borrow().lookup_scan_cost(k);
                     self.steps = self.steps.saturating_add(cost);
-                    m.borrow_mut().del(k);
+                    // z104-delalias (#104): two-phase delete — the probe runs
+                    // under an IMMUTABLE borrow because its deep_eq may
+                    // legally descend into THIS map (a stored container key
+                    // that transitively contains it); under borrow_mut that
+                    // descent re-borrows the same RefCell and panics (exit
+                    // 101, uncatchable by rescue). The removal then takes the
+                    // mutable borrow; no user code runs between the phases,
+                    // so the probed index stays valid.
+                    let hit = m.borrow().position(k);
+                    if let Some(i) = hit {
+                        m.borrow_mut().del_at(k, i);
+                    }
                     Ok(Value::Null)
                 }
                 // F-DELNOTE (note-parity, builder-B finding on PR #223):
@@ -12542,7 +12553,14 @@ impl Interp {
                     // may pay before it runs
                     let cost = m.borrow().lookup_scan_cost(&t);
                     self.steps = self.steps.saturating_add(cost);
-                    m.borrow_mut().del(&t);
+                    // z104-delalias (#104): two-phase delete, same contract
+                    // as the builtin del arm above — immutable probe, then
+                    // mutable removal (the scan may descend into this very
+                    // map through an aliased container key).
+                    let hit = m.borrow().position(&t);
+                    if let Some(i) = hit {
+                        m.borrow_mut().del_at(&t, i);
+                    }
                     Ok(Value::Null)
                 }
                 "len" => Ok(Value::Int(m.borrow().len() as i64)),
