@@ -11,6 +11,9 @@
 # CI runs (1)+(2) on every PR via ci.yml; this script exists for the weekly
 # fresh-toolchain sweep (security.yml) and for humans: ONE command that must
 # be green before any security-adjacent claim.
+# audit 2026-10-18: leg [2/3] and [3/3] need bin/operon (the build.sh compat
+# path); this script now provides it itself so the standalone weekly sweep
+# passes on a clean checkout without a prior scripts/build.sh step.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -22,6 +25,11 @@ if ! cargo test --release 2>&1 | tail -20; then
     echo "FAIL: cargo test"; FAIL=1
 fi
 
+# audit 2026-10-18 (finding #3): on a fresh runner bin/ does not exist and
+# the bare cp below died, which failed the redteam + caps legs and left the
+# weekly security.yml sandbox-regression sweep red 3 weeks running (Sep 28,
+# Oct 5, Oct 12 scheduled runs). mkdir first so the standalone sweep works.
+mkdir -p bin
 [ -x bin/operon ] || cp target/release/operon bin/operon
 
 echo "[2/3] redteam containment corpus"
