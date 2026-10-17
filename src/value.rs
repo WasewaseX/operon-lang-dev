@@ -409,49 +409,75 @@ impl MapStore {
     /// decrements stored positions and the removed key's slot is tombstoned
     /// (P1: was a full O(N) rebuild per delete — batch deletes were
     /// quadratic; rehash-on-threshold keeps tombstones bounded).
+    ///
+    /// z104-delalias (#104): the SCAN and the REMOVAL are split. The scan
+    /// (`position`, `&self`) may deep_eq-descend into a stored container key
+    /// that transitively contains THE MAP ITSELF — legal under an immutable
+    /// RefCell borrow, fatal under a mutable one (the Map arm re-borrows the
+    /// same cell -> "RefCell already mutably borrowed" -> exit 101,
+    /// uncatchable by rescue). Callers therefore hold `borrow()` for the
+    /// probe and only take `borrow_mut()` for `del_at`. No user code can run
+    /// between the two phases (single expression, no tick boundary), so the
+    /// probed index stays valid. `del` is retained for callers that hold no
+    /// outer borrow on the map's cell (Rust-side tests, kernel paths) — the
+    /// engine call sites MUST use the two-phase form.
     pub fn del(&mut self, key: &Value) -> bool {
-        let (cls, h) = key_class_hash(key);
-        match self.position_h(key, cls, h) {
-            Some(i) => {
-                // D3: tomb the verified slot BEFORE the removal — the
-                // probe needs the pre-removal items to identify which
-                // same-hash slot is really this key's (a hash-only tomb
-                // could hit a colliding neighbor's slot).
-                if cls != KC_OTHER {
-                    self.memo.tomb_verified(h, key, &self.items);
-                }
-                // perf-xlang-r2: removing the LAST item shifts nothing, so
-                // the O(capacity) memo walk is skipped entirely (pop-only
-                // del patterns — stacks, tail eviction — drop to O(1)).
-                if i + 1 == self.items.len() {
-                    self.items.pop();
-                } else {
-                    self.items.remove(i);
-                    if cls != KC_OTHER {
-                        self.memo.shift_positions(i);
-                    }
-                }
-                if cls != KC_OTHER {
-                    if cls == KC_INT || cls == KC_FLOAT {
-                        // D2 tripwire: exact since the D1 fix (put-branch
-                        // counts, rehash recounts) — a 0 here means the
-                        // counter lost an insert somewhere.
-                        debug_assert!(
-                            self.memo.num_numeric > 0,
-                            "num_numeric underflow: numeric key removed without a counted insert"
-                        );
-                        self.memo.num_numeric = self.memo.num_numeric.saturating_sub(1);
-                    }
-                    if cls == KC_FLOAT {
-                        self.memo.num_float = self.memo.num_float.saturating_sub(1);
-                    }
-                    if self.memo.tombs > self.memo.used {
-                        self.rebuild();
-                    }
-                }
-                true
-            }
+        match self.position(key) {
+            Some(i) => self.del_at(key, i),
             None => false,
+        }
+    }
+
+    /// Phase 2 of the two-phase delete: remove the slot `i` previously
+    /// found by an immutable-borrow `position(key)` probe on the SAME map
+    /// state. The index is trusted (re-verifying with deep_eq here would
+    /// re-enter the borrow the split exists to avoid); the memo bookkeeping
+    /// is byte-for-byte the landed del behavior (D3 tomb-before-removal,
+    /// perf-xlang-r2 pop shortcut, D2 num_numeric tripwire, tomb-threshold
+    /// rebuild). Returns whether the slot existed.
+    pub fn del_at(&mut self, key: &Value, i: usize) -> bool {
+        let (cls, h) = key_class_hash(key);
+        if i >= self.items.len() {
+            return false;
+        }
+        {
+            // D3: tomb the verified slot BEFORE the removal — the
+            // probe needs the pre-removal items to identify which
+            // same-hash slot is really this key's (a hash-only tomb
+            // could hit a colliding neighbor's slot).
+            if cls != KC_OTHER {
+                self.memo.tomb_verified(h, key, &self.items);
+            }
+            // perf-xlang-r2: removing the LAST item shifts nothing, so
+            // the O(capacity) memo walk is skipped entirely (pop-only
+            // del patterns — stacks, tail eviction — drop to O(1)).
+            if i + 1 == self.items.len() {
+                self.items.pop();
+            } else {
+                self.items.remove(i);
+                if cls != KC_OTHER {
+                    self.memo.shift_positions(i);
+                }
+            }
+            if cls != KC_OTHER {
+                if cls == KC_INT || cls == KC_FLOAT {
+                    // D2 tripwire: exact since the D1 fix (put-branch
+                    // counts, rehash recounts) — a 0 here means the
+                    // counter lost an insert somewhere.
+                    debug_assert!(
+                        self.memo.num_numeric > 0,
+                        "num_numeric underflow: numeric key removed without a counted insert"
+                    );
+                    self.memo.num_numeric = self.memo.num_numeric.saturating_sub(1);
+                }
+                if cls == KC_FLOAT {
+                    self.memo.num_float = self.memo.num_float.saturating_sub(1);
+                }
+                if self.memo.tombs > self.memo.used {
+                    self.rebuild();
+                }
+            }
+            true
         }
     }
     pub fn len(&self) -> usize {
