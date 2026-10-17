@@ -39,7 +39,7 @@ jobs:
           - { os: windows-latest,   target: x86_64-pc-windows-msvc,    pkg: zip }
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0 (SHA-pinned, sec-r1)
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v4.2.2 (SHA-pinned, sec-r1)
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable (SHA-pinned, D-6/sec-r5)
@@ -228,7 +228,7 @@ jobs:
       # reason; the failure surfaced only now that the manifest job first
       # ran against a real tag with the full asset set). Checkout gives gh
       # its context; SHA-pinned per D-6.
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v4.2.2
       - name: Publish whole-release SHA256SUMS
         env:
           GH_TOKEN: ${{ github.token }}
