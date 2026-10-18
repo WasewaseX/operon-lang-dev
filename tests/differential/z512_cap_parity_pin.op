@@ -1,0 +1,181 @@
+# z512-cap-parity (L-055 / sec-r5 F-12): the 512 container-scan cap is a
+# THREE-SURFACE law, pinned byte-identical on all three lanes (VM,
+# tree-walk, oracle).
+#
+#   1. The ORACLE probe side: _map_lookup/_map_has/_map_del AND the plain
+#      read (Expr::Index dict arm) scanned the unified head+tail store
+#      UNBOUNDED while the engine caps every KC_OTHER probe at 512 items
+#      (position_h .take(NON_SCALAR_SCAN_CAP), SPEC §763 "treated as
+#      absent") — beyond the cap the lanes diverged (read: value vs
+#      stress "missing"; has: true vs false; del: removal vs silent
+#      miss). The oracle now counts UNIFIED items (head dict first, side
+#      tail second, insertion order) and stops at 512 for container-key
+#      probes; scalar probes and the int/float cross-equality class stay
+#      UNBOUNDED (position_h's uncapped scalar arms).
+#   2. The ENGINE compound-assign read: `m[k] += v` used a raw
+#      iter().find(deep_eq) — UNCAPPED (found beyond-cap keys the
+#      engine's own plain read/has/del treat as absent) and UNCHARGED
+#      (a free ~190x linear scan, the #107.2 free-burn class). It now
+#      routes through position() + the lookup_scan_cost charge.
+#   3. The ORACLE idx_assign cur_line RESET (W07 mirror) zeroed the stale
+#      carryover the engine renders — removed (nothing else in the
+#      statement consumes cur_line; the full corpus proves inertness).
+#
+# Zero SPEC delta: §763 already states the cap law this pin enforces.
+# Boundary orientation: the cap counts unified 0-based items; the first
+# 512 items (indices 0..511) are visible, index 512 is the first
+# invisible one. Every row that can stress wraps in stress/rescue (no
+# uncaught stress), and every boundary row builds its OWN fresh map so
+# no del shifts another row's indices.
+
+# --- r1: the 600-container-key map (the beyond-cap witness) ---------------
+let m = {}
+for i in range(0, 600) {
+    m[[i]] = i
+}
+print("r1", len(m))
+
+# --- r2: the EXACT 511/512 boundary (reads) --------------------------------
+# [511] sits at unified index 511 (the 512th item — the last visible one);
+# [512] is the first invisible one: the read stresses "missing" exactly
+# like a genuinely absent key.
+print("r2a", m[[511]])
+stress {
+    print(m[[512]])
+} rescue (e) {
+    print("r2b [" + e.kind + "] " + e.message)
+}
+stress {
+    print(m[[513]])
+} rescue (e) {
+    print("r2c [" + e.kind + "] " + e.message)
+}
+
+# --- r3: has() across the boundary -----------------------------------------
+print("r3a", has(m, [511]))
+print("r3b", has(m, [512]))
+
+# --- r4a: del within cap removes; survivors keep their order ---------------
+let m4a = {}
+for i in range(0, 600) {
+    m4a[[i]] = i
+}
+del(m4a, [300])
+print("r4a-len", len(m4a))
+stress {
+    print(m4a[[300]])
+} rescue (e) {
+    print("r4a-gone [" + e.kind + "] " + e.message)
+}
+print("r4a-shift", m4a[[301]])
+
+# --- r4b: del beyond cap is a silent miss (fresh map, clean boundary) ------
+let m4b = {}
+for i in range(0, 600) {
+    m4b[[i]] = i
+}
+let before = len(m4b)
+del(m4b, [512])
+print("r4b-len", len(m4b) == before)
+print("r4b-has", has(m4b, [512]))
+
+# --- r5: compound-assign within cap (small map, coexistence interplay) -----
+# container-key writes ALWAYS APPEND (the #214 law): `ms[[7]] += 10` reads
+# the first match (7), appends [7, 17] — len grows, first-match read is
+# unchanged; del pops the FIRST and the appended pair surfaces.
+let ms = {}
+for i in range(0, 10) {
+    ms[[i]] = i
+}
+ms[[7]] += 10
+print("r5a", len(ms))
+print("r5b", ms[[7]])
+del(ms, [7])
+print("r5c", ms[[7]])
+print("r5d", len(ms))
+
+# --- r6: compound-assign on the 600-map within cap (the charged route) ------
+let m6 = {}
+for i in range(0, 600) {
+    m6[[i]] = i
+}
+m6[[511]] += 1
+print("r6a", m6[[511]])
+print("r6b", len(m6))
+
+# --- r7: compound-assign BEYOND the cap — the capped read misses, so the
+# binop sees null (the same soft-miss class a genuinely absent key takes)
+let m7 = {}
+for i in range(0, 600) {
+    m7[[i]] = i
+}
+stress {
+    m7[[513]] += 1
+} rescue (e) {
+    print("r7 [" + e.kind + "]")
+}
+
+# --- r8: scalar keys stay UNBOUNDED beyond 512 entries ----------------------
+let m2 = {}
+for i in range(0, 600) {
+    m2[i] = i
+}
+print("r8a", m2[599])
+print("r8b", has(m2, [599]) == false)
+stress {
+    print(m2[600])
+} rescue (e) {
+    print("r8c [" + e.kind + "] " + e.message)
+}
+
+# --- r9: the int/float cross-equality class stays UNBOUNDED ----------------
+let m3 = {}
+for i in range(0, 600) {
+    m3[i * 1.0] = i
+}
+print("r9a", m3[599])
+print("r9b", has(m3, 599.0))
+
+# --- r10: the null+0 contained-miss law (container keys carrying null/0) ---
+let m5 = {}
+m5[[null]] = "n"
+m5[[0]] = "z"
+print("r10a", m5[[null]])
+print("r10b", m5[[0]])
+print("r10c", len(m5))
+# scalar null vs 0: distinct keys, no cross-match
+let m6s = {}
+m6s[null] = 1
+m6s[0] = 2
+print("r10d", m6s[null])
+print("r10e", m6s[0])
+print("r10f", len(m6s))
+
+# --- r11: dup container keys — del removes the FIRST match only ------------
+let m9 = {}
+m9[[9]] = "first"
+m9[[9]] = "second"
+print("r11a", len(m9))
+print("r11b", m9[[9]])
+del(m9, [9])
+print("r11c", m9[[9]])
+print("r11d", len(m9))
+
+# --- r12: the deep beyond-cap trio + the uncapped consumers ----------------
+# a key inserted BEYOND the cap is invisible to read/has/del on every lane,
+# while len/keys stay uncapped (the ordered consumers are not probes)
+let m8 = {}
+for i in range(0, 600) {
+    m8[[i]] = i
+}
+m8[[999]] = "deep"
+stress {
+    print(m8[[999]])
+} rescue (e) {
+    print("r12a [" + e.kind + "] " + e.message)
+}
+print("r12b", has(m8, [999]))
+del(m8, [999])
+print("r12c", len(m8))
+print("r12d", len(keys(m8)))
+print("r12e", len(m8) == len(keys(m8)))
