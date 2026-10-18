@@ -2421,12 +2421,25 @@ impl Interp {
                                 Value::Null
                             }
                         }
-                        (Value::Map(m), _) => m
-                            .borrow()
-                            .iter()
-                            .find(|(k, _)| k.deep_eq(&iv))
-                            .map(|(_, v)| v.clone())
-                            .unwrap_or(Value::Null),
+                        (Value::Map(m), _) => {
+                            // z-s0-parity (#107.2) + sec-r5 F-12
+                            // (Z-512-CAP-PARITY): the compound-assign READ
+                            // routes through the same capped, charged probe
+                            // as the plain read. It was a raw
+                            // iter().find(deep_eq): UNCAPPED (found
+                            // beyond-cap keys the engine's own plain
+                            // read/has/del treat as absent, SPEC §763) and
+                            // UNCHARGED (a free ~190x linear scan on large
+                            // maps — the free-burn class the #107.2 law
+                            // closes for plain probes). borrow() is
+                            // immutable here — the read-only deep_eq
+                            // descent cannot re-enter the #104 panic class.
+                            let cost = m.borrow().lookup_scan_cost(&iv);
+                            self.steps = self.steps.saturating_add(cost);
+                            let pos = m.borrow().position(&iv);
+                            pos.and_then(|i| m.borrow().get(i).map(|e| e.1.clone()))
+                                .unwrap_or(Value::Null)
+                        }
                         _ => Value::Null,
                     };
                     val = self.apply_binop(env, *binop, &cur, &val)?;
