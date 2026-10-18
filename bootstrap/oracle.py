@@ -742,11 +742,41 @@ def _map_insert_key(tv, key, val):
 _MAP_MISS = object()
 
 
+_NON_SCALAR_SCAN_CAP = 512  # sec-r5 F-12 (Z-512-CAP-PARITY): mirrors
+# value.rs NON_SCALAR_SCAN_CAP — container-key probes scan the first 512
+# UNIFIED items only; beyond the cap the key is TREATED AS ABSENT.
+
+
+def _is_container_key(key):
+    """The KC_OTHER class: list/dict/Variant keys (bytes stay SCALAR, W029)."""
+    return isinstance(key, (list, dict, Variant)) and not isinstance(key, (str, bytes))
+
+
 def _map_lookup(tv, key):
     """deep_eq scan across BOTH stores; returns the value or _MAP_MISS.
     Z-MAPORDER: dict-HEAD-then-side-TAIL IS the insertion order (the dict
     froze at promotion, see the block comment), so the scan order is the
-    MapStore first-match law exactly."""
+    MapStore first-match law exactly.
+    Z-512-CAP-PARITY (sec-r5 F-12): a container-key probe scans only the
+    first 512 UNIFIED items (head+tail counted in insertion order —
+    position_h counts unified items); a match beyond the cap is treated as
+    absent (SPEC §763). Scalar probes and the int/float cross-equality
+    class stay UNBOUNDED, mirroring position_h's uncapped scalar arms."""
+    if _is_container_key(key):
+        n = 0
+        for kk, vv in tv.items():
+            if n >= _NON_SCALAR_SCAN_CAP:
+                return _MAP_MISS
+            n += 1
+            if deep_eq(kk, key):
+                return vv
+        for pair in _side(tv):
+            if n >= _NON_SCALAR_SCAN_CAP:
+                return _MAP_MISS
+            n += 1
+            if deep_eq(pair[0], key):
+                return pair[1]
+        return _MAP_MISS
     for kk, vv in tv.items():
         if deep_eq(kk, key):
             return vv
@@ -786,7 +816,33 @@ def _map_del(tv, key):
     side TAIL mirrors MapStore::del EXACTLY: position_h -> remove the FIRST
     match only (container keys can coexist as dups, del pops one). Z-MAPORDER:
     head-before-tail is the insertion order, so this removes the FIRST
-    matching entry of the unified store and the survivors keep their order."""
+    matching entry of the unified store and the survivors keep their order.
+    Z-512-CAP-PARITY: a container-key del scans only the first 512 UNIFIED
+    items — a match beyond the cap is treated as absent and the del is a
+    silent miss (len unchanged), mirroring the engine's two-phase delete
+    whose phase-1 probe is position() (the KC_OTHER arm .take(512)).
+    Scalar dels keep the full unbounded scan (position_h's scalar arms are
+    uncapped)."""
+    if _is_container_key(key):
+        n = 0
+        for kk in list(tv.keys()):
+            if n >= _NON_SCALAR_SCAN_CAP:
+                return
+            n += 1
+            if deep_eq(kk, key):
+                del tv[kk]
+                return
+        ent = _MAP_SIDE.get(id(tv))
+        if ent is not None and ent[0] is tv:
+            side = ent[1]
+            for i, p in enumerate(side):
+                if n >= _NON_SCALAR_SCAN_CAP:
+                    return
+                n += 1
+                if deep_eq(p[0], key):
+                    del side[i]
+                    return
+        return
     for kk in list(tv.keys()):
         if deep_eq(kk, key):
             del tv[kk]
@@ -4349,7 +4405,10 @@ class Interp:
                     self.note(4, f"'{name}' was not declared; auto-declared")
         elif k == "idx_assign":
             _, te, ie, op, ve = s
-            self.cur_line = te[3] if isinstance(te, tuple) and len(te) > 3 else 0  # W07 mirror
+            # Z-512-CAP-PARITY mirror leg: the W07 cur_line RESET here zeroed
+            # the stale carryover line the engine renders (nothing else in
+            # the statement consumes cur_line) — removed; the full
+            # differential corpus proves the removal inert.
             tv = self.eval(env, te)
             iv = self.eval(env, ie)
             v = self.eval(env, ve)
@@ -4926,9 +4985,25 @@ class Interp:
                     return tv[idx]
                 raise Stress("missing", f"index {idx} out of range")
             if isinstance(tv, dict):
-                for kk, vv in _map_items(tv):
-                    if deep_eq(kk, iv):
-                        return vv
+                # Z-512-CAP-PARITY: a container-key probe scans only the
+                # first 512 UNIFIED items (the engine's position() KC_OTHER
+                # arm .take(NON_SCALAR_SCAN_CAP), SPEC §763 "treated as
+                # absent") — a match beyond the cap stresses "missing"
+                # exactly like a genuinely absent key. Scalar probes and
+                # the int/float cross-equality class stay UNBOUNDED
+                # (position_h's uncapped scalar arms).
+                if _is_container_key(iv):
+                    n = 0
+                    for kk, vv in _map_items(tv):
+                        if n >= _NON_SCALAR_SCAN_CAP:
+                            break
+                        n += 1
+                        if deep_eq(kk, iv):
+                            return vv
+                else:
+                    for kk, vv in _map_items(tv):
+                        if deep_eq(kk, iv):
+                            return vv
                 raise Stress("missing", "key not found")
             if isinstance(tv, str):
                 idx = self.as_index(iv, len(tv))
