@@ -3723,15 +3723,25 @@ impl Parser {
     }
 
     fn parse_unary(&mut self) -> Expr {
-        // unary chains (`------x` ×1M) recurse natively, same depth cap as
-        // paren/list nesting (S4 NEW-4)
-        if self.depth >= 4096 {
-            let line = self.line();
-            self.note(line, 4, "expression nested deeper than 4096; truncated");
-            self.skip_to_stmt_end();
-            return Expr::Null;
-        }
+        // Z-CAPWINDOW (L-053): the 4096-budget cap check lived at the HEAD
+        // of parse_unary — the head of EVERY expression chain — so it fired
+        // one level before any arm-entry check the oracle mirrors: the
+        // innermost content of the 4095th nested paren/call/block parsed at
+        // depth 4096 and was rejected here while the oracle (whose checks
+        // all sit at recursive-arm ENTRY, pre-consume) parsed it clean.
+        // Deterministic stdout divergence across the whole transition window
+        // (N=4095: rust null vs oracle 1 on paren/call/block shapes; deep
+        // unary chains died at 4095 while the oracle never tripped). The
+        // check now lives at the Minus/Tilde arm entries — pre-consume,
+        // pre-increment, matching every other recursive arm and the oracle
+        // op-for-op. Unary chains keep the skip_to_stmt_end containment.
         if matches!(self.peek(), Tok::Minus) {
+            if self.depth >= 4096 {
+                let line = self.line();
+                self.note(line, 4, "expression nested deeper than 4096; truncated");
+                self.skip_to_stmt_end();
+                return Expr::Null;
+            }
             self.next();
             self.depth += 1;
             let e = self.parse_unary();
@@ -3739,6 +3749,12 @@ impl Parser {
             return Expr::Unary(UnOp::Neg, Box::new(e));
         }
         if matches!(self.peek(), Tok::Tilde) {
+            if self.depth >= 4096 {
+                let line = self.line();
+                self.note(line, 4, "expression nested deeper than 4096; truncated");
+                self.skip_to_stmt_end();
+                return Expr::Null;
+            }
             self.next();
             self.depth += 1;
             let e = self.parse_unary();
