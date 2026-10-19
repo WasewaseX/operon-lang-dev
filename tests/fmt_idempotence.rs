@@ -28,7 +28,12 @@ fn contained_depth_pin(p: &std::path::Path) -> bool {
     // asserted in fix_corpus law1 (big-stack thread).
     // Match on FILE NAME: Windows paths use backslashes, so path-suffix
     // matching would silently miss on the windows CI legs.
-    const CONTAINED: &[&str] = &["parser_depth_leak_pin.op", "parser_depth_calls_pin.op"];
+        // Z-CAPWINDOW (L-053, PR #231): capwindow_pin.op trips the parser
+        // guard BY DESIGN (rows at N=4094..4098) — its renders re-parse with
+        // the rung-4 cap notes it exists to pin. Out of the fmt corpus
+        // contract, loudly, same class as the two pins above.
+    const CONTAINED: &[&str] = &["parser_depth_leak_pin.op", "parser_depth_calls_pin.op",
+        "capwindow_pin.op"];
     match p.file_name().and_then(|n| n.to_str()) {
         Some(name) => CONTAINED.contains(&name),
         None => false,
