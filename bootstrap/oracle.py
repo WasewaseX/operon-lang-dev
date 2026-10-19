@@ -125,8 +125,8 @@ class Variant:
         return v_repr(self)
 
 class Gene:
-    __slots__ = ("name", "params", "guard", "body", "acetylate", "methylate", "m6a", "copies", "seq", "riboswitch", "burst", "closure", "param_anns", "ret_ann", "type_params")
-    def __init__(self, name, params, guard, body, ac=False, me=False, m6=False, copies=1, seq=False, riboswitch=None, burst=None, param_anns=None, ret_ann=None, type_params=None):
+    __slots__ = ("name", "params", "guard", "body", "acetylate", "methylate", "m6a", "copies", "seq", "riboswitch", "burst", "closure", "param_anns", "ret_ann", "type_params", "line")
+    def __init__(self, name, params, guard, body, ac=False, me=False, m6=False, copies=1, seq=False, riboswitch=None, burst=None, param_anns=None, ret_ann=None, type_params=None, line=0):
         self.name, self.params, self.guard, self.body = name, params, guard, body
         self.acetylate, self.methylate, self.m6a, self.copies, self.seq = ac, me, m6, copies, seq
         # loop-9 (F-5): cis riboswitch (ligand, bound_means_on, threshold)
@@ -138,6 +138,10 @@ class Gene:
         self.ret_ann = ret_ann
         # TYPED-MODE: declared generic type parameters (mirror of GeneDef.type_params)
         self.type_params = type_params if type_params is not None else []
+        # Z-CAPWINDOW (L-053): the def keyword's line (A13/dx-r2 mirror of
+        # GeneDef.line) — the call-repair notes (missing/extra argument)
+        # stamp it LOCATED exactly like the engine.
+        self.line = line
         self.closure = None
 
 ENHANCE_DELTA = 0.25  # T2e: super-enhancer activation boost (GRN threshold reduction)
@@ -1260,6 +1264,11 @@ def wobble_keyword(word):
 class P:
     def __init__(self, toks, notes):
         self.toks, self.pos, self.notes = toks, 0, notes
+        # Z-CAPWINDOW (L-053) mirror of parser.rs PARSE_NOTE_CAP: the 10k cap
+        # counts PARSER-generated notes only (lexed.notes ride uncapped in
+        # parser.rs — `let mut notes = lexed.notes` outside p.notes), so the
+        # cap keys on the delta from the lexer-note base.
+        self.parse_note_base = len(notes)
         # #111 mirror: ONE shared recursion budget across every recursive
         # descent site (paren/list/map/unary/postfix/pattern/block), matching
         # parser.rs `depth` op-for-op so truncation is byte-identical.
@@ -1282,6 +1291,15 @@ class P:
         return t
 
     def note(self, line, rung, msg):
+        # Z-CAPWINDOW (L-053) mirror of parser.rs note(): sec-r4 (F-3) —
+        # past the 10k cap, further parser notes are suppressed, one
+        # boundary note at the exact cap (byte-identical render).
+        PARSE_NOTE_CAP = 10_000
+        generated = len(self.notes) - self.parse_note_base
+        if generated >= PARSE_NOTE_CAP:
+            if generated == PARSE_NOTE_CAP:
+                self.notes.append(Note(4, "parse note cap (10000) reached, further notes suppressed", line))
+            return
         self.notes.append(Note(rung, msg, line))
 
     def eat_nl(self):
@@ -2355,7 +2373,9 @@ class P:
                                 if self.pos == before:
                                     self.note(t2[2], 4, "unclosed variant parameter list; auto-closed")
                                     break
-                        variants.append((vname, vparams, self.block(), vmarks))
+                        vbody = self.block()
+                        vline = self.peek()[2]  # Z-CAPWINDOW: past-`}` line, mirror of parser.rs self.line() post-block
+                        variants.append((vname, vparams, vbody, vmarks, vline))
                     else:
                         if pending_marks:
                             self.note(t[2], 4, "mark must precede 'variant' in splice block; skipped")
@@ -2531,6 +2551,7 @@ class P:
                 self.note(self.peek()[2], 1, "bare 'main' block accepted as the entry gene (canonical form: gene main())")
             else:
                 self.note(self.peek()[2], 4, f"bare name block '{word}' treated as gene definition")
+            gline = self.peek()[2]  # Z-CAPWINDOW: def line (name token, A13 mirror)
             self.next()  # consume the name
             params = []
             if self.peek() == ("SYM", "(", self.peek()[2]):
@@ -2555,7 +2576,7 @@ class P:
                     if self.pos == before:
                         self.note(t[2], 4, "unclosed parameter list; auto-closed")
                         break
-            g = Gene(word, params, None, self.block())
+            g = Gene(word, params, None, self.block(), line=gline)
             return ("gene", g)
         return self.assign_or_expr(w)
 
@@ -2680,6 +2701,9 @@ class P:
         return ("expr", e)
 
     def gene_def(self, marks, copies=1, riboswitch=None, burst=None, deprecated=None):
+        # Z-CAPWINDOW: def line = the first token after `gene` (the name),
+        # mirror of parser.rs parse_gene_def's def_line (A13/dx-r2).
+        gline = self.peek()[2]
         ac = "acetylate" in marks
         me = "methylate" in marks
         m6 = "m6a" in marks
@@ -2794,11 +2818,11 @@ class P:
             self.end_stmt()
             for _p in type_params:
                 self.type_param_stack.pop()
-            return ("gene", Gene(name, params, guard, [("return", e)], ac, me, m6, copies, seq=False, riboswitch=riboswitch, burst=burst, param_anns=param_anns, ret_ann=ret_ann, type_params=type_params))
+            return ("gene", Gene(name, params, guard, [("return", e)], ac, me, m6, copies, seq=False, riboswitch=riboswitch, burst=burst, param_anns=param_anns, ret_ann=ret_ann, type_params=type_params, line=gline))
         body = self.block()
         for _p in type_params:
             self.type_param_stack.pop()
-        return ("gene", Gene(name, params, guard, body, ac, me, m6, copies, seq=False, riboswitch=riboswitch, burst=burst, param_anns=param_anns, ret_ann=ret_ann, type_params=type_params))
+        return ("gene", Gene(name, params, guard, body, ac, me, m6, copies, seq=False, riboswitch=riboswitch, burst=burst, param_anns=param_anns, ret_ann=ret_ann, type_params=type_params, line=gline))
 
     def block(self):
         if not (self.peek() == ("SYM", "{", self.peek()[2])):
@@ -3038,13 +3062,57 @@ class P:
                 return left
 
     def unary(self):
+        # Z-CAPWINDOW (L-053) mirror: the 4096-budget check moves from the
+        # expression head (parser.rs parse_unary head, which fired one level
+        # before every arm-entry check) to the Minus/Tilde arm entries —
+        # pre-consume, pre-increment, matching parser.rs op-for-op. The
+        # oracle previously charged NO depth on unary chains and never
+        # tripped (Python native recursion ~150k) while the engine died at
+        # 4095; both boundaries now coincide at arm-entry depth 4096
+        # (N=4097 first trip) with the same skip-to-statement-end
+        # containment and the same note text/line stamp.
         if self.peek() == ("SYM", "-", self.peek()[2]):
+            if self.depth >= 4096:
+                self.note(self.peek()[2], 4, "expression nested deeper than 4096; truncated")
+                self.skip_to_stmt_end()
+                return ("lit", None)
             self.next()
-            return ("un", "neg", self.unary())
+            self.depth += 1
+            e = self.unary()
+            self.depth -= 1
+            return ("un", "neg", e)
         if self.peek() == ("SYM", "~", self.peek()[2]):
+            if self.depth >= 4096:
+                self.note(self.peek()[2], 4, "expression nested deeper than 4096; truncated")
+                self.skip_to_stmt_end()
+                return ("lit", None)
             self.next()
-            return ("un", "bitnot", self.unary())
+            self.depth += 1
+            e = self.unary()
+            self.depth -= 1
+            return ("un", "bitnot", e)
         return self.pow_expr()
+
+    def skip_to_stmt_end(self):
+        # Z-CAPWINDOW mirror of parser.rs skip_to_stmt_end: consume tokens
+        # up to (and including) the next statement terminator, delimiter-
+        # balanced; a closing delimiter at depth 0 stays visible to the
+        # caller (the truncation containment for delimiter-less arms).
+        depth = 0
+        while self.pos < len(self.toks):
+            k, v, _l = self.toks[self.pos]
+            if k == "SYM" and v in ("(", "[", "{"):
+                depth += 1
+            elif k == "SYM" and v in (")", "]", "}"):
+                if depth == 0:
+                    return
+                depth -= 1
+            elif (k == "NL" or v == ";") and depth == 0:
+                self.pos += 1
+                return
+            elif k == "EOF":
+                return
+            self.pos += 1
 
     def pow_expr(self):
         left = self.postfix()
@@ -3755,6 +3823,9 @@ BUILTIN_SYNONYMS = {"print": "promote", "echo": "promote", "say": "promote", "sh
 class Interp:
     def __init__(self, cell=None, cli_args=None):
         self.notes = []
+        # Z-CAPWINDOW (L-053) mirror of Interp::note notes_dropped: counts
+        # eval notes suppressed past the 10k cap (gates the one boundary note).
+        self.notes_dropped = 0
         self.cell = cell or {}
         # W05: frozen-container registry (id() of lists/dicts bound via const).
         # Frozen-ness does NOT cross the spawn boundary: the reachable ids are
@@ -4038,6 +4109,17 @@ class Interp:
         self.frozen_ids |= parked
 
     def note(self, rung, msg, line=0):
+        # Z-CAPWINDOW (L-053) mirror of Interp::note: sec-r3 — past the 10k
+        # cap (the COMBINED list: parse notes were pushed in raw by the
+        # runner, exactly like tools.rs `interp.notes.push(n.clone())`),
+        # further eval notes are counted, not stored; one boundary note at
+        # the first drop.
+        NOTE_CAP = 10_000
+        if len(self.notes) >= NOTE_CAP:
+            self.notes_dropped += 1
+            if self.notes_dropped == 1:
+                self.notes.append(Note(4, "note cap (10000) reached, further notes suppressed", line))
+            return
         # loop-9 (C8): worker-note prefix parity — the Rust join path tags
         # every spawned worker note with "[task <name>] " (genes.rs); the
         # sequential oracle applies the same prefix while the spawn body
@@ -4739,10 +4821,10 @@ class Interp:
             self.splice_registry[root] = s
             chosen = self.choose_variant(root, variants)
             if chosen:
-                vname, vparams, body, vmarks = chosen
+                vname, vparams, body, vmarks, vline = chosen
                 self.note(1, f"splice '{root}' → variant '{vname}' active")
                 g = Gene(root, vparams, None, body,
-                         ac="acetylate" in vmarks, me="methylate" in vmarks, m6="m6a" in vmarks)
+                         ac="acetylate" in vmarks, me="methylate" in vmarks, m6="m6a" in vmarks, line=vline)
                 if root not in self.defined_genes:
                     self.defined_genes.append(root)
                 env[root] = g
@@ -4818,25 +4900,25 @@ class Interp:
             return None
         cv = self.cell.get(f"variant.{root}")
         if cv:
-            for vn, vp, b, mk in variants:
+            for vn, vp, b, mk, vl in variants:
                 if vn == cv:
-                    return (vn, vp, b, mk)
+                    return (vn, vp, b, mk, vl)
         cv = self.cell.get("cli.variant")
         if cv:
-            for vn, vp, b, mk in variants:
+            for vn, vp, b, mk, vl in variants:
                 if vn == cv:
-                    return (vn, vp, b, mk)
+                    return (vn, vp, b, mk, vl)
         # 3. loop-9 (F-4): runtime splice_shift (a bound splicing factor
         # overrides the static mark; the operator pins above override it)
         sv = self.splice_shift.get(root)
         if sv:
-            for vn, vp, b, mk in variants:
+            for vn, vp, b, mk, vl in variants:
                 if vn == sv:
-                    return (vn, vp, b, mk)
+                    return (vn, vp, b, mk, vl)
         # 4. m6a-marked variant (T2c: mirrors the Rust core)
-        for vn, vp, b, mk in variants:
+        for vn, vp, b, mk, vl in variants:
             if "m6a" in mk:
-                return (vn, vp, b, mk)
+                return (vn, vp, b, mk, vl)
         # 5. first declared
         return variants[0]
 
@@ -6048,10 +6130,10 @@ class Interp:
                     raise Stress("unfolded", f"default of '{pname}' for gene '{name}' expects {ann_render(anns[i])}, got {type_name(dv)}")
                 fenv[pname] = dv
             else:
-                self.note(4, f"missing argument '{pname}' in call to {name}; bound null")
+                self.note(4, f"missing argument '{pname}' in call to {name}; bound null", g.line)
                 fenv[pname] = None
         if len(args) > len(g.params) and g.params:
-            self.note(4, f"{len(args) - len(g.params)} extra argument(s) in call to {name} ignored")
+            self.note(4, f"{len(args) - len(g.params)} extra argument(s) in call to {name} ignored", g.line)
         if g.guard is not None:
             cond, gbody = g.guard
             ok = False
@@ -6962,9 +7044,9 @@ class Interp:
                 self.note(4, f"splice_shift: variant '{variant}' not declared in splice '{root}'; selection unchanged")
                 return cur
             self.splice_shift[root] = variant
-            vname, vparams, body, vmarks = self.choose_variant(root, variants)
+            vname, vparams, body, vmarks, vline = self.choose_variant(root, variants)
             g = Gene(root, vparams, None, body,
-                     ac="acetylate" in vmarks, me="methylate" in vmarks, m6="m6a" in vmarks)
+                     ac="acetylate" in vmarks, me="methylate" in vmarks, m6="m6a" in vmarks, line=vline)
             if root not in self.defined_genes:
                 self.defined_genes.append(root)
             # trans-acting factor: replace the binding up the env chain
@@ -8830,7 +8912,7 @@ def collect_structure(stmts):
                 if s[1].guard:
                     walk(s[1].guard[1])
             elif s[0] == "splice":
-                for _, _vp, vb, _mk in s[2]:
+                for _, _vp, vb, _mk, _vl in s[2]:
                     walk(vb)
     walk(stmts)
     return proofs, frames, exports, tad_exports, tad_members, ires
@@ -9005,7 +9087,10 @@ def load_file(path, cell=None, variant=None, rna=None, args=None, caps=None):
         src = src2
     stmts, notes, _ = parse(src)
     for nt in notes:
-        it.note(nt.rung, nt.message, getattr(nt, "line", 0))
+        # Z-CAPWINDOW (L-053): raw append — mirror of tools.rs
+        # `interp.notes.push(n.clone())`: parse notes bypass the eval-note
+        # cap (which counts the combined list from the first eval note).
+        it.notes.append(nt)
     it.ires = [s[1] for s in stmts if s[0] == "ires"]
     # capability grants from .cell allow.* keys, only an EXPLICITLY passed
     # --cell may grant; auto-detected operon.cell keys are ignored with a note
