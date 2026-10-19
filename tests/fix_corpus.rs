@@ -94,6 +94,13 @@ fn law1_fix_never_changes_canonical_meaning_corpus_wide() {
         // matching would silently miss on the windows CI legs
         "parser_depth_leak_pin.op",
         "parser_depth_calls_pin.op",
+        // Z-CAPWINDOW (L-053, PR #231): the 4096-budget transition-window
+        // pin sits at the #111 guard boundary BY DESIGN (rows at N=4094..4098
+        // across paren/call/block/unary) — same class as the two pins above:
+        // parse+format on a big-stack thread, the fix->re-parse half
+        // excluded, loudly. Found by CI (law1 overflowed 2MB test threads on
+        // every matrix leg; the local box's larger stacks masked it).
+        "capwindow_pin.op",
     ];
     for path in corpus() {
         let src = match std::fs::read_to_string(&path) {
