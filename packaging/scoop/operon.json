@@ -15,7 +15,7 @@
             "hash": "d05fd6fa27b071737da660c14d8bfe42823e166482af800d2ea3b28be6b861d9"
         }
     },
-    "extract_dir": "operon-2.11.0",
+    "extract_dir": "operon-2.11.1-x86_64-pc-windows-msvc",
     "bin": [
         "operon.exe",
         "operon-ls.exe"
