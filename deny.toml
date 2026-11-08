@@ -1,0 +1,38 @@
+# Default cargo-deny policy for the Rust stack.
+#
+# cargo-deny's built-in default has an EMPTY license allow list - even
+# MIT is rejected - so the template ships this baseline. Commit your own
+# deny.toml to take full control (this file is copied into consumer
+# repos only when they have none).
+
+[licenses]
+version = 2
+confidence-threshold = 0.8
+allow = [
+    "MIT",
+    "MIT-0",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "CC0-1.0",
+    "Unlicense",
+    "WTFPL",
+    "Zlib",
+    "BSL-1.0",
+    "OpenSSL",
+    "CDLA-Permissive-2.0",
+]
+
+[advisories]
+version = 2
+yanked = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

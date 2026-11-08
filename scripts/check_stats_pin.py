@@ -72,7 +72,9 @@ def audit(text):
     if mods.group(2).strip() != live_names:
         findings.append("std module name list stale: STATS.md list != live std/*.op set")
     if int(mods.group(1)) != len(live):
-        findings.append(f"std module count stale: STATS.md says {mods.group(1)}, tree has {len(live)}")
+        findings.append(
+            f"std module count stale: STATS.md says {mods.group(1)}, tree has {len(live)}"
+        )
     for m, n in sorted(live.items()):
         if m in table and table[m] != n:
             findings.append(f"module '{m}' stale: STATS.md table says {table[m]}, tree counts {n}")
@@ -89,12 +91,16 @@ SELFTEST_FRESH = """- **Std modules**: 2 (alpha, beta)
 | beta | 1 |
 """
 
-SELFTEST_STALE = SELFTEST_FRESH.replace("340", "339").replace("**: 3", "**: 2") \
+SELFTEST_STALE = (
+    SELFTEST_FRESH.replace("340", "339")
+    .replace("**: 3", "**: 2")
     .replace("| alpha | 2 |", "| alpha | 1 |")
+)
 
 
 def selftest():
     import tempfile
+
     ok = True
     with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as t:
         t.write(SELFTEST_STALE)
@@ -132,7 +138,9 @@ def main():
         print("  re-pin with: python3 scripts/gen_doc_stats.py  (then commit the pair)")
         return 1
     mods, funcs, table = committed_counts(text)
-    print(f"stats pin OK: {mods.group(1)} modules / {funcs.group(1)} std funcs true at the current tree")
+    print(
+        f"stats pin OK: {mods.group(1)} modules / {funcs.group(1)} std funcs true at the current tree"
+    )
     return 0
 
 

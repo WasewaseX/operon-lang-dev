@@ -90,7 +90,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
 > The VM (W009) starts only after W007/W006 land so the bytecode design targets the final
 > error model, not a moving one.
 
-### W001, Optional static type annotations [P1] [dev-1] [XL] [Track L2c] [partial: stage 1 L2c soft annotations on main 8f59164 (gene param/return + let anns, unions, optionals, unknown-name typo armor, oracle op-for-op, type_anns.op 30 asserts + differential); REMAIN: check-time inference + reporting, List<T>/Map<K,V> sugar, type aliases]
+## W001, Optional static type annotations [P1] [dev-1] [XL] [Track L2c] [partial: stage 1 L2c soft annotations on main 8f59164 (gene param/return + let anns, unions, optionals, unknown-name typo armor, oracle op-for-op, type_anns.op 30 asserts + differential); REMAIN: check-time inference + reporting, List<T>/Map<K,V> sugar, type aliases]
 - Goal: `gene add(a: int, b: int) -> int` parses and soft-checks; annotations are optional
   everywhere (gradual typing); unknown/unexpected types become semantic **warnings**, never
   rejections (Total Grammar preserved).
@@ -393,7 +393,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
 > then **W039 → W043 → W049** (quick tooling wins), then **W037 → W041 → W042**, then
 > W051/W052, then W045/W047/W048, then the P3s.
 
-### W034, Serialization trait/interface [P2] [dev-2] [M] [done: SERIALIZATION.md stage 1 + stage 2 landed (stage 2 via PR #28, 2026-09-27) — phenotype instances serialize as the canonical wire map with the reserved `"#phenotype"` identity key, `from_json` rebuilds REAL instances (class must be declared, unknown name → err, init NOT re-run — the wire is the truth), round-trip table in docs/specs/SERIALIZATION.md covers every shape incl. the exact/recursive phenotype row, proof asserts the reporting; the W04 trait hook stays spec'd as the future OVERRIDE (the convention-first path the row itself sanctioned)]
+## W034, Serialization trait/interface [P2] [dev-2] [M] [done: SERIALIZATION.md stage 1 + stage 2 landed (stage 2 via PR #28, 2026-09-27) — phenotype instances serialize as the canonical wire map with the reserved `"#phenotype"` identity key, `from_json` rebuilds REAL instances (class must be declared, unknown name → err, init NOT re-run — the wire is the truth), round-trip table in docs/specs/SERIALIZATION.md covers every shape incl. the exact/recursive phenotype row, proof asserts the reporting; the W04 trait hook stays spec'd as the future OVERRIDE (the convention-first path the row itself sanctioned)]
 - Goal: one `Serialize` concept (trait per W004, or duck-typed convention until then) so
   JSON/CSV/custom formats share a contract.
 - Done when: `to_json`/`from_json` honor the convention for phenotypes; docs table of
@@ -661,7 +661,7 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
 > survive even if sessions reset), then code in the order the audit's "fix first" implies
 > for this range.
 
-### W066, `.cell` formal schema [P1] [dev-2, CLAIMED by builder-B per canonical board; owner-arbitration pending] [M] [done: docs/specs/CELL-SCHEMA.md is the as-built contract — dual-lane validation (check lane `operon lint f.op --cell c.cell` with cell-unknown-key + cell-type-mismatch rules, parse lane src/genes.rs::parse_cell_checked with the same rule names + closest-known-key typo hints), both advisory per Total Grammar (a config problem never rejects a run), allow.* grant semantics preserved; rt_p7g_cell_garbage.cell redteam payload contained; schema source of truth lives in src/genes.rs + src/lint.rs sharing one vocabulary; docs truth pass 2026-10-08 closed the stale [claimed] status against the landed evidence]
+## W066, `.cell` formal schema [P1] [dev-2, CLAIMED by builder-B per canonical board; owner-arbitration pending] [M] [done: docs/specs/CELL-SCHEMA.md is the as-built contract — dual-lane validation (check lane `operon lint f.op --cell c.cell` with cell-unknown-key + cell-type-mismatch rules, parse lane src/genes.rs::parse_cell_checked with the same rule names + closest-known-key typo hints), both advisory per Total Grammar (a config problem never rejects a run), allow.* grant semantics preserved; rt_p7g_cell_garbage.cell redteam payload contained; schema source of truth lives in src/genes.rs + src/lint.rs sharing one vocabulary; docs truth pass 2026-10-08 closed the stale [claimed] status against the landed evidence]
 > sz hand-off note: full implementation spec retained below for builder-B; the L022/W022
 > manifest-validator reuse contract still holds, coordinate before landing.
 - Goal: `.cell` gets a typed, versioned, documented schema: known keys with types/ranges/

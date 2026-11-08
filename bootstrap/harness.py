@@ -7,7 +7,11 @@ that keeps the two implementations honest.
 
 Usage: python3 bootstrap/harness.py [--bin ../bin/operon]
 """
-import subprocess, sys, os, argparse
+
+import argparse
+import os
+import subprocess
+import sys
 
 # compat-r2 (windows leg, 2026-10-03): the harness's own stdout crashed on
 # Windows runners. The W59 fix decodes the two cores as UTF-8, but the
@@ -22,6 +26,7 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace", newline="\n")
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace", newline="\n")
+
 
 # S3 exclusion policy (sz, 2026-09-24), builtins with NO exact-output golden,
 # by nature, each accounted for:
@@ -48,10 +53,17 @@ def run(cmd, timeout=120):
     env = dict(os.environ)
     env["PYTHONIOENCODING"] = "utf-8"
     env["PYTHONUTF8"] = "1"
-    p = subprocess.run(cmd, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=timeout,
-                       env=env)
+    p = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+        env=env,
+    )
     return p.stdout, p.returncode, p.stderr
+
 
 def collect_op(root):
     out = []
@@ -69,6 +81,7 @@ def collect_op(root):
             if f.endswith(".op"):
                 out.append(os.path.join(dirpath, f))
     return sorted(out)
+
 
 # loop-10 (F-7/F-8): granted-with-cell differential targets, the opt-in
 # Rho/queue proofs run under an explicit operator cell on BOTH cores.
@@ -90,6 +103,7 @@ GRANTED_CELL_TARGETS = [
     ("tests/granted/visibility_strict.op", "tests/granted/visibility_strict.cell"),
 ]
 
+
 # W096-A (reliab lane, 2026-10-02): this harness is CWD-contractual. The
 # oracle resolves `use std/x` through CWD-relative candidates (its module
 # search: the importing file's dir, then CWD, then std/), so running the
@@ -109,8 +123,9 @@ def ensure_in_tree(root):
     granted-targets loop is unconditional and repo-relative).
     """
     if os.path.realpath(os.getcwd()) != os.path.realpath(root):
-        print("FATAL: harness.py must run from the repo root "
-              f"(cwd={os.getcwd()} != --root={root}).")
+        print(
+            f"FATAL: harness.py must run from the repo root (cwd={os.getcwd()} != --root={root})."
+        )
         print("  Why: the oracle resolves `use std/x` via CWD-relative candidates,")
         print("  so an out-of-tree cwd silently diverges every std-using program")
         print("  (false DIVERGE flood, the W096-A audit class).")
@@ -206,7 +221,9 @@ def main():
             gop = os.path.join(root, rel_op)
             gcell = os.path.join(root, rel_cell)
             if not (os.path.isfile(gop) and os.path.isfile(gcell)):
-                print(f"  FAIL     {rel_op} (missing op or cell, granted targets are checked in, a missing one is a broken tree)")
+                print(
+                    f"  FAIL     {rel_op} (missing op or cell, granted targets are checked in, a missing one is a broken tree)"
+                )
                 failed += 1
                 continue
             # z-fuzz-infra (#138.7): timeout parity, see the main lane
@@ -246,7 +263,7 @@ def main():
     # A6 boundary, the coverage contract (both engines, whole corpus) did
     # not change.
     vm_pass, vm_fail = 0, 0
-    print(f"\n--no-vm lane (tree-walk engine vs the same oracle output)")
+    print("\n--no-vm lane (tree-walk engine vs the same oracle output)")
     if args.lane in ("both", "novm"):
         for t in targets:
             rel = os.path.relpath(t, root)
@@ -280,6 +297,7 @@ def main():
                 vm_fail += 1
     print(f"tree-walk lane result: {vm_pass} match, {vm_fail} diverge")
     sys.exit(1 if (failed or vm_fail) else 0)
+
 
 if __name__ == "__main__":
     main()

@@ -4,6 +4,7 @@
 Usage: python3 scripts/bench/bench_merge.py out.json in1.json in2.json ...
 Later files win on key collisions; "meta" is taken from the first input.
 """
+
 import json
 import sys
 

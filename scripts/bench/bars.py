@@ -32,6 +32,7 @@ Usage:
 Reproducibility half: scripts/bench/bars_check.py re-derives
 docs/perf/BARS.md from the saved JSON.
 """
+
 import argparse
 import hashlib
 import json
@@ -48,8 +49,7 @@ import urllib.request
 # the bench.sh convention: the cargo toolchain lives in ~/.cargo/bin (or the
 # relocated $PROJECT/.cargo + .rustup after a sandbox HOME wipe) — put it on
 # PATH and point rustup at it so rustc is reachable for the Bar C twins.
-for _cargo in (os.path.expanduser("~/.cargo/bin"),
-               "/home/z/my-project/.cargo/bin"):
+for _cargo in (os.path.expanduser("~/.cargo/bin"), "/home/z/my-project/.cargo/bin"):
     if os.path.isdir(_cargo) and _cargo not in os.environ["PATH"]:
         os.environ["PATH"] = _cargo + os.pathsep + os.environ["PATH"]
 for _home in (os.path.expanduser("~/.rustup"), "/home/z/my-project/.rustup"):
@@ -67,7 +67,7 @@ for _home in (os.path.expanduser("~/.cargo"), "/home/z/my-project/.cargo"):
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # import-the-law: the workload table, the native-py mirrors and the timing
 # law come from scripts/bench_compare.py. Nothing here re-implements them.
-from bench_compare import SUITES, time_cmd, time_fn, run_operon  # noqa: E402
+from bench_compare import SUITES, run_operon, time_cmd, time_fn  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 BENCH = os.path.join(ROOT, "scripts", "bench")
@@ -80,27 +80,34 @@ CACHE = os.environ.get("OPERON_BARS_CACHE", "/tmp/operon-bars-cache")
 # kind "std" = the R0.8 twins (argv n, prints the .op promote line).
 # None = documented REFUSAL (no std-only Rust analog).
 C_TWINS = {
-    "fib25":      ("call_fib_rs.rs", "callfib"),
-    "loops":      ("loops_rs.rs", "std"),
-    "strings":    ("strings_rs.rs", "std"),
-    "collections":("collections_rs.rs", "std"),
-    "recursion":  ("recursion_rs.rs", "std"),
-    "grn":        ("grn_rs.rs", "std"),
-    "seq":        ("seq_rs.rs", "std"),
-    "large_map":  ("large_map_rs.rs", "std"),
-    "file_io":    ("file_io_rs.rs", "std"),
-    "json":       None,
-    "regex":      None,
-    "modules":    None,
+    "fib25": ("call_fib_rs.rs", "callfib"),
+    "loops": ("loops_rs.rs", "std"),
+    "strings": ("strings_rs.rs", "std"),
+    "collections": ("collections_rs.rs", "std"),
+    "recursion": ("recursion_rs.rs", "std"),
+    "grn": ("grn_rs.rs", "std"),
+    "seq": ("seq_rs.rs", "std"),
+    "large_map": ("large_map_rs.rs", "std"),
+    "file_io": ("file_io_rs.rs", "std"),
+    "json": None,
+    "regex": None,
+    "modules": None,
 }
 
 # base size per workload (the .op constant; passed EXPLICITLY to the twins
 # so a silent twin-default drift can never go unnoticed).
 BASE_N = {
-    "fib25": 25, "loops": 200000, "strings": 4000, "collections": 20000,
-    "recursion": 20, "grn": 20000, "seq": 6000, "large_map": 6000,
+    "fib25": 25,
+    "loops": 200000,
+    "strings": 4000,
+    "collections": 20000,
+    "recursion": 20,
+    "grn": 20000,
+    "seq": 6000,
+    "large_map": 6000,
     "file_io": 300,
 }
+
 
 def c_cmd(name, src_path, n2=None, reps=1):
     """The argv law for a Bar C twin at size n (n2 = explicit override)."""
@@ -108,23 +115,35 @@ def c_cmd(name, src_path, n2=None, reps=1):
         return [src_path, str(n2 or BASE_N[name]), str(reps)]
     return [src_path, str(n2 or BASE_N[name])]
 
+
 # py-mirror value -> the string the .op promotes (the parity contract).
 def py_line(name, v):
-    if name == "loops":      return f"acc = {v}"
-    if name == "strings":    return f"len = {v}"
+    if name == "loops":
+        return f"acc = {v}"
+    if name == "strings":
+        return f"len = {v}"
     if name == "collections":
         total, distinct = v
         # k1 is a constant of the shape: n_base/2000 hits of key "k1"
         return f"total = {total}, distinct = {distinct}, k1 = {20000 // 2000}"
-    if name == "recursion":  return f"C(20,10) = {v}"
-    if name == "grn":        return f"acc = {v}"
-    if name == "seq":        return None  # sum only; triple checked via decomposition
-    if name == "large_map":  return f"map sum = {v}"
-    if name == "file_io":    return f"io ok = {v}"
-    if name == "json":       return f"json acc = {v}"
-    if name == "regex":      return f"regex hits = {v}"
-    if name == "fib25":      return f"fib(25) = {v}"
-    if name == "modules":    return None  # shape-compare (BENCH.md honesty note)
+    if name == "recursion":
+        return f"C(20,10) = {v}"
+    if name == "grn":
+        return f"acc = {v}"
+    if name == "seq":
+        return None  # sum only; triple checked via decomposition
+    if name == "large_map":
+        return f"map sum = {v}"
+    if name == "file_io":
+        return f"io ok = {v}"
+    if name == "json":
+        return f"json acc = {v}"
+    if name == "regex":
+        return f"regex hits = {v}"
+    if name == "fib25":
+        return f"fib(25) = {v}"
+    if name == "modules":
+        return None  # shape-compare (BENCH.md honesty note)
     raise KeyError(name)
 
 
@@ -154,13 +173,17 @@ def sha256(path):
 # Bar A: the previous release binary
 # --------------------------------------------------------------------------
 
+
 def resolve_bara(explicit=None):
     """Return (binary_path, meta). explicit PATH wins; else the cache; else
     download the latest release tarball for this platform + verify sha256
     against the release's own SHA256SUMS."""
     if explicit:
-        return explicit, {"source": "explicit", "binary_sha256": sha256(explicit),
-                          "version": bin_version(explicit)}
+        return explicit, {
+            "source": "explicit",
+            "binary_sha256": sha256(explicit),
+            "version": bin_version(explicit),
+        }
     machine = "x86_64-unknown-linux-gnu"
     asset = tag = None
     try:
@@ -169,7 +192,8 @@ def resolve_bara(explicit=None):
         if tok:
             headers["Authorization"] = f"token {tok}"
         req = urllib.request.Request(
-            f"https://api.github.com/repos/{REPO}/releases/latest", headers=headers)
+            f"https://api.github.com/repos/{REPO}/releases/latest", headers=headers
+        )
         with urllib.request.urlopen(req, timeout=30) as r:
             rel = json.load(r)
         tag = rel["tag_name"]
@@ -203,26 +227,32 @@ def resolve_bara(explicit=None):
                 t.extractall(CACHE, filter="tar")
         b = os.path.join(d, "operon")
         if os.path.exists(b):
-            return b, {"source": f"release {tag}", "tag": tag, "asset": asset,
-                       "tarball_sha256": got, "binary_sha256": sha256(b),
-                       "version": bin_version(b)}
-    raise SystemExit("[bars] no Bar A binary available (offline and cache empty); "
-                     "pass --bara PATH")
+            return b, {
+                "source": f"release {tag}",
+                "tag": tag,
+                "asset": asset,
+                "tarball_sha256": got,
+                "binary_sha256": sha256(b),
+                "version": bin_version(b),
+            }
+    raise SystemExit("[bars] no Bar A binary available (offline and cache empty); pass --bara PATH")
 
 
 # --------------------------------------------------------------------------
 # Bar C: compile + run the rust twins
 # --------------------------------------------------------------------------
 
+
 def twin_bin(src_name):
     """Compile (cached by mtime) and return the twin binary path."""
     if shutil.which("rustc") is None:
-        raise SystemExit("[bars] rustc not found on PATH — the Bar C lane needs "
-                         "the Rust toolchain (bash scripts/build.sh provisions "
-                         "the expectation; install rustup 1.99.0 to run Bar C)")
+        raise SystemExit(
+            "[bars] rustc not found on PATH — the Bar C lane needs "
+            "the Rust toolchain (bash scripts/build.sh provisions "
+            "the expectation; install rustup 1.99.0 to run Bar C)"
+        )
     src = os.path.join(BENCH, src_name)
-    out = os.path.join(tempfile.gettempdir(), "operon-bars-c",
-                       src_name.replace(".rs", ""))
+    out = os.path.join(tempfile.gettempdir(), "operon-bars-c", src_name.replace(".rs", ""))
     os.makedirs(os.path.dirname(out), exist_ok=True)
     if not os.path.exists(out) or os.path.getmtime(src) > os.path.getmtime(out):
         r = sh(["rustc", "-O", src, "-o", out])
@@ -252,6 +282,7 @@ def c_time(name, src_name, iters):
 # main
 # --------------------------------------------------------------------------
 
+
 def cpu_model():
     try:
         with open("/proc/cpuinfo") as f:
@@ -280,9 +311,11 @@ def main():
             raise SystemExit("[bars] build.sh failed")
 
     bara_bin, bara_meta = resolve_bara(args.bara)
-    head_meta = {"source": f"main @ {git('rev-parse', '--short', 'HEAD')}",
-                 "binary_sha256": sha256(HEAD_BIN),
-                 "version": bin_version(HEAD_BIN)}
+    head_meta = {
+        "source": f"main @ {git('rev-parse', '--short', 'HEAD')}",
+        "binary_sha256": sha256(HEAD_BIN),
+        "version": bin_version(HEAD_BIN),
+    }
 
     suites, scaling = {}, {}
     print(f"HEAD  : {head_meta['version']}  ({head_meta['source']})")
@@ -291,8 +324,16 @@ def main():
     print(f"Bar C : rustc twins{' (SKIPPED)' if args.skip_c else ''}")
     print()
 
-    hdr = [("workload", 12), ("HEAD", 9), ("barA", 9), ("barB", 10), ("barC", 9),
-           ("op/py", 8), ("HEAD/A", 8), ("parity", 7)]
+    hdr = [
+        ("workload", 12),
+        ("HEAD", 9),
+        ("barA", 9),
+        ("barB", 10),
+        ("barC", 9),
+        ("op/py", 8),
+        ("HEAD/A", 8),
+        ("parity", 7),
+    ]
     w = [c[1] for c in hdr]
     print("  ".join(f"{c:>{x}}" for c, x in hdr))
     print("  ".join("-" * x for x in w))
@@ -324,8 +365,7 @@ def main():
         if expected is not None:
             parity = parity and hval == expected
             checks.append("==py")
-        row["values"] = {"head": hval, "bara": aval, "py": expected,
-                         "contract": "; ".join(checks)}
+        row["values"] = {"head": hval, "bara": aval, "py": expected, "contract": "; ".join(checks)}
 
         cmn = None
         if args.skip_c or C_TWINS.get(name) is None:
@@ -348,26 +388,40 @@ def main():
                 parity = parity and (tot == native()) and (cval == hval)
                 row["values"]["py"] = f"triple-sum = {tot}"
             else:
-                parity = parity and (cval == hval) and (
-                    expected is None or cval == expected)
+                parity = parity and (cval == hval) and (expected is None or cval == expected)
             cmn, cmed = c_time(name, src_name, iters)
             row["barc"] = {"min": cmn, "median": cmed}
 
         if not parity:
-            print(f"[bars] VALUE PARITY FAILURE on {name}: "
-                  f"head={hval!r} bara={aval!r} py={expected!r} "
-                  f"barc={row['values'].get('barc')!r}", file=sys.stderr)
-            raise SystemExit("[bars] refusing to record timings for a disagreeing "
-                             "runner (differential-verified benchmarking)")
+            print(
+                f"[bars] VALUE PARITY FAILURE on {name}: "
+                f"head={hval!r} bara={aval!r} py={expected!r} "
+                f"barc={row['values'].get('barc')!r}",
+                file=sys.stderr,
+            )
+            raise SystemExit(
+                "[bars] refusing to record timings for a disagreeing "
+                "runner (differential-verified benchmarking)"
+            )
         row["parity"] = True
 
         opms = row["head"]["min"] * 1000
-        ccell = ("refused" if row.get("barc", {}).get("refused")
-                 else f"{cmn*1000:.1f}" if cmn is not None else "-")
+        ccell = (
+            "refused"
+            if row.get("barc", {}).get("refused")
+            else f"{cmn * 1000:.1f}"
+            if cmn is not None
+            else "-"
+        )
         cells = [
-            name, f"{opms:.1f}", f"{amn*1000:.1f}",
-            f"{bmn*1000:.1f}", ccell,
-            f"{opms/(bmn*1000):.1f}x", f"{hmn/amn:.2f}", "OK",
+            name,
+            f"{opms:.1f}",
+            f"{amn * 1000:.1f}",
+            f"{bmn * 1000:.1f}",
+            ccell,
+            f"{opms / (bmn * 1000):.1f}x",
+            f"{hmn / amn:.2f}",
+            "OK",
         ]
         print("  ".join(f"{c:>{x}}" for c, x in zip(cells, w)))
         suites[name] = row
@@ -375,9 +429,11 @@ def main():
     # ------------------------------------------------------------------
     # scaling: base vs *_2x.op on HEAD / Bar A / Bar C
     # ------------------------------------------------------------------
-    print("\nscaling t(2N)/t(N) — HEAD / Bar A / Bar C (Bar B: size-fixed "
-          "mirrors, noted not a gap; fib25+recursion: exponential by "
-          "construction)")
+    print(
+        "\nscaling t(2N)/t(N) — HEAD / Bar A / Bar C (Bar B: size-fixed "
+        "mirrors, noted not a gap; fib25+recursion: exponential by "
+        "construction)"
+    )
     shdr = [("workload", 12), ("HEAD", 10), ("barA", 10), ("barC", 10)]
     sw = [c[1] for c in shdr]
     print("  ".join(f"{c:>{x}}" for c, x in shdr))
@@ -401,12 +457,18 @@ def main():
             # both binaries must print the same value at the doubled size.
             vals2[lane] = sh([binary, "run", x2_p] + list(extra or [])).stdout.strip()
         if vals2["head"] != vals2["bara"]:
-            raise SystemExit(f"[bars] 2x VALUE PARITY FAILURE on {name}: "
-                             f"head={vals2['head']!r} bara={vals2['bara']!r} — "
-                             "refusing a scaling row for disagreeing runners")
+            raise SystemExit(
+                f"[bars] 2x VALUE PARITY FAILURE on {name}: "
+                f"head={vals2['head']!r} bara={vals2['bara']!r} — "
+                "refusing a scaling row for disagreeing runners"
+            )
         crow = None
-        if not args.skip_c and C_TWINS.get(name) and name in BASE_N \
-                and C_TWINS[name][1] != "callfib":
+        if (
+            not args.skip_c
+            and C_TWINS.get(name)
+            and name in BASE_N
+            and C_TWINS[name][1] != "callfib"
+        ):
             src_name = C_TWINS[name][0]
             p = twin_bin(src_name)
             c1 = time_cmd(c_cmd(name, p), ROOT, iters)[0]
@@ -415,10 +477,16 @@ def main():
             # twin at 2n must agree with the engines' 2x fixture value
             cval2 = run_c_once(name, src_name, BASE_N[name] * 2)[0]
             if cval2 != vals2["head"]:
-                raise SystemExit(f"[bars] 2x twin disagreement on {name}: "
-                                 f"twin={cval2!r} engines={vals2['head']!r}")
-        scaling[name] = {"head": srow["head"], "bara": srow["bara"],
-                         "barc": crow, "value_2x": vals2["head"]}
+                raise SystemExit(
+                    f"[bars] 2x twin disagreement on {name}: "
+                    f"twin={cval2!r} engines={vals2['head']!r}"
+                )
+        scaling[name] = {
+            "head": srow["head"],
+            "bara": srow["bara"],
+            "barc": crow,
+            "value_2x": vals2["head"],
+        }
         cells = [
             name,
             f"{srow['head']['ratio']:.2f}",
@@ -428,18 +496,28 @@ def main():
         print("  ".join(f"{c:>{x}}" for c, x in zip(cells, sw)))
 
     # ------------------------------------------------------------------
-    out = {"meta": {
-        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-        "host": platform.node(), "os": platform.platform(), "cpu": cpu_model(),
-        "python": platform.python_version(), "iters": iters,
-        "timing": "end-to-end process wall time, min over iters (1 warmup)",
-        "head": head_meta, "bara": bara_meta,
-        "method": ("Bar A = previous release binary (sha256 vs the release "
-                   "SHA256SUMS); Bar B = bench_compare native-py mirrors "
-                   "(imported); Bar C = rustc -O twins; regex/json/modules "
-                   "refused (no std-only Rust analog); value parity enforced "
-                   "before any timing is recorded"),
-    }, "suites": suites, "scaling": scaling}
+    out = {
+        "meta": {
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            "host": platform.node(),
+            "os": platform.platform(),
+            "cpu": cpu_model(),
+            "python": platform.python_version(),
+            "iters": iters,
+            "timing": "end-to-end process wall time, min over iters (1 warmup)",
+            "head": head_meta,
+            "bara": bara_meta,
+            "method": (
+                "Bar A = previous release binary (sha256 vs the release "
+                "SHA256SUMS); Bar B = bench_compare native-py mirrors "
+                "(imported); Bar C = rustc -O twins; regex/json/modules "
+                "refused (no std-only Rust analog); value parity enforced "
+                "before any timing is recorded"
+            ),
+        },
+        "suites": suites,
+        "scaling": scaling,
+    }
     os.makedirs(os.path.dirname(args.json), exist_ok=True)
     with open(args.json, "w") as f:
         json.dump(out, f, indent=2)

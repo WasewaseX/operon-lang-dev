@@ -118,4 +118,4 @@ else
   fi
 fi
 
-[ "$FAIL" = 0 ] && echo "smoke: PASS ($ART)" || { echo "smoke: FAIL ($ART)"; exit 1; }
+if [ "$FAIL" = 0 ]; then echo "smoke: PASS ($ART)"; else echo "smoke: FAIL ($ART)"; exit 1; fi

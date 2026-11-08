@@ -39,11 +39,31 @@ GUARD_BORN = os.environ.get("COLLISION_GUARD_BORN", "2026-10-05")
 # §24.4 "rejects unknown/unclaimed core paths"). Everything an engine, docs,
 # packaging or CI change could live under is listed explicitly.
 CORE_PATHS = (
-    "src/", "std/", "tests/", "examples/", "apps/", "bootstrap/", "scripts/",
-    "docs/", "packaging/", "web/", "labs/", ".github/",
-    "README.md", "SPEC.md", "CONTRIBUTING.md", "CHANGELOG.md", "BUILD.md",
-    "DETERMINISM.md", "BENCH.md", "PROFILING.md", "MODELING-NOTES.md",
-    "Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "build.sh",
+    "src/",
+    "std/",
+    "tests/",
+    "examples/",
+    "apps/",
+    "bootstrap/",
+    "scripts/",
+    "docs/",
+    "packaging/",
+    "web/",
+    "labs/",
+    ".github/",
+    "README.md",
+    "SPEC.md",
+    "CONTRIBUTING.md",
+    "CHANGELOG.md",
+    "BUILD.md",
+    "DETERMINISM.md",
+    "BENCH.md",
+    "PROFILING.md",
+    "MODELING-NOTES.md",
+    "Cargo.toml",
+    "Cargo.lock",
+    "rust-toolchain.toml",
+    "build.sh",
 )
 
 ROW_RE = re.compile(
@@ -72,6 +92,7 @@ def path_covers(cover, path):
     cover = cover.strip()
     if cover.startswith("glob:"):
         import fnmatch
+
         return fnmatch.fnmatch(path, cover[5:].strip())
     if cover == path:
         return True
@@ -117,7 +138,11 @@ def parse_locks(text):
 def parse_body(body):
     return {
         "task_id": (TASK_RE.search(body or "") or [None, None])[1],
-        "paths": [p.strip() for p in (PATHS_RE.search(body or "") or [None, ""])[1].split(",") if p.strip()],
+        "paths": [
+            p.strip()
+            for p in (PATHS_RE.search(body or "") or [None, ""])[1].split(",")
+            if p.strip()
+        ],
     }
 
 
@@ -136,31 +161,37 @@ def audit(locks_text, body, changed_files, pr_created):
     for f in changed_files:
         for lk in active:
             if lk.covers(f) and (task_id or "").lower() != lk.task.lower():
-                findings.append((
-                    "conflict",
-                    f"'{f}' is covered by ACTIVE lock {lk.lock_id} ({lk.agent}/{lk.task}); "
-                    f"this PR claims {task_id or 'NO TASK'}. First canonical claim wins "
-                    f"(roadmap §24.3) — stop and pick another READY task or negotiate in the chatroom.",
-                ))
+                findings.append(
+                    (
+                        "conflict",
+                        f"'{f}' is covered by ACTIVE lock {lk.lock_id} ({lk.agent}/{lk.task}); "
+                        f"this PR claims {task_id or 'NO TASK'}. First canonical claim wins "
+                        f"(roadmap §24.3) — stop and pick another READY task or negotiate in the chatroom.",
+                    )
+                )
     # 2) core paths need a claim
     if not task_id:
         unclaimed = [f for f in changed_files if is_core(f)]
         if unclaimed:
             sample = ", ".join(unclaimed[:5]) + (" …" if len(unclaimed) > 5 else "")
-            findings.append((
-                "unclaimed",
-                f"core path(s) changed with no Task-ID in the PR body: {sample}. Add to the body:\n"
-                f"      Task-ID: <id from collab/TASKS.md or roadmap §34>\n"
-                f"      Paths: <exclusive paths this task touches>",
-            ))
+            findings.append(
+                (
+                    "unclaimed",
+                    f"core path(s) changed with no Task-ID in the PR body: {sample}. Add to the body:\n"
+                    f"      Task-ID: <id from collab/TASKS.md or roadmap §34>\n"
+                    f"      Paths: <exclusive paths this task touches>",
+                )
+            )
     # 3) declared Paths overlapping someone else's lock — draft-time warning
     for p in claim["paths"]:
         for lk in active:
             if path_covers(p, p) and lk.covers(p) and (task_id or "").lower() != lk.task.lower():
-                warnings.append((
-                    "declared-overlap",
-                    f"declared path '{p}' overlaps ACTIVE lock {lk.lock_id} ({lk.agent}/{lk.task})",
-                ))
+                warnings.append(
+                    (
+                        "declared-overlap",
+                        f"declared path '{p}' overlaps ACTIVE lock {lk.lock_id} ({lk.agent}/{lk.task})",
+                    )
+                )
 
     summary = (
         f"ledger: {len(active)} ACTIVE lock(s) of {len(locks)} rows · "
@@ -178,11 +209,14 @@ def is_core(path):
 
 
 def gh_api(url, token):
-    req = urllib.request.Request(url, headers={
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/vnd.github+json",
-        "User-Agent": "operon-collision-guard",
-    })
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "operon-collision-guard",
+        },
+    )
     with urllib.request.urlopen(req, timeout=30) as r:
         return json.loads(r.read().decode())
 
@@ -192,7 +226,10 @@ def ci_mode():
     repo = os.environ.get("GITHUB_REPOSITORY") or ""
     pr_number = os.environ.get("PR_NUMBER") or ""
     if not (token and repo and pr_number):
-        print("collision-guard: FAIL — CI mode needs GH_TOKEN, GITHUB_REPOSITORY, PR_NUMBER", file=sys.stderr)
+        print(
+            "collision-guard: FAIL — CI mode needs GH_TOKEN, GITHUB_REPOSITORY, PR_NUMBER",
+            file=sys.stderr,
+        )
         return 2
     base = f"https://api.github.com/repos/{repo}"
     pr = gh_api(f"{base}/pulls/{pr_number}", token)
@@ -204,7 +241,9 @@ def ci_mode():
             break
         page += 1
     locks_text = open(LOCK_FILE, encoding="utf-8").read()
-    findings, warnings, summary = audit(locks_text, pr.get("body") or "", files, pr.get("created_at") or "")
+    findings, warnings, summary = audit(
+        locks_text, pr.get("body") or "", files, pr.get("created_at") or ""
+    )
     print(f"collision-guard: {summary}")
     for tag, msg in warnings:
         print(f"  [WARN {tag}] {msg}")
@@ -235,31 +274,71 @@ class Case:
 
 
 SELFTEST_CASES = [
-    Case("self-task-overlap-ok",
-         "Task-ID: P1-batch\nPaths: src/value.rs",
-         ["src/value.rs"], "2026-10-06", False, []),
-    Case("other-task-overlap-fail",
-         "Task-ID: W999\nPaths: src/value.rs",
-         ["src/value.rs"], "2026-10-06", True, ["conflict", "declared-overlap"]),
-    Case("released-lock-not-a-conflict",
-         "Task-ID: W999\nPaths: src/tools.rs",
-         ["src/tools.rs"], "2026-10-06", False, []),
-    Case("dir-prefix-lock-covers-file",
-         "Task-ID: W999\nPaths: packaging/x",
-         ["packaging/registry/app.py"], "2026-10-06", True, ["conflict", "declared-overlap"]),
-    Case("unclaimed-core-path-fail",
-         "fix typo in the vm\n",
-         ["src/vm.rs"], "2026-10-06", True, ["conflict", "unclaimed"]),
-    Case("noncore-only-no-claim-ok",
-         "notes\n", ["MISC.txt"], "2026-10-06", False, []),
-    Case("grandfathered-overlap-warn-only",
-         "Task-ID: OLD\nPaths: src/value.rs",
-         ["src/value.rs"], "2026-10-04", False, ["conflict", "declared-overlap"]),
-    Case("grandfathered-unclaimed-warn-only",
-         "old pr\n", ["src/vm.rs"], "2026-10-04", False, ["conflict", "unclaimed"]),
-    Case("declared-overlap-is-warning",
-         "Task-ID: W777\nPaths: docs/KEYWORDS.md",
-         ["MISC.txt"], "2026-10-06", False, ["declared-overlap"]),
+    Case(
+        "self-task-overlap-ok",
+        "Task-ID: P1-batch\nPaths: src/value.rs",
+        ["src/value.rs"],
+        "2026-10-06",
+        False,
+        [],
+    ),
+    Case(
+        "other-task-overlap-fail",
+        "Task-ID: W999\nPaths: src/value.rs",
+        ["src/value.rs"],
+        "2026-10-06",
+        True,
+        ["conflict", "declared-overlap"],
+    ),
+    Case(
+        "released-lock-not-a-conflict",
+        "Task-ID: W999\nPaths: src/tools.rs",
+        ["src/tools.rs"],
+        "2026-10-06",
+        False,
+        [],
+    ),
+    Case(
+        "dir-prefix-lock-covers-file",
+        "Task-ID: W999\nPaths: packaging/x",
+        ["packaging/registry/app.py"],
+        "2026-10-06",
+        True,
+        ["conflict", "declared-overlap"],
+    ),
+    Case(
+        "unclaimed-core-path-fail",
+        "fix typo in the vm\n",
+        ["src/vm.rs"],
+        "2026-10-06",
+        True,
+        ["conflict", "unclaimed"],
+    ),
+    Case("noncore-only-no-claim-ok", "notes\n", ["MISC.txt"], "2026-10-06", False, []),
+    Case(
+        "grandfathered-overlap-warn-only",
+        "Task-ID: OLD\nPaths: src/value.rs",
+        ["src/value.rs"],
+        "2026-10-04",
+        False,
+        ["conflict", "declared-overlap"],
+    ),
+    Case(
+        "grandfathered-unclaimed-warn-only",
+        "old pr\n",
+        ["src/vm.rs"],
+        "2026-10-04",
+        False,
+        ["conflict", "unclaimed"],
+    ),
+    Case(
+        "declared-overlap-is-warning",
+        "Task-ID: W777\nPaths: docs/KEYWORDS.md",
+        ["MISC.txt"],
+        "2026-10-06",
+        False,
+        ["declared-overlap"],
+    ),
 ]
 
 
@@ -278,7 +357,8 @@ def selftest():
     # ledger defect detection
     bad = SELFTEST_LOCKS.replace(
         "| L-002 | builder-B | Q1 | docs/KEYWORDS.md | ACTIVE | 2026-10-04 | — |",
-        "| L-002 | builder-B | OTHER | src/value.rs | ACTIVE | 2026-10-04 | — |")
+        "| L-002 | builder-B | OTHER | src/value.rs | ACTIVE | 2026-10-04 | — |",
+    )
     findings, _, _ = audit(bad, "Task-ID: W1\n", ["MISC.txt"], "2026-10-06")
     led = [m for t, m in findings if t == "ledger"]
     ok = len(led) == 1 and "ledger defect" in led[0]

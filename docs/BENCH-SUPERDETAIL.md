@@ -1,6 +1,6 @@
 # Operon Super-Benchmark — 57 aspects, 4 languages (perf-xlang-r2)
 
-**Date:** 2026-10-07 · **Engine:** operon 2.9.1-vm (main @ f5d2f98 + this wave) · 
+**Date:** 2026-10-07 · **Engine:** operon 2.9.1-vm (main @ f5d2f98 + this wave) ·
 **Host:** x86-64 Linux sandbox · **Comparators:** CPython 3.12.14, Node.js v24.21.0, rustc 1.99.0 (`-O`)
 
 ---
@@ -229,7 +229,7 @@ Suite lives in `scripts/bench/super/` (`super.op`, `super_py.py`, `super_js.js`,
 
 # Super-bench r3 — 11 Oct re-run (perf-xlang-r3)
 
-**Date:** 2026-10-11 · **Engine:** operon 2.10.0-vm (main @ `354fa16`) · 
+**Date:** 2026-10-11 · **Engine:** operon 2.10.0-vm (main @ `354fa16`) ·
 **Host:** x86-64 Linux sandbox · **Comparators:** CPython 3.12, Node.js v24.21.0, rustc 1.99.0 (`-O`)
 
 ## 1. Why a re-run

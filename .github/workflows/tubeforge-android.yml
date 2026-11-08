@@ -14,6 +14,10 @@ on:
       - ".github/workflows/tubeforge-android.yml"
   workflow_dispatch:
 
+# least privilege: nothing in this workflow writes to the repo
+permissions:
+  contents: read
+
 jobs:
   apk:
     runs-on: ubuntu-latest

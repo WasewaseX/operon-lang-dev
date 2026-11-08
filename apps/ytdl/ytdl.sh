@@ -36,6 +36,7 @@ if [ -n "${YTDL_EXTRA_RUN:-}" ]; then
   for p in "${_parts[@]}"; do EXTRA_RUN="$EXTRA_RUN --allow-run $p"; done
 fi
 
+# shellcheck disable=SC2086  # deliberate word-split: optional extra landlock grants
 exec "$OP" run "$HERE/ytdl.op" \
   --cell "$HERE/ytdl.cell" \
   --allow-run yt-dlp --allow-run ffmpeg --allow-run aria2c $EXTRA_RUN \

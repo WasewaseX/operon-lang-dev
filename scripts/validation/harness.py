@@ -41,6 +41,7 @@ Usage:
   python3 scripts/validation/harness.py --fixture V-R06-02-bernoulli --seed 23 --replay
   python3 scripts/validation/harness.py --pin-manifest
 """
+
 from __future__ import annotations
 
 import argparse
@@ -50,6 +51,7 @@ import math
 import subprocess
 import sys
 from pathlib import Path
+from typing import NoReturn
 
 SCHEMA = "r06-fixture-v1"
 REPO = Path(__file__).resolve().parent.parent.parent
@@ -78,6 +80,7 @@ def two_sided_crit(alpha: float) -> float:
 # own answer. Adding a reference = one entry + the fixture citing it.
 # ---------------------------------------------------------------------------
 
+
 def ref_uniform_mean(p: dict, n: int) -> tuple:
     # mean of n iid uniform(0,1) draws: mean 1/2, var 1/(12n)
     return 0.5, 1.0 / (12.0 * n), None
@@ -93,8 +96,9 @@ def ref_binomial_pmf(p: dict, n: int) -> tuple:
     trials, prob = int(p["trials"]), float(p["p"])
     # exact Binomial(trials, prob) pmf; multinomial cell noise makes the
     # z-gate ill-defined here, so this reference is TV-gate-only by contract
-    pmf = {k: math.comb(trials, k) * prob**k * (1.0 - prob) ** (trials - k)
-           for k in range(trials + 1)}
+    pmf = {
+        k: math.comb(trials, k) * prob**k * (1.0 - prob) ** (trials - k) for k in range(trials + 1)
+    }
     return trials * prob, trials * prob * (1.0 - prob), pmf
 
 
@@ -139,7 +143,8 @@ def resolve_engine() -> Path:
         "[r06] Nothing was tested. Build first: cargo build --release && "
         "cp target/release/operon bin/operon\n"
         "[r06] Stale-binary trap: re-copy after every rebuild (HANDOFF "
-        "session-28).\n")
+        "session-28).\n"
+    )
     sys.exit(2)
 
 
@@ -176,8 +181,7 @@ def load_fixtures(only: str | None) -> list:
     out = []
     for path in sorted(FIXTURE_DIR.glob("*.json")):
         fx = json.loads(path.read_text())
-        for key in ("schema", "id", "program", "seeds", "reference",
-                    "reduce", "gates"):
+        for key in ("schema", "id", "program", "seeds", "reference", "reduce", "gates"):
             if key not in fx:
                 _refuse(f"{path.name}: missing fixture key '{key}'")
         if fx["schema"] != SCHEMA:
@@ -185,13 +189,14 @@ def load_fixtures(only: str | None) -> list:
         if not (REPO / fx["program"]).exists():
             _refuse(f"{path.name}: program {fx['program']!r} does not exist")
         if fx["reference"]["kind"] not in REFERENCES:
-            _refuse(f"{path.name}: unknown reference "
-                    f"{fx['reference']['kind']!r}")
+            _refuse(f"{path.name}: unknown reference {fx['reference']['kind']!r}")
         if fx["reduce"]["op"] not in ("ratio", "pmf"):
             _refuse(f"{path.name}: reduce.op must be 'ratio' or 'pmf'")
         if (fx["reduce"]["op"] == "pmf") != ("pmf" in fx["reference"]["kind"]):
-            _refuse(f"{path.name}: reduce.op and reference kind disagree "
-                    f"(pmf reduce requires a -pmf reference and vice versa)")
+            _refuse(
+                f"{path.name}: reduce.op and reference kind disagree "
+                f"(pmf reduce requires a -pmf reference and vice versa)"
+            )
         if only and fx["id"] != only:
             continue
         out.append(fx)
@@ -209,6 +214,7 @@ def _refuse(msg: str) -> None:
 # Gates: each returns None (pass) or a minimized failure dict.
 # ---------------------------------------------------------------------------
 
+
 def gate_determinism(engine, fx, seed) -> dict | None:
     prog = concrete_program(fx, seed)
     rc1, out1, _ = run_program(engine, fx, prog)
@@ -219,17 +225,18 @@ def gate_determinism(engine, fx, seed) -> dict | None:
     while i < min(len(out1), len(out2)) and out1[i] == out2[i]:
         i += 1
     line = out1[:i].count(b"\n") + 1
-    return {"gate": "determinism-pin",
-            "detail": f"same seed {seed}: run1 rc={rc1} {len(out1)}B vs "
-                      f"run2 rc={rc2} {len(out2)}B; first diff at byte {i} "
-                      f"(line {line}) — the mirrored stream moved"}
+    return {
+        "gate": "determinism-pin",
+        "detail": f"same seed {seed}: run1 rc={rc1} {len(out1)}B vs "
+        f"run2 rc={rc2} {len(out2)}B; first diff at byte {i} "
+        f"(line {line}) — the mirrored stream moved",
+    }
 
 
 def _reduce(fx, numbers: list) -> tuple:
     if fx["reduce"]["op"] == "ratio":
         if len(numbers) != 2 or numbers[1] <= 0:
-            raise ValueError(
-                f"reduce=ratio needs [numerator, n>0], got {numbers[:4]}")
+            raise ValueError(f"reduce=ratio needs [numerator, n>0], got {numbers[:4]}")
         return numbers[0] / numbers[1], numbers[1]
     # pmf: the tokens ARE the count vector; effective n is their sum
     return numbers, sum(numbers)
@@ -244,10 +251,12 @@ def gate_statistical(fx, seed, numbers: list) -> dict | None:
     crit = two_sided_crit(alpha)
     if abs(z) <= crit:
         return None
-    return {"gate": f"statistical-z(alpha={alpha}, crit={crit:.4f})",
-            "detail": f"observed={obs:.6f} analytic mean={mean:.6f} "
-                      f"analytic sd={math.sqrt(var):.6g} z={z:+.3f} "
-                      f"(|z| > crit) — pre-registered in the fixture"}
+    return {
+        "gate": f"statistical-z(alpha={alpha}, crit={crit:.4f})",
+        "detail": f"observed={obs:.6f} analytic mean={mean:.6f} "
+        f"analytic sd={math.sqrt(var):.6g} z={z:+.3f} "
+        f"(|z| > crit) — pre-registered in the fixture",
+    }
 
 
 def gate_support(fx, seed, numbers: list) -> dict | None:
@@ -262,20 +271,24 @@ def gate_support(fx, seed, numbers: list) -> dict | None:
     if tv <= eps:
         return None
     worst = max(pmf, key=lambda k: abs(emp.get(k, 0.0) - pmf[k]))
-    return {"gate": f"support-tv(eps={eps})",
-            "detail": f"total variation={tv:.6f} > eps; worst cell k={worst}: "
-                      f"empirical={emp.get(worst, 0.0):.6f} vs "
-                      f"analytic={pmf[worst]:.6f}"}
+    return {
+        "gate": f"support-tv(eps={eps})",
+        "detail": f"total variation={tv:.6f} > eps; worst cell k={worst}: "
+        f"empirical={emp.get(worst, 0.0):.6f} vs "
+        f"analytic={pmf[worst]:.6f}",
+    }
 
 
 def failure_block(fx, seed, fail: dict) -> str:
-    return "\n".join([
-        f"FAIL {fx['id']} seed={seed} gate={fail['gate']}",
-        f"  program : {fx['program']}",
-        f"  evidence: {fail['detail']}",
-        f"  replay  : python3 scripts/validation/harness.py "
-        f"--fixture {fx['id']} --seed {seed} --replay",
-    ])
+    return "\n".join(
+        [
+            f"FAIL {fx['id']} seed={seed} gate={fail['gate']}",
+            f"  program : {fx['program']}",
+            f"  evidence: {fail['detail']}",
+            f"  replay  : python3 scripts/validation/harness.py "
+            f"--fixture {fx['id']} --seed {seed} --replay",
+        ]
+    )
 
 
 def parse_numbers(fx, stdout: bytes) -> list:
@@ -288,10 +301,12 @@ def parse_numbers(fx, stdout: bytes) -> list:
         _fail_parse(fx, f"non-numeric token in stdout: {text[:80]!r}")
 
 
-def _fail_parse(fx, why: str):
-    print(f"FAIL {fx['id']} seed=? gate=parse\n  evidence: {why}\n"
-          f"  replay  : python3 scripts/validation/harness.py "
-          f"--fixture {fx['id']} --replay")
+def _fail_parse(fx, why: str) -> NoReturn:  # both call sites precede returns
+    print(
+        f"FAIL {fx['id']} seed=? gate=parse\n  evidence: {why}\n"
+        f"  replay  : python3 scripts/validation/harness.py "
+        f"--fixture {fx['id']} --replay"
+    )
     sys.exit(1)
 
 
@@ -299,10 +314,12 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="R0.6 analytic validation harness")
     ap.add_argument("--fixture", help="one fixture by id (default: all)")
     ap.add_argument("--seed", type=int, help="with --replay: the failing seed")
-    ap.add_argument("--replay", action="store_true",
-                    help="rerun one (fixture, seed), dump raw stdout/err/rc")
-    ap.add_argument("--pin-manifest", action="store_true",
-                    help="regenerate tests/validation/MANIFEST.sha256")
+    ap.add_argument(
+        "--replay", action="store_true", help="rerun one (fixture, seed), dump raw stdout/err/rc"
+    )
+    ap.add_argument(
+        "--pin-manifest", action="store_true", help="regenerate tests/validation/MANIFEST.sha256"
+    )
     ap.add_argument("--json", metavar="PATH", help="also write a JSON report")
     args = ap.parse_args()
 
@@ -320,8 +337,9 @@ def main() -> int:
         rc, out, err = run_program(engine, fx, concrete_program(fx, seed))
         sys.stdout.write(out.decode("utf-8", errors="replace"))
         sys.stderr.write(err.decode("utf-8", errors="replace"))
-        print(f"[r06] replay {fx['id']} seed={seed}: rc={rc}, {len(out)}B "
-              f"stdout, {len(err)}B stderr")
+        print(
+            f"[r06] replay {fx['id']} seed={seed}: rc={rc}, {len(out)}B stdout, {len(err)}B stderr"
+        )
         return 0 if rc == 0 else 1
 
     engine = resolve_engine()
@@ -334,43 +352,45 @@ def main() -> int:
             if rc != 0:
                 failures += 1
                 fx_fail += 1
-                print(failure_block(fx, seed, {
-                    "gate": "engine-rc", "detail": f"engine exited rc={rc}"}))
+                print(
+                    failure_block(
+                        fx, seed, {"gate": "engine-rc", "detail": f"engine exited rc={rc}"}
+                    )
+                )
                 continue
             numbers = parse_numbers(fx, out)
             fail = gate_determinism(engine, fx, seed)
             if fail is None:
-                fail = (gate_support(fx, seed, numbers)
-                        if fx["reduce"]["op"] == "pmf"
-                        else gate_statistical(fx, seed, numbers))
+                fail = (
+                    gate_support(fx, seed, numbers)
+                    if fx["reduce"]["op"] == "pmf"
+                    else gate_statistical(fx, seed, numbers)
+                )
             if fail is not None:
                 failures += 1
                 fx_fail += 1
                 print(failure_block(fx, seed, fail))
         verdict = "GREEN" if fx_fail == 0 else f"FAIL({fx_fail})"
-        rows.append({"id": fx["id"], "seeds": len(fx["seeds"]),
-                     "verdict": verdict})
-        print(f"[r06] {fx['id']}: {verdict} ({len(fx['seeds'])} seeds, "
-              f"ref={fx['reference']['kind']})")
+        rows.append({"id": fx["id"], "seeds": len(fx["seeds"]), "verdict": verdict})
+        print(
+            f"[r06] {fx['id']}: {verdict} ({len(fx['seeds'])} seeds, ref={fx['reference']['kind']})"
+        )
 
     print(f"[r06] total: {len(fixtures)} fixtures, {failures} gate failure(s)")
     if args.json:
-        Path(args.json).write_text(json.dumps(
-            {"fixtures": rows, "failures": failures}, indent=2,
-            sort_keys=True) + "\n")
+        Path(args.json).write_text(
+            json.dumps({"fixtures": rows, "failures": failures}, indent=2, sort_keys=True) + "\n"
+        )
     return 1 if failures else 0
 
 
 def _pin_manifest() -> int:
     """Byte-pinned manifest: sha256 of every fixture + program, sorted paths,
     deterministic bytes (LF, trailing newline) — the house MANIFEST class."""
-    files = sorted(list(FIXTURE_DIR.glob("*.json"))
-                   + list(PROGRAM_DIR.glob("*.op")))
-    lines = [f"{hashlib.sha256(f.read_bytes()).hexdigest()}  "
-             f"{f.relative_to(REPO)}" for f in files]
+    files = sorted(list(FIXTURE_DIR.glob("*.json")) + list(PROGRAM_DIR.glob("*.op")))
+    lines = [f"{hashlib.sha256(f.read_bytes()).hexdigest()}  {f.relative_to(REPO)}" for f in files]
     MANIFEST.write_text("\n".join(lines) + "\n")
-    print(f"[r06] pinned {len(lines)} entries -> "
-          f"{MANIFEST.relative_to(REPO)}")
+    print(f"[r06] pinned {len(lines)} entries -> {MANIFEST.relative_to(REPO)}")
     return 0
 
 

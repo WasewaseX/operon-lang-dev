@@ -30,6 +30,7 @@ Opt-in, NOT a CI gate (same rule as coverage: baseline first, gate later).
 Without --gate the script always exits 0 after printing the table; --gate
 flips it to exit 1 on any panic/hang (for when the sweep earns a CI slot).
 """
+
 import argparse
 import os
 import subprocess
@@ -58,8 +59,11 @@ def classify(binpath, rel, timeout):
     try:
         p = subprocess.run(
             [binpath, "run", rel],
-            capture_output=True, text=True, encoding="utf-8",
-            errors="replace", timeout=timeout,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
         )
     except subprocess.TimeoutExpired:
         return "hang", None, ""
@@ -78,10 +82,14 @@ def classify(binpath, rel, timeout):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--bin", default=None, help="operon binary (default: bin/operon, then target/debug/operon)")
+    ap.add_argument(
+        "--bin", default=None, help="operon binary (default: bin/operon, then target/debug/operon)"
+    )
     ap.add_argument("--timeout", type=int, default=20, help="per-file wall-clock seconds")
     ap.add_argument("--json", default=None, help="also write the table as JSON to this path")
-    ap.add_argument("--gate", action="store_true", help="exit 1 on any panic/hang (future CI wiring)")
+    ap.add_argument(
+        "--gate", action="store_true", help="exit 1 on any panic/hang (future CI wiring)"
+    )
     args = ap.parse_args()
 
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -92,27 +100,31 @@ def main():
                 binpath = os.path.join(root, cand)
                 break
     if binpath is None:
-        print("no operon binary found (build with scripts/build.sh or cargo build)", file=sys.stderr)
+        print(
+            "no operon binary found (build with scripts/build.sh or cargo build)", file=sys.stderr
+        )
         return 2
     binpath = os.path.abspath(binpath)
 
     targets = collect_op(root)
     corpus = [t for t in targets if t.replace(os.sep, "/").startswith(CORPUS_DIR)]
-    print(f"total grammar sweep: {len(targets)} program(s) "
-          f"({len(corpus)} corpus) under {os.path.relpath(binpath, root)}, "
-          f"timeout {args.timeout}s\n")
+    print(
+        f"total grammar sweep: {len(targets)} program(s) "
+        f"({len(corpus)} corpus) under {os.path.relpath(binpath, root)}, "
+        f"timeout {args.timeout}s\n"
+    )
 
     counts = {"clean": 0, "contained": 0, "panic": 0, "hang": 0}
     rows, panics = [], []
-    width = max(len(t) for t in targets) if targets else 10
     for rel in targets:
         cls, rc, blob = classify(binpath, rel, args.timeout)
         counts[cls] += 1
         rows.append((cls, rc, rel, blob))
         marker = ""
         if cls == "panic":
-            first = next((ln for ln in blob.splitlines()
-                          if any(m in ln for m in PANIC_MARKERS)), "")
+            first = next(
+                (ln for ln in blob.splitlines() if any(m in ln for m in PANIC_MARKERS)), ""
+            )
             panics.append((rel, rc, first.strip()[:160]))
             marker = "  <-- CONTRACT VIOLATION"
         if cls in ("panic", "hang") or os.environ.get("TG_SWEEP_VERBOSE"):
@@ -154,6 +166,7 @@ def main():
 
     if args.json:
         import json
+
         with open(args.json, "w", encoding="utf-8") as fh:
             json.dump(
                 {
@@ -162,7 +175,8 @@ def main():
                     "counts": counts,
                     "rows": [{"file": r, "class": c, "rc": rc} for c, rc, r, _ in rows],
                 },
-                fh, indent=1,
+                fh,
+                indent=1,
             )
         print(f"json table: {args.json}")
 

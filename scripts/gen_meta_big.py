@@ -9,6 +9,7 @@ with different content. Invariants:
   - realistic field mix: heights 144..2160, audio-only rows (height 0),
     fps on some rows, filesize vs filesize_approx, format_note on some
 """
+
 import json
 import random
 
@@ -20,7 +21,7 @@ NOTES = [None, "HDR", "premium", "dual", "storyboard", "1080p60-2"]
 
 heights = [2160, 1440, 1080, 1080, 720, 720, 480, 360, 240, 144, 0, 0] * 4
 formats = []
-used = set()
+used: set = set()
 fid = 394
 for i in range(48):
     h = heights[i % len(heights)]
@@ -28,13 +29,13 @@ for i in range(48):
     while True:
         tbr = round(rng.uniform(80, 25000), 1)
         if h == 0:
-            key = ("a", tbr)
+            key: tuple = ("a", tbr)
         else:
             key = (h, tbr)
         if key not in used:
             used.add(key)
             break
-    f = {"format_id": str(fid), "ext": rng.choice(["mp4", "webm", "mp4"])}
+    f: dict = {"format_id": str(fid), "ext": rng.choice(["mp4", "webm", "mp4"])}
     fid += 3 if i % 2 == 0 else 7
     if h == 0:
         f["vcodec"] = "none"
@@ -42,8 +43,16 @@ for i in range(48):
         f["abr"] = round(tbr, 1)
     else:
         f["height"] = h
-        f["width"] = {2160: 3840, 1440: 2560, 1080: 1920, 720: 1280,
-                      480: 854, 360: 640, 240: 426, 144: 256}[h]
+        f["width"] = {
+            2160: 3840,
+            1440: 2560,
+            1080: 1920,
+            720: 1280,
+            480: 854,
+            360: 640,
+            240: 426,
+            144: 256,
+        }[h]
         f["vcodec"] = rng.choice(VC[:4])
         f["acodec"] = "none"
         if i % 3 == 0 and h > 0:

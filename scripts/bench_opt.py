@@ -5,8 +5,9 @@ Median-of-N wall clock per (fixture, config). Each fixture prints a
 deterministic checksum line; the runner asserts all configs produce
 IDENTICAL output before timing (a correctness gate inside the benchmark).
 """
-import subprocess
+
 import statistics
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -31,7 +32,9 @@ def run(cfg_args: list[str], f: Path) -> tuple[str, float]:
     t0 = time.perf_counter()
     p = subprocess.run(
         [str(BIN), "run", *cfg_args, str(f)],
-        capture_output=True, text=True, timeout=120,
+        capture_output=True,
+        text=True,
+        timeout=120,
     )
     dt = time.perf_counter() - t0
     if p.returncode != 0:
@@ -47,7 +50,9 @@ def main() -> None:
         print(f"no fixtures in {CORPUS}", file=sys.stderr)
         sys.exit(1)
     print(f"operon optimizer benchmarks — median of {n} runs, N={n}")
-    print(f"{'fixture':<22}{'tree':>9}{'O0+f0':>9}{'O0':>9}{'O1+f0':>9}{'O1':>9}{'O2':>9}   speedup O1 vs O0+f0")
+    print(
+        f"{'fixture':<22}{'tree':>9}{'O0+f0':>9}{'O0':>9}{'O1+f0':>9}{'O1':>9}{'O2':>9}   speedup O1 vs O0+f0"
+    )
     for f in fixtures:
         # correctness gate: every config must print the same bytes
         outputs = {}

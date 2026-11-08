@@ -108,7 +108,7 @@ Source: Hill-Langmuir input function; EC50 = the half-max point (Alon, An Introd
 | `v1_2t` | `0.8` | absolute | `1e-12` | level = 2t = 0.6: 4/(4+1) = 0.8 |
 | `v1_3t` | `0.9` | absolute | `1e-12` | level = 3t = 0.9: 9/(9+1) = 0.9 (the 10-90 span complete) |
 
-Why this magnitude is defensible: The expectations are the closed form of the n=2 curve at the five canonical points (t/3, t/2, t, 2t, 3t with t = 0.3, strength 1.0), and the engine evaluates strength * L*L / (L*L + t*t) in exactly the op order the expectation is written in (repeated multiplication, no powi, W090). Live worst case is one ulp (the t/3 point reads 0.10000000000000002 against 0.1, a 1.4e-17 gap), so 1e-12 absolute is a refactor guard, not a jitter allowance. Fails-pre: any change to the influence formula, the gate semantics, or the level-latch behavior.
+Why this magnitude is defensible: The expectations are the closed form of the n=2 curve at the five canonical points (t/3, t/2, t, 2t, 3t with t = 0.3, strength 1.0), and the engine evaluates strength `* L*L` / (L*L + t*t) in exactly the op order the expectation is written in (repeated multiplication, no powi, W090). Live worst case is one ulp (the t/3 point reads 0.10000000000000002 against 0.1, a 1.4e-17 gap), so 1e-12 absolute is a refactor guard, not a jitter allowance. Fails-pre: any change to the influence formula, the gate semantics, or the level-latch behavior.
 
 Enforcing tests: `tests/sci_ec50_hill.op`. Measurement probes: `bootstrap/validation_probes/v1_hill.op`.
 
@@ -214,11 +214,11 @@ Source: Thermodynamic occupancy survival: repression composed multiplicatively (
 | Quantity | Expected | Comparison | Tolerance | Derivation |
 |---|---|---|---|---|
 | `v7_sub_partial` | `0.2` | absolute | `1e-12` | subtractive legacy: 1 - 0.4 - 0.4 = 0.2 (live reads 0.19999999999999996, one-ulp class) |
-| `v7_occ_partial` | `0.36` | absolute | `1e-12` | occupancy survival: 1 * 0.6 * 0.6 = 0.36 |
+| `v7_occ_partial` | `0.36` | absolute | `1e-12` | occupancy survival: 1 \* 0.6 \\* 0.6 = 0.36 |
 | `v7_sub_overshoot` | `0.0` | exact | bit-identical | two near-full subtractive repressors overshoot and clamp to a hard 0.0 (discrete clamp outcome) |
 | `v7_occ_survival` | `9.802960494069226e-05` | absolute | `1e-12` | occupancy near-full survival: (1 - 1/1.01)^2, approaches but never crosses zero |
 
-Why this magnitude is defensible: The expectations are closed forms: two partial repressors (level 1.0, strength 0.5, threshold 0.5, influence 0.4 each) give survival 1 * 0.6 * 0.6 = 0.36 and the legacy subtractive form gives 1 - 0.4 - 0.4 = 0.2; two near-full repressors (influence 1/(1+0.01) each) give survival (1 - 1/1.01)^2 (hand-derived 9.802960494069213e-05, live 9.802960494069226e-05, a 1.3e-17 gap) and the subtractive form overshoots to a hard-clamped 0.0. The engine composes in the derivation's op order, so observed gaps are one-ulp class; 1e-12 absolute guards re-association only. The hard-zero row is exact (the subtractive overshoot is a clamp, not a small number). Fails-pre: a composition change (multiplicative to subtractive or back), an overshoot into negatives, or an influence-formula change.
+Why this magnitude is defensible: The expectations are closed forms: two partial repressors (level 1.0, strength 0.5, threshold 0.5, influence 0.4 each) give survival 1 \* 0.6 \\* 0.6 = 0.36 and the legacy subtractive form gives 1 - 0.4 - 0.4 = 0.2; two near-full repressors (influence 1/(1+0.01) each) give survival (1 - 1/1.01)^2 (hand-derived 9.802960494069213e-05, live 9.802960494069226e-05, a 1.3e-17 gap) and the subtractive form overshoots to a hard-clamped 0.0. The engine composes in the derivation's op order, so observed gaps are one-ulp class; 1e-12 absolute guards re-association only. The hard-zero row is exact (the subtractive overshoot is a clamp, not a small number). Fails-pre: a composition change (multiplicative to subtractive or back), an overshoot into negatives, or an influence-formula change.
 
 Enforcing tests: `tests/grn_occupy.op`. Measurement probes: `bootstrap/validation_probes/v7_occupy.op`.
 

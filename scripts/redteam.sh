@@ -74,6 +74,8 @@ run_one() {
     # blocked until the process died on its own). rc 137 = SIGKILLed (hang).
     # W09: OPERON_EXTRA_ARGS (e.g. --vm) re-runs the same containment gate
     # against the bytecode engine; default empty = the tree-walk baseline.
+    # deliberate split: OPERON_EXTRA_ARGS carries optional grants
+    # shellcheck disable=SC2086
     timeout -k 5 15 ./bin/operon run ${OPERON_EXTRA_ARGS:-} "$f" ${grants[@]+"${grants[@]}"} > "$TMP/out" 2> "$TMP/err"
     local rc=$?
     if [ $rc -eq 124 ] || [ $rc -eq 137 ]; then
@@ -154,7 +156,8 @@ for f in "$DIR"/rt_p*.op; do
         *)
             run_one "$f" --allow-read "$DIR" --allow-write "$DIR" --allow-run echo ;;
     esac
-    if [ $? -eq 0 ]; then pass=$((pass+1)); else fail=$((fail+1)); failed_files+=("$f"); fi
+    rc2=$?
+    if [ "$rc2" -eq 0 ]; then pass=$((pass+1)); else fail=$((fail+1)); failed_files+=("$f"); fi
 done
 
 echo
@@ -255,7 +258,7 @@ else
     fi
 fi
 
-if [ -n "$(ls -A /tmp/redteam-out-escape 2>/dev/null | grep -v toctou_canary)" ]; then
+if [ -n "$(find /tmp/redteam-out-escape -mindepth 1 -maxdepth 1 -not -name toctou_canary -print -quit 2>/dev/null)" ]; then
     echo "ESCAPE: files were created inside /tmp/redteam-out-escape — sandbox breached"
     fail=$((fail+1))
 fi

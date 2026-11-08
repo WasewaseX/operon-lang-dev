@@ -9,9 +9,12 @@ gene-expression regulation layer, and the same display rules.
 Deliberately sequential: spawn() runs tasks inline (deterministic), which is
 equivalent for the differential corpus.
 """
-import sys, os, math, json as _json
+
 import copy  # P6-wave fix: per-instance gene closure (mirror of Value::Gene(def, env))
-import weakref  # W013: weak handles, the mirror of the Rust WeakHandle
+import json as _json
+import math
+import os
+import sys
 import unicodedata  # W28 stage 2: THE reference implementation for NFC/NFD/category
 
 # compat-r3 (environment-pair repair, F-assigned per digest-4, 2026-10-04;
@@ -35,13 +38,16 @@ for _stream in (sys.stdout, sys.stderr):
 # ----------------------------------------------------------------------------
 # notes / values
 
+
 class Note:
     __slots__ = ("rung", "line", "message")
+
     def __init__(self, rung, message, line=0):
         # compat matrix fix: the Rust core stores the origin line on every
         # note (ast.rs Note{line, rung, message}) and tools::flush_notes
         # renders `[tag] file:line: msg`. The oracle now mirrors both.
         self.rung, self.line, self.message = rung, line, message
+
 
 # W101 slice 7 mirror of diag.rs::note_code (SPEC 9a.1): the derived E2xxx
 # code rides the tag in flush output (`[fallback E2012] ...`). Ordered
@@ -94,6 +100,7 @@ def note_code(message):
         return "E2030"
     return ""
 
+
 class Stress(Exception):
     def __init__(self, kind, message):
         self.kind, self.message = kind, message
@@ -106,27 +113,71 @@ class Stress(Exception):
         # through the kind/message constructor), so rescue can never catch
         # or spoof propagation. Every catch site pre-arms on `prop`.
         self.prop = None
+
     def as_map(self):
         # W07 mirror: rescue binding carries the chain, same field order as
         # the Rust stress_map (kind, message, chain). Stress.line stays a
         # Rust-side stderr-rendering field (dx-r3), not mirrored here.
-        return {"kind": self.kind, "message": self.message,
-                "chain": [{"gene": n, "line": l} for (n, l) in self.chain]}
+        return {
+            "kind": self.kind,
+            "message": self.message,
+            "chain": [{"gene": n, "line": ln} for (n, ln) in self.chain],
+        }
+
 
 class Variant:
     """W06 (D-014) mirror: first-class Option/Result variant value.
     tag is one of {Some, None, Ok, Err}; payload is None for None and a
     value otherwise. Families are distinct: Some(x) != Ok(x), the tag IS
     the contract."""
+
     __slots__ = ("tag", "payload")
+
     def __init__(self, tag, payload):
         self.tag, self.payload = tag, payload
+
     def __repr__(self):
         return v_repr(self)
 
+
 class Gene:
-    __slots__ = ("name", "params", "guard", "body", "acetylate", "methylate", "m6a", "copies", "seq", "riboswitch", "burst", "closure", "param_anns", "ret_ann", "type_params", "line")
-    def __init__(self, name, params, guard, body, ac=False, me=False, m6=False, copies=1, seq=False, riboswitch=None, burst=None, param_anns=None, ret_ann=None, type_params=None, line=0):
+    __slots__ = (
+        "name",
+        "params",
+        "guard",
+        "body",
+        "acetylate",
+        "methylate",
+        "m6a",
+        "copies",
+        "seq",
+        "riboswitch",
+        "burst",
+        "closure",
+        "param_anns",
+        "ret_ann",
+        "type_params",
+        "line",
+    )
+
+    def __init__(
+        self,
+        name,
+        params,
+        guard,
+        body,
+        ac=False,
+        me=False,
+        m6=False,
+        copies=1,
+        seq=False,
+        riboswitch=None,
+        burst=None,
+        param_anns=None,
+        ret_ann=None,
+        type_params=None,
+        line=0,
+    ):
         self.name, self.params, self.guard, self.body = name, params, guard, body
         self.acetylate, self.methylate, self.m6a, self.copies, self.seq = ac, me, m6, copies, seq
         # loop-9 (F-5): cis riboswitch (ligand, bound_means_on, threshold)
@@ -144,12 +195,19 @@ class Gene:
         self.line = line
         self.closure = None
 
+
 ENHANCE_DELTA = 0.25  # T2e: super-enhancer activation boost (GRN threshold reduction)
 M64 = 0xFFFFFFFFFFFFFFFF
 
 # reg-bio (F-5): default ring kinetics, the historical constants.
-DEFAULT_REPRESSI = {"alpha": 10.0, "gamma": 1.0, "hill": 4, "basal": 0.0, "noise": 0.0,
-                    "seed": 0x9E3779B97F4A7C15}
+DEFAULT_REPRESSI = {
+    "alpha": 10.0,
+    "gamma": 1.0,
+    "hill": 4,
+    "basal": 0.0,
+    "noise": 0.0,
+    "seed": 0x9E3779B97F4A7C15,
+}
 
 
 def repressilator_levels(n, tick, params=None):
@@ -174,8 +232,9 @@ def repressilator_levels(n, tick, params=None):
         for ss in range(SUB):
             nx = 0
             if NOISE > 0.0:
-                nx = (SEED ^ ((t * 0x9E3779B97F4A7C15) & M64)
-                      ^ ((ss * 0xBF58476D1CE4E5B9) & M64)) & M64
+                nx = (
+                    SEED ^ ((t * 0x9E3779B97F4A7C15) & M64) ^ ((ss * 0xBF58476D1CE4E5B9) & M64)
+                ) & M64
                 if nx == 0:
                     nx = 0x9E3779B97F4A7C15
             snap = lv[:]
@@ -202,6 +261,7 @@ def repressilator_levels(n, tick, params=None):
                 lv[j] = v if v > 0.0 else 0.0
     return lv
 
+
 def grapheme_count(s):
     """W28 (SPEC 3): grapheme-cluster count over a DOCUMENTED SUBSET of the
     extended-grapheme rules (mirror of the Rust core's grapheme_count):
@@ -209,10 +269,19 @@ def grapheme_count(s):
     U+20D0-20FF, U+FE20-FE2F), ZWJ (U+200D) glues prev+next, regional-
     indicator pairs (flags) are one cluster each."""
     chars = list(s)
-    combining = lambda cp: (0x0300 <= cp <= 0x036F or 0x1AB0 <= cp <= 0x1AFF or
-                            0x1DC0 <= cp <= 0x1DFF or 0x20D0 <= cp <= 0x20FF or
-                            0xFE20 <= cp <= 0xFE2F)
-    ri = lambda cp: 0x1F1E6 <= cp <= 0x1F1FF
+
+    def combining(cp):
+        return (
+            0x0300 <= cp <= 0x036F
+            or 0x1AB0 <= cp <= 0x1AFF
+            or 0x1DC0 <= cp <= 0x1DFF
+            or 0x20D0 <= cp <= 0x20FF
+            or 0xFE20 <= cp <= 0xFE2F
+        )
+
+    def ri(cp):
+        return 0x1F1E6 <= cp <= 0x1F1FF
+
     n = len(chars)
     clusters = 0
     i = 0
@@ -245,27 +314,36 @@ def grapheme_count(s):
 
 class Pheno:
     __slots__ = ("name", "parent", "fields", "methods", "implements")
+
     def __init__(self, name, parent, fields, methods, implements=None):
         self.name, self.parent, self.fields, self.methods = name, parent, fields, methods
         # W04: implemented traits, in declaration order (SPEC 8b)
         self.implements = implements or []
 
+
 class TraitM:
     """W04: one trait method contract. required=True means the implementing
     phenotype must provide it; default is the full GeneDef body otherwise."""
+
     __slots__ = ("name", "required", "default")
+
     def __init__(self, name, required, default):
         self.name, self.required, self.default = name, required, default
 
+
 class Trait:
     __slots__ = ("name", "methods")
+
     def __init__(self, name, methods):
         self.name, self.methods = name, methods
 
+
 class ObjInst:
     __slots__ = ("defn", "fields")
+
     def __init__(self, defn, fields):
         self.defn, self.fields = defn, fields
+
 
 class Channel:
     """W015 mirror: unbounded FIFO channel, created empty. The sequential
@@ -274,10 +352,13 @@ class Channel:
     payloads: the Rust queue stores SendValue, and channel_wire below is
     its sequential mirror, applied at send time on both cores so the
     membrane contract is one rule on the same-thread buffered path too."""
+
     __slots__ = ("buf", "closed")
+
     def __init__(self):
         self.buf = []
         self.closed = False
+
 
 class WeakRef:
     """W013 (D-013) mirror: opaque weak handle (the weak() builtin). Holds a
@@ -289,7 +370,9 @@ class WeakRef:
     definition never keeps an instance alive. addr is the target address at
     handle creation, the identity rule for deep_eq (same as the Rust
     same_target: same backing-store allocation)."""
+
     __slots__ = ("kind", "addr", "defn")
+
     def __init__(self, kind, addr, defn=None):
         # no Python weakref here: plain list/dict are not weakref-able, and
         # the oracle models the RULES deterministically instead. The target
@@ -299,6 +382,7 @@ class WeakRef:
         # holds the target = a strong reference exists). Same-thread,
         # sequential: matches the Rust Rc semantics on every pin-able shape.
         self.kind, self.addr, self.defn = kind, addr, defn
+
 
 def channel_wire(v, _d=0):
     """W015 mirror of the Rust channel wire serialization (genes.to_send_d):
@@ -318,8 +402,10 @@ def channel_wire(v, _d=0):
         # one walk over _map_items (the Rust SendValue::Map k.display()
         # contract); the old {**dict, **side} merge ordered dict-entries
         # first even when a container key was inserted before a scalar one
-        return {(k if isinstance(k, str) else v_display(k)): channel_wire(x, _d + 1)
-                for k, x in _map_items(v)}
+        return {
+            (k if isinstance(k, str) else v_display(k)): channel_wire(x, _d + 1)
+            for k, x in _map_items(v)
+        }
     if isinstance(v, Variant):
         return Variant(v.tag, None if v.payload is None else channel_wire(v.payload, _d + 1))
     if isinstance(v, ObjInst):
@@ -329,6 +415,7 @@ def channel_wire(v, _d=0):
         return out
     # Gene / SeqObj / Channel handles degrade to null, like the spawn wire
     return None
+
 
 def channel_degrade_result(v, _d=0):
     """W015 mirror of the Rust join-result path (genes.to_send_d): a channel
@@ -344,19 +431,25 @@ def channel_degrade_result(v, _d=0):
         return [channel_degrade_result(x, _d + 1) for x in v]
     if isinstance(v, dict):
         # Z-MAPORDER: unified insertion sequence (see channel_wire)
-        return {(k if isinstance(k, str) else v_display(k)): channel_degrade_result(x, _d + 1)
-                for k, x in _map_items(v)}
+        return {
+            (k if isinstance(k, str) else v_display(k)): channel_degrade_result(x, _d + 1)
+            for k, x in _map_items(v)
+        }
     if isinstance(v, Variant):
-        return Variant(v.tag, None if v.payload is None
-                       else channel_degrade_result(v.payload, _d + 1))
+        return Variant(
+            v.tag, None if v.payload is None else channel_degrade_result(v.payload, _d + 1)
+        )
     return v
+
 
 class SeqObj:
     """Sequential-oracle sequence: values are produced by running the body to
     completion on first pull (buffered), then served one at a time. The Rust
     core pulls lazily via a rendezvous worker; corpus-visible output is
     identical because the differential programs do not print inside bodies."""
+
     __slots__ = ("interp", "gene", "args", "buf", "idx", "done")
+
     def __init__(self, interp, gene, args):
         self.interp, self.gene, self.args = interp, gene, args
         self.buf = None
@@ -370,7 +463,9 @@ class SeqObj:
             self.interp.seq_buffer = self.buf
             try:
                 g = self.gene
-                fenv = self.interp.new_scope(g.closure if g.closure is not None else self.interp.globals)
+                fenv = self.interp.new_scope(
+                    g.closure if g.closure is not None else self.interp.globals
+                )
                 for i, (pname, dflt) in enumerate(g.params):
                     if pname in ("?", ""):
                         continue
@@ -401,15 +496,19 @@ class SeqObj:
             return v
         return None
 
+
 class Return(Exception):
     def __init__(self, value):
         self.value = value
 
+
 class BreakLoop(Exception):
     pass
 
+
 class ContinueLoop(Exception):
     pass
+
 
 # display rules (must match Rust value.rs)
 def fmt_float(f):
@@ -423,27 +522,42 @@ def fmt_float(f):
     # scientific when exp < -4 or >= 16, ".0" on integral positional values)
     return repr(f)
 
+
 def escape_str(s):
     return s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\t", "\\t")
+
 
 def escape_bytes(b):
     # W029 mirror of the Rust escape_bytes, printable ASCII raw, the C
     # escape set short-form, everything else \xNN two-hex-digit lowercase.
     out = ""
     for byte in b:
-        if byte == 0x0a: out += "\\n"
-        elif byte == 0x09: out += "\\t"
-        elif byte == 0x0d: out += "\\r"
-        elif byte == 0x22: out += '\\"'
-        elif byte == 0x5c: out += "\\\\"
-        elif 0x20 <= byte <= 0x7e: out += chr(byte)
-        else: out += "\\x%02x" % byte
+        if byte == 0x0A:
+            out += "\\n"
+        elif byte == 0x09:
+            out += "\\t"
+        elif byte == 0x0D:
+            out += "\\r"
+        elif byte == 0x22:
+            out += '\\"'
+        elif byte == 0x5C:
+            out += "\\\\"
+        elif 0x20 <= byte <= 0x7E:
+            out += chr(byte)
+        else:
+            out += "\\x%02x" % byte
     return out
+
 
 def is_identlike(s):
     # Z-125 (item 6): ASCII-only, mirroring the Rust lexer's charset
     # (SPEC §Identifiers) — Unicode-permissive display conflation removed.
-    return bool(s) and (s[0].isascii() and s[0].isalpha() or s[0] == "_") and all(c.isascii() and (c.isalnum() or c == "_") for c in s)
+    return (
+        bool(s)
+        and (s[0].isascii() and s[0].isalpha() or s[0] == "_")
+        and all(c.isascii() and (c.isalnum() or c == "_") for c in s)
+    )
+
 
 def v_repr(v, _seen=None, _depth=0):
     # reg-r4 (re-audit B-3): cycle-safe, a container containing itself
@@ -453,13 +567,20 @@ def v_repr(v, _seen=None, _depth=0):
         _seen = set()
     if _depth > 256:
         return "[...]"
-    if v is None: return "null"
-    if v is True: return "true"
-    if v is False: return "false"
-    if isinstance(v, int): return str(v)
-    if isinstance(v, float): return fmt_float(v)
-    if isinstance(v, str): return f'"{escape_str(v)}"'
-    if isinstance(v, bytes): return f'b"{escape_bytes(v)}"'
+    if v is None:
+        return "null"
+    if v is True:
+        return "true"
+    if v is False:
+        return "false"
+    if isinstance(v, int):
+        return str(v)
+    if isinstance(v, float):
+        return fmt_float(v)
+    if isinstance(v, str):
+        return f'"{escape_str(v)}"'
+    if isinstance(v, bytes):
+        return f'b"{escape_bytes(v)}"'
     if isinstance(v, list):
         marker = id(v)
         if marker in _seen:
@@ -475,10 +596,16 @@ def v_repr(v, _seen=None, _depth=0):
         _seen.add(marker)
         # Z-MAPORDER: _map_items is the pure insertion sequence (head+tail);
         # the old v.items() walk dropped side entries from repr entirely
-        out = "{" + ", ".join(
-            (k if isinstance(k, str) and is_identlike(k) else v_repr(k, _seen, _depth + 1))
-            + ": " + v_repr(val, _seen, _depth + 1)
-            for k, val in _map_items(v)) + "}"
+        out = (
+            "{"
+            + ", ".join(
+                (k if isinstance(k, str) and is_identlike(k) else v_repr(k, _seen, _depth + 1))
+                + ": "
+                + v_repr(val, _seen, _depth + 1)
+                for k, val in _map_items(v)
+            )
+            + "}"
+        )
         _seen.discard(marker)
         return out
     if isinstance(v, Gene):
@@ -503,7 +630,8 @@ def v_repr(v, _seen=None, _depth=0):
     # is observable only through strengthen(), never through repr.
     if isinstance(v, WeakRef):
         return "<weak>"
-    return "<?>" 
+    return "<?>"
+
 
 def io_err(e):
     """Mirror the rust io::Error Display: '<strerror> (os error <N>)'.
@@ -525,17 +653,27 @@ def v_display(v):
         return v
     return v_repr(v)
 
+
 def truthy(v):
-    if v is None or v is False: return False
-    if v is True: return True
-    if isinstance(v, (int, float)): return v != 0
-    if isinstance(v, str): return len(v) > 0
-    if isinstance(v, bytes): return len(v) > 0
-    if isinstance(v, list): return len(v) > 0
-    if isinstance(v, dict): return _map_len(v) > 0
+    if v is None or v is False:
+        return False
+    if v is True:
+        return True
+    if isinstance(v, (int, float)):
+        return v != 0
+    if isinstance(v, str):
+        return len(v) > 0
+    if isinstance(v, bytes):
+        return len(v) > 0
+    if isinstance(v, list):
+        return len(v) > 0
+    if isinstance(v, dict):
+        return _map_len(v) > 0
     # W06 mirror: a carried success is truthy; a carried failure is falsy
-    if isinstance(v, Variant): return v.tag in ("Some", "Ok")
+    if isinstance(v, Variant):
+        return v.tag in ("Some", "Ok")
     return True
+
 
 # W01 (L2c), soft annotation matching (mirror of interp.rs ann_matches).
 # A value matches by type_name(); `any` accepts everything; `float` accepts
@@ -547,6 +685,7 @@ def truthy(v):
 def ann_name_norm(name):
     # TYPED-MODE mirror of interp.rs ann_name_norm.
     return name.lower()
+
 
 def ann_matches(v, ann):
     k = ann[0]
@@ -588,8 +727,11 @@ def ann_matches(v, ann):
         if head == "result":
             return isinstance(v, Variant) and v.tag in ("Ok", "Err")
         # unknown generic head: bare-name fallback (typo never accepts all)
-        return type_name(v) == head or (head == "float" and isinstance(v, int) and not isinstance(v, bool))
+        return type_name(v) == head or (
+            head == "float" and isinstance(v, int) and not isinstance(v, bool)
+        )
     return False
+
 
 def ann_is_typaram(ann, type_params):
     # TYPED-MODE mirror of interp.rs ann_is_typaram: type parameters are
@@ -603,6 +745,7 @@ def ann_is_typaram(ann, type_params):
         return ann_is_typaram(ann[1], type_params)
     # W01-s2: an alias resolves to its concrete target
     return False
+
 
 def ann_render(ann):
     # Canonical rendering, must match TypeAnn::render op-for-op.
@@ -619,24 +762,40 @@ def ann_render(ann):
         return ann[1]
     return "any"
 
+
 def type_name(v):
-    if v is None: return "null"
-    if isinstance(v, bool): return "bool"
-    if isinstance(v, int): return "int"
-    if isinstance(v, float): return "float"
-    if isinstance(v, str): return "str"
-    if isinstance(v, bytes): return "bytes"
-    if isinstance(v, list): return "list"
-    if isinstance(v, dict): return "map"
-    if isinstance(v, Gene): return "gene"
-    if isinstance(v, SeqObj): return "sequence"
-    if isinstance(v, ObjInst): return "phenotype"
-    if isinstance(v, Variant): return "option" if v.tag in ("Some", "None") else "result"
-    if isinstance(v, Channel): return "channel"
+    if v is None:
+        return "null"
+    if isinstance(v, bool):
+        return "bool"
+    if isinstance(v, int):
+        return "int"
+    if isinstance(v, float):
+        return "float"
+    if isinstance(v, str):
+        return "str"
+    if isinstance(v, bytes):
+        return "bytes"
+    if isinstance(v, list):
+        return "list"
+    if isinstance(v, dict):
+        return "map"
+    if isinstance(v, Gene):
+        return "gene"
+    if isinstance(v, SeqObj):
+        return "sequence"
+    if isinstance(v, ObjInst):
+        return "phenotype"
+    if isinstance(v, Variant):
+        return "option" if v.tag in ("Some", "None") else "result"
+    if isinstance(v, Channel):
+        return "channel"
     # W013 mirror: the handle type is its own name, the TARGET's type is not
     # leaked (the handle may outlive the target).
-    if isinstance(v, WeakRef): return "weak"
+    if isinstance(v, WeakRef):
+        return "weak"
     return "native"
+
 
 class _NanKey(float):
     """z-s0-parity (#107.1): a NaN map key that bypasses CPython's dict
@@ -696,7 +855,7 @@ def _nkey(k):
 # bool/int keys collapse through the native dict probe (True == 1);
 # post-promotion they are deep_eq-distinct in the tail exactly like the
 # Rust two-slot law.
-_MAP_SIDE = {}  # id(map) -> (map, side_list)
+_MAP_SIDE: dict = {}  # id(map) -> (map, side_list)
 
 
 def _side(tv, create=False):
@@ -927,15 +1086,21 @@ def deep_eq(a, b, _pairs=None):
         try:
             if len(fa) != len(fb):
                 return False
-            return all(any(deep_eq(k, k2, _pairs) and deep_eq(v, v2, _pairs)
-                           for k2, v2 in fb.items()) for k, v in fa.items())
+            return all(
+                any(deep_eq(k, k2, _pairs) and deep_eq(v, v2, _pairs) for k2, v2 in fb.items())
+                for k, v in fa.items()
+            )
         finally:
             _pairs.discard(key)
     # W013 mirror: weak handles are identity-based like channels (same
     # backing-store address), a handle never equals the target it references.
     if isinstance(a, WeakRef) or isinstance(b, WeakRef):
-        return (isinstance(a, WeakRef) and isinstance(b, WeakRef)
-                and a.kind == b.kind and a.addr == b.addr)
+        return (
+            isinstance(a, WeakRef)
+            and isinstance(b, WeakRef)
+            and a.kind == b.kind
+            and a.addr == b.addr
+        )
     if type(a) is not type(b) and not (a is None and b is None):
         if isinstance(a, (int, float)) and isinstance(b, (int, float)):
             return a == b
@@ -949,8 +1114,7 @@ def deep_eq(a, b, _pairs=None):
         _pairs.add(key)
         try:
             if isinstance(a, list):
-                return len(a) == len(b) and all(
-                    deep_eq(x, y, _pairs) for x, y in zip(a, b))
+                return len(a) == len(b) and all(deep_eq(x, y, _pairs) for x, y in zip(a, b))
             # #214: compare BOTH stores — container keys live in the side
             # pair-list, so a dict-vs-dict walk that only iterated the
             # Python dict would call two all-container-key maps equal the
@@ -961,18 +1125,68 @@ def deep_eq(a, b, _pairs=None):
             ia, ib = _map_items(a), _map_items(b)
             if len(ia) != len(ib):
                 return False
-            return all(any(deep_eq(k, k2, _pairs) and deep_eq(v, v2, _pairs)
-                           for k2, v2 in ib) for k, v in ia)
+            return all(
+                any(deep_eq(k, k2, _pairs) and deep_eq(v, v2, _pairs) for k2, v2 in ib)
+                for k, v in ia
+            )
         finally:
             _pairs.discard(key)
     return a == b
 
+
 # ----------------------------------------------------------------------------
 # lexer
 
-SYMBOLS = ["**=", "<<=", ">>=", "+=", "-=", "*=", "/=", "%=", "==", "!=", "<=", ">=", "&&", "||",
-           "//", "->", "=>", "**", "<<", ">>", "??", "?.", "?!", "&", "|", "^", "~", "?", "{", "}", "(", ")", "[", "]", ",", ":", "+", "-",
-           "*", "/", "%", "=", "<", ">", "!", ".", ";"]
+SYMBOLS = [
+    "**=",
+    "<<=",
+    ">>=",
+    "+=",
+    "-=",
+    "*=",
+    "/=",
+    "%=",
+    "==",
+    "!=",
+    "<=",
+    ">=",
+    "&&",
+    "||",
+    "//",
+    "->",
+    "=>",
+    "**",
+    "<<",
+    ">>",
+    "??",
+    "?.",
+    "?!",
+    "&",
+    "|",
+    "^",
+    "~",
+    "?",
+    "{",
+    "}",
+    "(",
+    ")",
+    "[",
+    "]",
+    ",",
+    ":",
+    "+",
+    "-",
+    "*",
+    "/",
+    "%",
+    "=",
+    "<",
+    ">",
+    "!",
+    ".",
+    ";",
+]
+
 
 def lex(src):
     toks, notes = [], []
@@ -980,25 +1194,31 @@ def lex(src):
     while i < n:
         c = src[i]
         if c in " \t\r":
-            i += 1; continue
+            i += 1
+            continue
         if c == "\n":
             if not toks or toks[-1][0] != "NL":
                 toks.append(("NL", None, line))
-            line += 1; i += 1; continue
+            line += 1
+            i += 1
+            continue
         if c == "#":
             while i < n and src[i] != "\n":
                 i += 1
             continue
         # W030 mirror: raw strings r"...", no escapes, no interpolation
-        if c == "r" and i + 1 < n and src[i+1] == '"':
+        if c == "r" and i + 1 < n and src[i + 1] == '"':
             i += 2
             raw, closed = "", False
             while i < n:
                 if src[i] == '"':
-                    i += 1; closed = True; break
+                    i += 1
+                    closed = True
+                    break
                 if src[i] == "\n":
                     line += 1
-                raw += src[i]; i += 1
+                raw += src[i]
+                i += 1
             if not closed:
                 notes.append(Note(4, "unclosed raw string consumed to end of input", line))
             toks.append(("STR", raw, line))
@@ -1006,8 +1226,8 @@ def lex(src):
         # W029 mirror: bytes literals b"..." / b'...', same escape set as the
         # Rust lexer (\n \t \r \\ \" \' \0 \xNN; unknown escapes verbatim; no
         # interpolation); non-ASCII encodes as UTF-8 with a note.
-        if (c == "b" or c == "B") and i + 1 < n and src[i+1] in ('"', "'"):
-            quote = src[i+1]
+        if (c == "b" or c == "B") and i + 1 < n and src[i + 1] in ('"', "'"):
+            quote = src[i + 1]
             if quote == "'":
                 notes.append(Note(4, "single-quoted bytes literal repaired to double quotes"))
             i += 2
@@ -1015,25 +1235,40 @@ def lex(src):
             closed = False
             while i < n:
                 if src[i] == quote:
-                    i += 1; closed = True; break
+                    i += 1
+                    closed = True
+                    break
                 if src[i] == "\\" and i + 1 < n:
                     e = src[i + 1]
-                    if e == "n": out.append(10)
-                    elif e == "t": out.append(9)
-                    elif e == "r": out.append(13)
-                    elif e == "0": out.append(0)
-                    elif e == "\\": out.append(92)
-                    elif e == '"': out.append(34)
-                    elif e == "'": out.append(39)
+                    if e == "n":
+                        out.append(10)
+                    elif e == "t":
+                        out.append(9)
+                    elif e == "r":
+                        out.append(13)
+                    elif e == "0":
+                        out.append(0)
+                    elif e == "\\":
+                        out.append(92)
+                    elif e == '"':
+                        out.append(34)
+                    elif e == "'":
+                        out.append(39)
                     elif e == "x":
-                        if i + 3 < n and all(ch in "0123456789abcdefABCDEF" for ch in src[i+2:i+4]):
-                            out.append(int(src[i+2:i+4], 16))
-                            i += 4; continue
+                        if i + 3 < n and all(
+                            ch in "0123456789abcdefABCDEF" for ch in src[i + 2 : i + 4]
+                        ):
+                            out.append(int(src[i + 2 : i + 4], 16))
+                            i += 4
+                            continue
                         notes.append(Note(4, "malformed \\x escape in bytes literal kept verbatim"))
-                        out.append(92); out.append(120)
+                        out.append(92)
+                        out.append(120)
                     else:
-                        out.append(92); out.extend(e.encode("utf-8"))
-                    i += 2; continue
+                        out.append(92)
+                        out.extend(e.encode("utf-8"))
+                    i += 2
+                    continue
                 if src[i] == "\n":
                     line += 1
                 if ord(src[i]) > 127:
@@ -1048,23 +1283,30 @@ def lex(src):
             continue
         # W030 mirror: multiline triple-quoted strings """...""", escapes and
         # interpolation processed, content verbatim
-        if c == '"' and i + 2 < n and src[i+1] == '"' and src[i+2] == '"':
+        if c == '"' and i + 2 < n and src[i + 1] == '"' and src[i + 2] == '"':
             i += 3
             raw, closed, interp, depth = "", False, False, 0
             while i < n:
-                if src[i] == '"' and i + 2 < n and src[i+1] == '"' and src[i+2] == '"':
-                    i += 3; closed = True; break
+                if src[i] == '"' and i + 2 < n and src[i + 1] == '"' and src[i + 2] == '"':
+                    i += 3
+                    closed = True
+                    break
                 if src[i] == "\\" and i + 1 < n:
                     e = src[i + 1]
-                    raw += {"n": "\n", "t": "\t", "\\": "\\", '"': '"', "{": "{", "}": "}"}.get(e, "\\" + e)
-                    i += 2; continue
+                    raw += {"n": "\n", "t": "\t", "\\": "\\", '"': '"', "{": "{", "}": "}"}.get(
+                        e, "\\" + e
+                    )
+                    i += 2
+                    continue
                 if src[i] == "\n":
                     line += 1
                 if src[i] == "{":
-                    depth += 1; interp = True
+                    depth += 1
+                    interp = True
                 if src[i] == "}" and depth > 0:
                     depth -= 1
-                raw += src[i]; i += 1
+                raw += src[i]
+                i += 1
             if not closed:
                 notes.append(Note(4, "unclosed multiline string consumed to end of input", line))
             toks.append(("INTERP" if interp else "STR", raw, line))
@@ -1076,21 +1318,29 @@ def lex(src):
                 ch = src[i2]
                 if ch == "\\" and i2 + 1 < n:
                     e = src[i2 + 1]
-                    raw += {"n": "\n", "t": "\t", "\\": "\\", '"': '"', "{": "{", "}": "}"}.get(e, "\\" + e)
-                    i2 += 2; continue
+                    raw += {"n": "\n", "t": "\t", "\\": "\\", '"': '"', "{": "{", "}": "}"}.get(
+                        e, "\\" + e
+                    )
+                    i2 += 2
+                    continue
                 if depth == 0 and ch == '"':
-                    closed = True; i2 += 1; break
+                    closed = True
+                    i2 += 1
+                    break
                 if ch == "\n":
                     line += 1
                 if ch == "{":
-                    depth += 1; interp = True
+                    depth += 1
+                    interp = True
                 if ch == "}" and depth > 0:
                     depth -= 1
-                raw += ch; i2 += 1
+                raw += ch
+                i2 += 1
             if not closed:
                 notes.append(Note(4, "unclosed string consumed to end of file", line))
             toks.append(("INTERP" if interp else "STR", raw, line))
-            i = i2; continue
+            i = i2
+            continue
         if c == "'":
             notes.append(Note(4, "single-quoted string repaired to double quotes", line))
             raw, i2, closed = "", i + 1, False
@@ -1099,32 +1349,42 @@ def lex(src):
                 if ch == "\\" and i2 + 1 < n:
                     e = src[i2 + 1]
                     raw += {"n": "\n", "t": "\t", '"': '"'}.get(e, e)
-                    i2 += 2; continue
+                    i2 += 2
+                    continue
                 if ch == "'":
-                    closed = True; i2 += 1; break
+                    closed = True
+                    i2 += 1
+                    break
                 if ch == "\n":
                     line += 1
-                raw += ch; i2 += 1
+                raw += ch
+                i2 += 1
             if not closed:
                 notes.append(Note(4, "unclosed string consumed to end of file", line))
             toks.append(("STR", raw, line))
-            i = i2; continue
+            i = i2
+            continue
         if c == "@":
             j = i + 1
             while j < n and (src[j].isalnum() or src[j] == "_"):
                 j += 1
             if j > i + 1:
-                toks.append(("MARK", src[i + 1:j], line))
+                toks.append(("MARK", src[i + 1 : j], line))
             else:
                 notes.append(Note(4, "stray '@' skipped", line))
-            i = j; continue
+            i = j
+            continue
         if c.isdigit():
             # W031 mirror: radix prefixes 0x/0b/0o (case-insensitive) with `_`
             # separators; prefix with no valid digit falls through to decimal
-            if c == "0" and i + 1 < n and src[i+1] in "xXbBoO":
-                radix = {"x": 16, "X": 16, "b": 2, "B": 2, "o": 8, "O": 8}[src[i+1]]
-                vset = "0123456789abcdefABCDEF" if radix == 16 else ("01" if radix == 2 else "01234567")
-                if i + 2 < n and (src[i+2] in vset or src[i+2] == "_"):
+            if c == "0" and i + 1 < n and src[i + 1] in "xXbBoO":
+                radix = {"x": 16, "X": 16, "b": 2, "B": 2, "o": 8, "O": 8}[src[i + 1]]
+                vset = (
+                    "0123456789abcdefABCDEF"
+                    if radix == 16
+                    else ("01" if radix == 2 else "01234567")
+                )
+                if i + 2 < n and (src[i + 2] in vset or src[i + 2] == "_"):
                     j = i + 2
                     while j < n and (src[j] in vset or src[j] == "_"):
                         j += 1
@@ -1138,13 +1398,16 @@ def lex(src):
                         val = int(digits, radix)
                         toks.append(("INT", val, line))
                         # i64 parity: out-of-range treated as 0 with the same note
-                        if not (-2**63 <= val <= 2**63 - 1):
-                            notes.append(Note(4, f"integer '{raw}' out of range treated as 0", line))
+                        if not (-(2**63) <= val <= 2**63 - 1):
+                            notes.append(
+                                Note(4, f"integer '{raw}' out of range treated as 0", line)
+                            )
                             toks[-1] = ("INT", 0, line)
                     else:
                         notes.append(Note(4, f"integer '{raw}' out of range treated as 0", line))
                         toks.append(("INT", 0, line))
-                    i = j; continue
+                    i = j
+                    continue
             j = i
             isf = False
             while j < n and (src[j].isdigit() or src[j] == "." or src[j] == "_"):
@@ -1166,7 +1429,9 @@ def lex(src):
             # W031 mirror: `_` separators stripped before parsing
             cleaned = text.replace("_", "")
             try:
-                toks.append(("FLOAT", float(cleaned), line) if isf else (("INT", int(cleaned), line)))
+                toks.append(
+                    ("FLOAT", float(cleaned), line) if isf else (("INT", int(cleaned), line))
+                )
             except ValueError:
                 notes.append(Note(4, f"malformed number '{text}' treated as 0", line))
                 toks.append(("INT", 0, line))
@@ -1175,10 +1440,11 @@ def lex(src):
                 # is out of range and treated as 0 with the same note (the
                 # Rust core parses i64; a Python bignum would otherwise see
                 # a value the compiled engine never did)
-                if not isf and not (-2**63 <= int(cleaned) <= 2**63 - 1):
+                if not isf and not (-(2**63) <= int(cleaned) <= 2**63 - 1):
                     notes.append(Note(4, f"integer '{text}' out of range treated as 0", line))
                     toks[-1] = ("INT", 0, line)
-            i = j; continue
+            i = j
+            continue
         if c.isascii() and (c.isalpha() or c == "_"):
             j = i
             # Z-125 (item 6): ASCII-only identifiers, mirroring the Rust
@@ -1188,8 +1454,9 @@ def lex(src):
             while j < n and src[j].isascii() and (src[j].isalnum() or src[j] == "_"):
                 j += 1
             toks.append(("IDENT", src[i:j], line))
-            i = j; continue
-        if c == "?" and i + 2 < n and src[i+1] == "." and src[i+2].isdigit():
+            i = j
+            continue
+        if c == "?" and i + 2 < n and src[i + 1] == "." and src[i + 2].isdigit():
             # L1a parity guard: '?.' followed by a digit lexes as '?' + number-dot
             toks.append(("SYM", "?", line))
             i += 1
@@ -1207,29 +1474,54 @@ def lex(src):
     toks.append(("EOF", None, line))
     return toks, notes
 
+
 # ----------------------------------------------------------------------------
 # parser, Total Grammar ladder
 
-KEYWORDS = set("""gene let if elif else while loop scope for in return break continue match case use
+KEYWORDS = set(
+    """gene let if elif else while loop scope for in return break continue match case use
 tad anchor export import enhance silence stress rescue raise fate state regulate activates
 inhibits strength toggle repressilator period frame proof guard splice variant edit replace
-ires as collect enter phenotype sequence yield new threshold from self operon""".split())
+ires as collect enter phenotype sequence yield new threshold from self operon""".split()
+)
 
-ARMS = set("""gene let if elif else while loop scope for return break continue match use tad anchor
+ARMS = set(
+    """gene let if elif else while loop scope for return break continue match use tad anchor
 enhance silence stress raise fate regulate toggle repressilator frame splice edit ires
-phenotype sequence yield operon""".split())
+phenotype sequence yield operon""".split()
+)
 
 SYNONYMS = {
-    "fn": "gene", "func": "gene", "fun": "gene", "def": "gene", "sub": "gene",
-    "lambda": "gene", "proc": "gene", "var": "let", "val": "let",
-    "foreach": "for", "each": "for", "import": "use", "include": "use",
-    "require": "use", "ret": "return", "stop": "break", "next": "continue",
-    "skip": "continue", "elseif": "elif",
-    "class": "phenotype", "struct": "phenotype", "record": "phenotype", "prototype": "phenotype",
-    "type": "phenotype", "generator": "sequence", "gen": "sequence", "stream": "sequence", "iter": "sequence",
+    "fn": "gene",
+    "func": "gene",
+    "fun": "gene",
+    "def": "gene",
+    "sub": "gene",
+    "lambda": "gene",
+    "proc": "gene",
+    "var": "let",
+    "val": "let",
+    "foreach": "for",
+    "each": "for",
+    "import": "use",
+    "include": "use",
+    "require": "use",
+    "ret": "return",
+    "stop": "break",
+    "next": "continue",
+    "skip": "continue",
+    "elseif": "elif",
+    "class": "phenotype",
+    "struct": "phenotype",
+    "record": "phenotype",
+    "prototype": "phenotype",
+    "type": "phenotype",
+    "generator": "sequence",
+    "gen": "sequence",
+    "stream": "sequence",
+    "iter": "sequence",
 }
-VALUE_SYNONYMS = {"yes": True, "on": True, "no": False, "off": False,
-                  "nil": None, "nothing": None}
+VALUE_SYNONYMS = {"yes": True, "on": True, "no": False, "off": False, "nil": None, "nothing": None}
 # W06 (D-014) mirror: 'none' RETIRED from VALUE_SYNONYMS, it is now the
 # Option constructor none(); bare 'none' degrades to an unbound ident
 # (phantom note), never a silent null. Matches src/parser.rs.
@@ -1237,12 +1529,15 @@ VALUE_SYNONYMS = {"yes": True, "on": True, "no": False, "off": False,
 # never mangles it; the payload parse is lenient, runtime never reads it
 MARKS = {"acetylate", "methylate", "m6a", "copies", "riboswitch", "burst", "deprecated"}
 
+
 def edit_distance(a, b):
     if a == b:
         return 0
     la, lb = len(a), len(b)
-    if la == 0: return lb
-    if lb == 0: return la
+    if la == 0:
+        return lb
+    if lb == 0:
+        return la
     prev = list(range(lb + 1))
     for i in range(1, la + 1):
         cur = [i] + [0] * lb
@@ -1252,6 +1547,7 @@ def edit_distance(a, b):
         prev = cur
     return prev[lb]
 
+
 def wobble_keyword(word):
     limit = 1 if len(word) <= 4 else 2
     best, bd = None, 99
@@ -1260,6 +1556,7 @@ def wobble_keyword(word):
         if d <= limit and d < bd:
             best, bd = k, d
     return best
+
 
 class P:
     def __init__(self, toks, notes):
@@ -1298,7 +1595,9 @@ class P:
         generated = len(self.notes) - self.parse_note_base
         if generated >= PARSE_NOTE_CAP:
             if generated == PARSE_NOTE_CAP:
-                self.notes.append(Note(4, "parse note cap (10000) reached, further notes suppressed", line))
+                self.notes.append(
+                    Note(4, "parse note cap (10000) reached, further notes suppressed", line)
+                )
             return
         self.notes.append(Note(rung, msg, line))
 
@@ -1309,16 +1608,19 @@ class P:
     def expect_kw(self, word):
         t = self.peek()
         if t[0] == "IDENT" and t[1] == word:
-            self.next(); return True
+            self.next()
+            return True
         if t[0] == "IDENT":
             syn = SYNONYMS.get(t[1])
             if syn == word:
                 self.note(t[2], 2, f"synonym '{t[1]}' repaired to '{word}'")
-                self.next(); return True
+                self.next()
+                return True
             wk = wobble_keyword(t[1])
             if wk == word:
                 self.note(t[2], 3, f"wobble: '{t[1]}' repaired to keyword '{word}'")
-                self.next(); return True
+                self.next()
+                return True
         return False
 
     def at_ident(self, w):
@@ -1334,7 +1636,8 @@ class P:
                 break
             if self.peek() == ("SYM", "}", self.peek()[2]):
                 self.note(self.peek()[2], 4, "unmatched '}' skipped")
-                self.next(); continue
+                self.next()
+                continue
             before = self.pos
             # W24 mirror: contextual `pub` marker, `pub gene` / `pub let` /
             # `pub const` / `pub phenotype` at TOP LEVEL records the name for
@@ -1362,7 +1665,7 @@ class P:
             if s is not None:
                 out.append(s)
             if self.pos == before:
-                self.note(self.peek()[2], 4, f"token skipped")
+                self.note(self.peek()[2], 4, "token skipped")
                 self.next()
         return out
 
@@ -1443,7 +1746,11 @@ class P:
                 if tt[0] == "INT":
                     self.next()
                     if tt[1] < 1 or tt[1] > 64:
-                        self.note(tt[2], 4, "gene dosage clamped to 1..=64 copies (a level is a concentration, not an amplifier)")
+                        self.note(
+                            tt[2],
+                            4,
+                            "gene dosage clamped to 1..=64 copies (a level is a concentration, not an amplifier)",
+                        )
                     copies = min(max(tt[1], 1), 64)
                 else:
                     self.note(tt[2], 4, "@copies needs an integer 1..=64; default 1")
@@ -1474,7 +1781,9 @@ class P:
                             self.next()
                             threshold = min(max(float(vt[1]), 0.0), 1.0)
                         else:
-                            self.note(vt[2], 4, "riboswitch threshold needs a number 0..=1; default 0.5")
+                            self.note(
+                                vt[2], 4, "riboswitch threshold needs a number 0..=1; default 0.5"
+                            )
                     riboswitch = (lig, on, threshold)
             # loop-9 (F-2): @burst kon koff, per-gene promoter identity
             burst = None
@@ -1507,7 +1816,7 @@ class P:
                         self.next()
                         msg = vt[1]
                     else:
-                        self.note(vt[2], 4, f"@deprecated needs a string message; mark skipped")
+                        self.note(vt[2], 4, "@deprecated needs a string message; mark skipped")
                     since = None
                     nt = self.peek()
                     if nt[0] == "SYM" and nt[1] == ",":
@@ -1561,12 +1870,14 @@ class P:
             return ("block", self.block())
         if t[0] == "IDENT":
             return self.word_stmt(t[1])
-        self.note(t[2], 4, f"unexpected token at statement position")
+        self.note(t[2], 4, "unexpected token at statement position")
         self.next()
         return None
 
     def skip_line(self):
-        while self.peek()[0] not in ("NL", "EOF") and not (self.peek()[0] == "SYM" and self.peek()[1] == "}"):
+        while self.peek()[0] not in ("NL", "EOF") and not (
+            self.peek()[0] == "SYM" and self.peek()[1] == "}"
+        ):
             self.next()
 
     def end_stmt(self):
@@ -1575,14 +1886,37 @@ class P:
 
     def word_stmt(self, w):
         t1 = self.toks[self.pos + 1] if self.pos + 1 < len(self.toks) else ("EOF", None, 0)
-        expr_head = (t1[0] == "SYM" and t1[1] in ("=", "(", "[", ".", "+=", "-=", "*=", "/=", "%=",
-            "==", "!=", "<", "<=", ">", ">=", "+", "-", "*", "/", "//", "%", "&&", "||", "??"))  # Z-125 (item 2)
+        expr_head = t1[0] == "SYM" and t1[1] in (
+            "=",
+            "(",
+            "[",
+            ".",
+            "+=",
+            "-=",
+            "*=",
+            "/=",
+            "%=",
+            "==",
+            "!=",
+            "<",
+            "<=",
+            ">",
+            ">=",
+            "+",
+            "-",
+            "*",
+            "/",
+            "//",
+            "%",
+            "&&",
+            "||",
+            "??",
+        )  # Z-125 (item 2)
         word = w
         # W01-s2: `type Name = ...` is the type-alias form; the repair to
         # 'phenotype' happens silently (the alias arm intercepts first).
         t2 = self.toks[self.pos + 2] if self.pos + 2 < len(self.toks) else ("EOF", None, 0)
-        alias_head = (w == "type" and t1[0] == "IDENT"
-                      and t2[0] == "SYM" and t2[1] == "=")
+        alias_head = w == "type" and t1[0] == "IDENT" and t2[0] == "SYM" and t2[1] == "="
         if w not in KEYWORDS and not expr_head:
             syn = SYNONYMS.get(w)
             if syn and syn in ARMS:
@@ -1607,7 +1941,8 @@ class P:
                     self.eat_nl()
                     t = self.peek()
                     if t[0] == "SYM" and t[1] == "}":
-                        self.next(); break
+                        self.next()
+                        break
                     if t[0] == "EOF":
                         self.note(t[2], 4, "trait body auto-closed")
                         break
@@ -1618,7 +1953,9 @@ class P:
                             if g[0] == "gene":
                                 methods.append(TraitM(g[1].name or "?", False, g[1]))
                             else:
-                                self.note(t[2], 4, "trait method default body lost; treated as required")
+                                self.note(
+                                    t[2], 4, "trait method default body lost; treated as required"
+                                )
                                 methods.append(TraitM("?", True, None))
                         else:
                             self.next()
@@ -1719,7 +2056,9 @@ class P:
                     e = self.expr()
                     self.end_stmt()
                     return ("letann", name, ann, e)
-                self.note(self.peek()[2], 4, f"'let {name}: {ann_render(ann)}' without value binds null")
+                self.note(
+                    self.peek()[2], 4, f"'let {name}: {ann_render(ann)}' without value binds null"
+                )
                 self.end_stmt()
                 return ("letann", name, ann, ("null",))
             if self.peek() == ("SYM", "=", self.peek()[2]):
@@ -1806,9 +2145,13 @@ class P:
             self.end_stmt()
             return ("return", e)
         if word == "break":
-            self.next(); self.end_stmt(); return ("break",)
+            self.next()
+            self.end_stmt()
+            return ("break",)
         if word == "continue":
-            self.next(); self.end_stmt(); return ("continue",)
+            self.next()
+            self.end_stmt()
+            return ("continue",)
         if word == "match":
             self.next()
             subj = self.expr()
@@ -1819,13 +2162,15 @@ class P:
                     self.eat_nl()
                     t = self.peek()
                     if t[0] == "SYM" and t[1] == "}":
-                        self.next(); break
+                        self.next()
+                        break
                     if t[0] == "EOF":
                         self.note(t[2], 4, "match block auto-closed at end of file")
                         break
                     if not self.expect_kw("case"):
                         self.note(t[2], 4, "expected 'case' in match; skipped token")
-                        self.next(); continue
+                        self.next()
+                        continue
                     pat = self.pattern()
                     if self.peek() == ("SYM", "=>", t[2]):
                         self.next()
@@ -1945,7 +2290,13 @@ class P:
             self.next()
             save = self.pos
             t = self.peek()
-            if t[0] == "IDENT" and t[1] in ("unfolded", "missing", "overflow", "burned", "interference"):
+            if t[0] == "IDENT" and t[1] in (
+                "unfolded",
+                "missing",
+                "overflow",
+                "burned",
+                "interference",
+            ):
                 self.next()
                 if self.peek() == ("SYM", ",", t[2]):
                     self.next()
@@ -1966,7 +2317,8 @@ class P:
                     self.eat_nl()
                     t = self.peek()
                     if t[0] == "SYM" and t[1] == "}":
-                        self.next(); break
+                        self.next()
+                        break
                     if t[0] == "EOF":
                         break
                     if t[0] == "IDENT" and (t[1] == "state" or edit_distance(t[1], "state") <= 1):
@@ -2004,12 +2356,14 @@ class P:
                     self.eat_nl()
                     t = self.peek()
                     if t[0] == "SYM" and t[1] == "}":
-                        self.next(); break
+                        self.next()
+                        break
                     if t[0] == "EOF":
                         break
                     if t[0] != "IDENT":
                         self.note(t[2], 4, "unexpected token in regulate block; skipped")
-                        self.next(); continue
+                        self.next()
+                        continue
                     frm = self.next()[1]
                     # reg-bio-2 (C1): `a translates b rate r decay d;`
                     if self.expect_kw("translates"):
@@ -2043,8 +2397,11 @@ class P:
                         elif self.expect_kw("cofactor"):
                             inducer = False
                         if inducer is None:
-                            self.note(t[2], 4, "bind needs 'inducer' or 'cofactor'; binding dropped")
-                            self.skip_line(); continue
+                            self.note(
+                                t[2], 4, "bind needs 'inducer' or 'cofactor'; binding dropped"
+                            )
+                            self.skip_line()
+                            continue
                         lg = self.ident()
                         k = 0.1
                         if self.expect_kw("k"):
@@ -2071,8 +2428,13 @@ class P:
                         attenuating = True
                         inhibit = True
                     if inhibit is None:
-                        self.note(t[2], 4, "regulate edge missing 'activates'/'inhibits'/'translates'; edge dropped")
-                        self.skip_line(); continue
+                        self.note(
+                            t[2],
+                            4,
+                            "regulate edge missing 'activates'/'inhibits'/'translates'; edge dropped",
+                        )
+                        self.skip_line()
+                        continue
                     to = self.ident()
                     strength = 1.0
                     if self.expect_kw("strength"):
@@ -2085,10 +2447,18 @@ class P:
                         # reg-bio-2 (D2c): strength clamps to the physical
                         # range (mirror of the Rust parser clamp + note).
                         if strength > 1.0:
-                            self.note(tt[2], 4, "strength > 1.0 clamped to 1.0 (levels are concentration fractions)")
+                            self.note(
+                                tt[2],
+                                4,
+                                "strength > 1.0 clamped to 1.0 (levels are concentration fractions)",
+                            )
                             strength = 1.0
                         elif strength < 0.0:
-                            self.note(tt[2], 4, "negative strength clamped to 0.0 (a negative repressor is not a booster)")
+                            self.note(
+                                tt[2],
+                                4,
+                                "negative strength clamped to 0.0 (a negative repressor is not a booster)",
+                            )
                             strength = 0.0
                     threshold = None
                     if self.expect_kw("threshold"):
@@ -2108,9 +2478,17 @@ class P:
                             if 1 <= iv <= 8:
                                 hill = iv
                             else:
-                                self.note(tt[2], 4, "hill needs an integer 1..=8; edge keeps the default n=2 shape")
+                                self.note(
+                                    tt[2],
+                                    4,
+                                    "hill needs an integer 1..=8; edge keeps the default n=2 shape",
+                                )
                         else:
-                            self.note(tt[2], 4, "hill needs an integer 1..=8; edge keeps the default n=2 shape")
+                            self.note(
+                                tt[2],
+                                4,
+                                "hill needs an integer 1..=8; edge keeps the default n=2 shape",
+                            )
                     # reg-bio (F-3): optional cis-regulatory OR membership
                     is_any = False
                     if self.expect_kw("any"):
@@ -2124,19 +2502,44 @@ class P:
                     if self.expect_kw("sum"):
                         is_sum = True
                     if (hill is not None or is_any) and threshold is None:
-                        self.note(tt[2], 4, "hill/any apply to thresholded edges; ignored (edge stays declarative)")
+                        self.note(
+                            tt[2],
+                            4,
+                            "hill/any apply to thresholded edges; ignored (edge stays declarative)",
+                        )
                         hill = None
                         is_any = False
                     if is_any and inhibit:
-                        self.note(tt[2], 4, "any on an inhibiting edge is ignored (inhibitors already veto independently)")
+                        self.note(
+                            tt[2],
+                            4,
+                            "any on an inhibiting edge is ignored (inhibitors already veto independently)",
+                        )
                         is_any = False
                     if occupy and not inhibit:
-                        self.note(tt[2], 4, "occupy applies to inhibiting edges; ignored (activators cannot occupy a promoter they activate)")
+                        self.note(
+                            tt[2],
+                            4,
+                            "occupy applies to inhibiting edges; ignored (activators cannot occupy a promoter they activate)",
+                        )
                         occupy = False
                     if is_sum and (inhibit or threshold is None):
                         self.note(tt[2], 4, "sum applies to thresholded activating edges; ignored")
                         is_sum = False
-                    edges.append((frm, to, strength, inhibit, threshold, hill, is_any, occupy, is_sum, attenuating))
+                    edges.append(
+                        (
+                            frm,
+                            to,
+                            strength,
+                            inhibit,
+                            threshold,
+                            hill,
+                            is_any,
+                            occupy,
+                            is_sum,
+                            attenuating,
+                        )
+                    )
                     self.end_stmt()
             return ("regulate", edges, trans, binds)
         if word == "ligand":
@@ -2210,7 +2613,9 @@ class P:
                         self.note(t2[2], 4, "unexpected token in operon block; skipped")
                         self.next()
             else:
-                self.note(self.peek()[2], 4, "operon needs a block '{ cistron rbs r; ... }'; skipped")
+                self.note(
+                    self.peek()[2], 4, "operon needs a block '{ cistron rbs r; ... }'; skipped"
+                )
             return ("operon", name, members)
         if word == "toggle":
             self.next()
@@ -2235,8 +2640,14 @@ class P:
                     self.next()
             # reg-bio (F-5): inline kinetics, mirror of the Rust parser.
             # Canonical order: alpha, gamma, hill, basal, noise, seed.
-            ov = {"alpha": None, "gamma": None, "hill": None, "basal": None,
-                  "noise": None, "seed": None}
+            ov = {
+                "alpha": None,
+                "gamma": None,
+                "hill": None,
+                "basal": None,
+                "noise": None,
+                "seed": None,
+            }
             while True:
                 if self.expect_kw("alpha"):
                     t = self.peek()
@@ -2323,7 +2734,9 @@ class P:
                     if t[0] == "SYM" and t[1] == "}":
                         self.next()
                         if pending_marks:
-                            self.note(t[2], 4, "mark must precede 'variant' in splice block; skipped")
+                            self.note(
+                                t[2], 4, "mark must precede 'variant' in splice block; skipped"
+                            )
                             pending_marks = []
                         break
                     if t[0] == "EOF":
@@ -2344,7 +2757,9 @@ class P:
                             else:
                                 self.note(t[2], 4, f"unknown mark '@{m}' skipped")
                         continue
-                    if t[0] == "IDENT" and (t[1] == "variant" or edit_distance(t[1], "variant") <= 1):
+                    if t[0] == "IDENT" and (
+                        t[1] == "variant" or edit_distance(t[1], "variant") <= 1
+                    ):
                         if t[1] != "variant":
                             self.note(t[2], 3, f"wobble: '{t[1]}' repaired to 'variant'")
                         self.next()
@@ -2358,7 +2773,8 @@ class P:
                                 self.eat_nl()
                                 t2 = self.peek()
                                 if t2[0] == "SYM" and t2[1] == ")":
-                                    self.next(); break
+                                    self.next()
+                                    break
                                 if t2[0] == "EOF":
                                     break
                                 before = self.pos
@@ -2371,14 +2787,20 @@ class P:
                                 if self.peek() == ("SYM", ",", self.peek()[2]):
                                     self.next()
                                 if self.pos == before:
-                                    self.note(t2[2], 4, "unclosed variant parameter list; auto-closed")
+                                    self.note(
+                                        t2[2], 4, "unclosed variant parameter list; auto-closed"
+                                    )
                                     break
                         vbody = self.block()
-                        vline = self.peek()[2]  # Z-CAPWINDOW: past-`}` line, mirror of parser.rs self.line() post-block
+                        vline = self.peek()[
+                            2
+                        ]  # Z-CAPWINDOW: past-`}` line, mirror of parser.rs self.line() post-block
                         variants.append((vname, vparams, vbody, vmarks, vline))
                     else:
                         if pending_marks:
-                            self.note(t[2], 4, "mark must precede 'variant' in splice block; skipped")
+                            self.note(
+                                t[2], 4, "mark must precede 'variant' in splice block; skipped"
+                            )
                             pending_marks = []
                         self.note(t[2], 4, "unexpected token in splice block; skipped")
                         self.next()
@@ -2393,7 +2815,8 @@ class P:
                     self.eat_nl()
                     t = self.peek()
                     if t[0] == "SYM" and t[1] == "}":
-                        self.next(); break
+                        self.next()
+                        break
                     if t[0] == "EOF":
                         break
                     if self.expect_kw("replace"):
@@ -2428,12 +2851,16 @@ class P:
                 target = self.type_ann()
                 self.end_stmt()
                 dup = None
-                for (n, t0) in self.type_aliases:
+                for n, t0 in self.type_aliases:
                     if n == name:
                         dup = t0
                         break
                 if dup is not None:
-                    self.note(alias_line, 2, f"duplicate type alias '{name}'; first declaration ({ann_render(dup)}) wins")
+                    self.note(
+                        alias_line,
+                        2,
+                        f"duplicate type alias '{name}'; first declaration ({ann_render(dup)}) wins",
+                    )
                 else:
                     self.type_aliases.append((name, target))
                 return ("typealias", name, target, alias_line)
@@ -2462,7 +2889,8 @@ class P:
                     self.eat_nl()
                     t = self.peek()
                     if t[0] == "SYM" and t[1] == "}":
-                        self.next(); break
+                        self.next()
+                        break
                     if t[0] == "EOF":
                         self.note(t[2], 4, "phenotype body auto-closed")
                         break
@@ -2548,7 +2976,11 @@ class P:
             # src/parser.rs's special case; without it every bare-main
             # program's stderr diverged ([info] vs [fallback E2017]).
             if word == "main":
-                self.note(self.peek()[2], 1, "bare 'main' block accepted as the entry gene (canonical form: gene main())")
+                self.note(
+                    self.peek()[2],
+                    1,
+                    "bare 'main' block accepted as the entry gene (canonical form: gene main())",
+                )
             else:
                 self.note(self.peek()[2], 4, f"bare name block '{word}' treated as gene definition")
             gline = self.peek()[2]  # Z-CAPWINDOW: def line (name token, A13 mirror)
@@ -2560,7 +2992,8 @@ class P:
                     self.eat_nl()
                     t = self.peek()
                     if t[0] == "SYM" and t[1] == ")":
-                        self.next(); break
+                        self.next()
+                        break
                     if t[0] == "EOF":
                         self.note(t[2], 4, "parameter list auto-closed")
                         break
@@ -2585,7 +3018,7 @@ class P:
         if t[0] == "IDENT":
             self.next()
             return t[1]
-        self.note(t[2], 4, f"expected a name, found token; used '?'")
+        self.note(t[2], 4, "expected a name, found token; used '?'")
         return "?"
 
     def use_path(self):
@@ -2597,25 +3030,32 @@ class P:
             if t[0] == "IDENT":
                 if t[1] in ("as", "from"):
                     break
-                parts.append(t[1]); self.next()
+                parts.append(t[1])
+                self.next()
                 nt = self.peek()
                 if not (nt[0] == "SYM" and nt[1] in ("/", ".", "-", ":")):
                     break
             elif t[0] == "SYM" and t[1] in ("/", ".", "-"):
-                parts.append(t[1]); self.next()
+                parts.append(t[1])
+                self.next()
             elif t[0] == "SYM" and t[1] == ":":
                 nt = self.toks[self.pos + 1] if self.pos + 1 < len(self.toks) else ("EOF", None, 0)
                 if nt[0] == "SYM" and nt[1] == ":":
-                    parts.append("/"); self.next(); self.next()
+                    parts.append("/")
+                    self.next()
+                    self.next()
                 else:
                     break
             elif t[0] == "SYM" and t[1] == "*":
                 # W025 stage 2: wildcard tail, `use a::b::*` carries as
                 # "a/b/*"; the interpreter strips the `/*` and flat-binds the
                 # target table's exports.
-                parts.append("*"); self.next(); break
+                parts.append("*")
+                self.next()
+                break
             elif t[0] == "STR":
-                parts.append(t[1]); self.next()
+                parts.append(t[1])
+                self.next()
                 nt = self.peek()
                 if not (nt[0] == "SYM" and nt[1] in ("/", ".", "-", ":")):
                     break
@@ -2664,7 +3104,9 @@ class P:
                 self.end_stmt()
                 return ("multi", targets, values, False)
             self.pos = save
-            self.note(self.peek()[2], 4, "expression statement not terminated; rest of line skipped")
+            self.note(
+                self.peek()[2], 4, "expression statement not terminated; rest of line skipped"
+            )
             self.skip_line()
             self.end_stmt()
             return ("expr", e)
@@ -2677,7 +3119,11 @@ class P:
                 return ("idx_assign", e[1], e[2], None, v)
             if e[0] == "member":
                 return ("mem_assign", e[1], e[2], None, v)
-            self.note(t[2], 4, "assignment target must be a name, index or member; value computed and dropped")
+            self.note(
+                t[2],
+                4,
+                "assignment target must be a name, index or member; value computed and dropped",
+            )
             return ("expr", e)
         if t[0] == "SYM" and t[1] in ("+=", "-=", "*=", "/=", "%="):
             opmap = {"+=": "+", "-=": "-", "*=": "*", "/=": "/", "%=": "%"}
@@ -2751,7 +3197,7 @@ class P:
                     break
         # W01-s2: type parameter names shadow aliases inside the body's
         # annotations (mirror of parser.rs type_param_stack push/pop).
-        for (p, _b) in type_params:
+        for p, _b in type_params:
             self.type_param_stack.append(p)
         params = []
         param_anns = []
@@ -2761,7 +3207,8 @@ class P:
                 self.eat_nl()
                 t = self.peek()
                 if t[0] == "SYM" and t[1] == ")":
-                    self.next(); break
+                    self.next()
+                    break
                 if t[0] == "EOF":
                     self.note(t[2], 4, "parameter list auto-closed")
                     break
@@ -2818,11 +3265,49 @@ class P:
             self.end_stmt()
             for _p in type_params:
                 self.type_param_stack.pop()
-            return ("gene", Gene(name, params, guard, [("return", e)], ac, me, m6, copies, seq=False, riboswitch=riboswitch, burst=burst, param_anns=param_anns, ret_ann=ret_ann, type_params=type_params, line=gline))
+            return (
+                "gene",
+                Gene(
+                    name,
+                    params,
+                    guard,
+                    [("return", e)],
+                    ac,
+                    me,
+                    m6,
+                    copies,
+                    seq=False,
+                    riboswitch=riboswitch,
+                    burst=burst,
+                    param_anns=param_anns,
+                    ret_ann=ret_ann,
+                    type_params=type_params,
+                    line=gline,
+                ),
+            )
         body = self.block()
         for _p in type_params:
             self.type_param_stack.pop()
-        return ("gene", Gene(name, params, guard, body, ac, me, m6, copies, seq=False, riboswitch=riboswitch, burst=burst, param_anns=param_anns, ret_ann=ret_ann, type_params=type_params, line=gline))
+        return (
+            "gene",
+            Gene(
+                name,
+                params,
+                guard,
+                body,
+                ac,
+                me,
+                m6,
+                copies,
+                seq=False,
+                riboswitch=riboswitch,
+                burst=burst,
+                param_anns=param_anns,
+                ret_ann=ret_ann,
+                type_params=type_params,
+                line=gline,
+            ),
+        )
 
     def block(self):
         if not (self.peek() == ("SYM", "{", self.peek()[2])):
@@ -2852,7 +3337,8 @@ class P:
             self.eat_nl()
             t = self.peek()
             if t[0] == "SYM" and t[1] == "}":
-                self.next(); break
+                self.next()
+                break
             if t[0] == "EOF":
                 self.note(t[2], 4, "block auto-closed at end of file")
                 break
@@ -2876,7 +3362,8 @@ class P:
                 self.eat_nl()
                 t2 = self.peek()
                 if t2 == ("SYM", "]", t2[2]):
-                    self.next(); break
+                    self.next()
+                    break
                 if t2[0] == "EOF":
                     self.note(t2[2], 4, "pattern bracket auto-closed")
                     break
@@ -2900,7 +3387,8 @@ class P:
                 self.eat_nl()
                 t2 = self.peek()
                 if t2 == ("SYM", "}", t2[2]):
-                    self.next(); break
+                    self.next()
+                    break
                 if t2[0] == "EOF":
                     self.note(t2[2], 4, "pattern brace auto-closed")
                     break
@@ -2946,7 +3434,13 @@ class P:
             if (t[0] == "IDENT" and t[1] == "or") or (t[0] == "SYM" and t[1] == "||"):
                 self.next()
                 self.eat_nl()
-                left = ("bin", "or", left, self.nullish_expr(), t[2])  # #125.8: op line (mirror of the Rust or_line fix)
+                left = (
+                    "bin",
+                    "or",
+                    left,
+                    self.nullish_expr(),
+                    t[2],
+                )  # #125.8: op line (mirror of the Rust or_line fix)
             else:
                 return left
 
@@ -2969,7 +3463,13 @@ class P:
             if (t[0] == "IDENT" and t[1] == "and") or (t[0] == "SYM" and t[1] == "&&"):
                 self.next()
                 self.eat_nl()
-                left = ("bin", "and", left, self.not_expr(), t[2])  # #125.8: op line (mirror of the Rust and_line fix)
+                left = (
+                    "bin",
+                    "and",
+                    left,
+                    self.not_expr(),
+                    t[2],
+                )  # #125.8: op line (mirror of the Rust and_line fix)
             else:
                 return left
 
@@ -3153,7 +3653,8 @@ class P:
                     self.eat_nl()
                     t2 = self.peek()
                     if t2 == ("SYM", ")", t2[2]):
-                        self.next(); break
+                        self.next()
+                        break
                     if t2[0] == "EOF":
                         self.note(t2[2], 4, "call arguments auto-closed")
                         break
@@ -3201,7 +3702,8 @@ class P:
                             self.eat_nl()
                             t3 = self.peek()
                             if t3 == ("SYM", ")", t3[2]):
-                                self.next(); break
+                                self.next()
+                                break
                             if t3[0] == "EOF":
                                 break
                             args.append(self.expr())
@@ -3233,7 +3735,8 @@ class P:
                             self.eat_nl()
                             t3 = self.peek()
                             if t3 == ("SYM", ")", t3[2]):
-                                self.next(); break
+                                self.next()
+                                break
                             if t3[0] == "EOF":
                                 break
                             args.append(self.expr())
@@ -3246,13 +3749,19 @@ class P:
                     self.note(t2[2], 4, "'?.' followed by non-name; chain resolves to null")
                     e = ("member?", e, "")
                     break
-            elif t[0] == "SYM" and t[1] == ":" and self.pos + 1 < len(self.toks) and self.toks[self.pos + 1][:2] == ("SYM", ":"):
+            elif (
+                t[0] == "SYM"
+                and t[1] == ":"
+                and self.pos + 1 < len(self.toks)
+                and self.toks[self.pos + 1][:2] == ("SYM", ":")
+            ):
                 # W025 stage 2: `e::name` is the namespace spelling of
                 # `e.name` (stage 1 made `::` a use-path separator; stage 2
                 # lets qualified reads and calls ride the same spelling
                 # through nested tables). Exactly sugar for the Dot arm
                 # above, the AST is identical.
-                self.next(); self.next()
+                self.next()
+                self.next()
                 t2 = self.peek()
                 if t2[0] == "IDENT":
                     self.next()
@@ -3263,7 +3772,8 @@ class P:
                             self.eat_nl()
                             t3 = self.peek()
                             if t3 == ("SYM", ")", t3[2]):
-                                self.next(); break
+                                self.next()
+                                break
                             if t3[0] == "EOF":
                                 break
                             args.append(self.expr())
@@ -3341,7 +3851,8 @@ class P:
                 self.eat_nl()
                 t2 = self.peek()
                 if t2 == ("SYM", "]", t2[2]):
-                    self.next(); break
+                    self.next()
+                    break
                 if t2[0] == "EOF":
                     self.note(t2[2], 4, "list auto-closed at end of file")
                     break
@@ -3376,7 +3887,8 @@ class P:
                 self.eat_nl()
                 t2 = self.peek()
                 if t2 == ("SYM", "}", t2[2]):
-                    self.next(); break
+                    self.next()
+                    break
                 if t2[0] == "EOF":
                     self.note(t2[2], 4, "map literal auto-closed at end of file")
                     break
@@ -3413,7 +3925,11 @@ class P:
                     self.note(line, 2, f"synonym '{val}' repaired")
                 return ("lit", val == "true")
             if val in VALUE_SYNONYMS:
-                self.note(line, 2, f"synonym '{val}' repaired to '{'null' if VALUE_SYNONYMS[val] is None else str(VALUE_SYNONYMS[val]).lower()}'")
+                self.note(
+                    line,
+                    2,
+                    f"synonym '{val}' repaired to '{'null' if VALUE_SYNONYMS[val] is None else str(VALUE_SYNONYMS[val]).lower()}'",
+                )
                 v = VALUE_SYNONYMS[val]
                 return ("lit", v)
             if val == "null":
@@ -3432,7 +3948,8 @@ class P:
                         self.eat_nl()
                         t2 = self.peek()
                         if t2[0] == "SYM" and t2[1] == ")":
-                            self.next(); break
+                            self.next()
+                            break
                         if t2[0] == "EOF":
                             break
                         before = self.pos
@@ -3549,7 +4066,7 @@ class P:
         # time; an enclosing gene's type parameter never does.
         if any(p == w for p in self.type_param_stack):
             return ("named", w)
-        for (n, target) in self.type_aliases:
+        for n, target in self.type_aliases:
             if n == w:
                 return ("alias", n, target)
         return ("named", w)
@@ -3720,7 +4237,8 @@ class P:
                         t3 = self.peek()
                         if t3[0] == "SYM" and t3[1] == ",":
                             self.note(
-                                line, 4,
+                                line,
+                                4,
                                 "variant payload is a single value; extra pattern elements ignored",
                             )
                             while not (
@@ -3768,6 +4286,7 @@ class P:
         self.next()
         return ("wild",)
 
+
 def describe_tok(t):
     """Mirror of src/lexer.rs Tok::describe (dx-r1) for the token shapes
     that can reach the pattern-wildcard arm."""
@@ -3796,10 +4315,12 @@ def parse(src):
     # W24: pub-marked top-level names ride out for strict-mode export filter
     return stmts, p.notes, p.pub_names
 
+
 # ----------------------------------------------------------------------------
 # evaluator
 
-BUILTINS = set("""promote expr_on expr_off decay_clock ligand_set ligand secrete quorum quench quorum_state splice_shift promoter_telemetry burst_set len push pop insert remove keys values has del range str num type
+BUILTINS = set(
+    """promote expr_on expr_off decay_clock ligand_set ligand secrete quorum quench quorum_state splice_shift promoter_telemetry burst_set len push pop insert remove keys values has del range str num type
 abs min max sum clock exit assert codon distance similar transcribe reverse_complement
 gc_content translate find_orf memory methyl methylate demethylate m6a_write m6a_erase passage grn_set grn_get fingerprint toggle_on toggle_state repressi_next
 repressi_state repressi_start grn_fire grn_state spawn join floor ceil sqrt pow random
@@ -3816,9 +4337,11 @@ try_first try_last try_char_at try_env try_json_parse try_re_groups
 try_read_file try_read_file_bytes try_read_dir try_run try_http_get try_str_from_bytes
 enumerate zip sorted reversed any all first last take drop unique flatten chunk round clamp divmod
 channel send recv close select
-is_object object_fields object_from_map""".split())
+is_object object_fields object_from_map""".split()
+)
 
 BUILTIN_SYNONYMS = {"print": "promote", "echo": "promote", "say": "promote", "show": "promote"}
+
 
 class Interp:
     def __init__(self, cell=None, cli_args=None):
@@ -3933,7 +4456,16 @@ class Interp:
         self.burst_overrides = {}
         self.grn_binds = []
         self.seq_buffer = None
-        self.caps = {"enabled": True, "read": [], "write": [], "run": [], "net": [], "env": [], "py": [], "exit": False}
+        self.caps = {
+            "enabled": True,
+            "read": [],
+            "write": [],
+            "run": [],
+            "net": [],
+            "env": [],
+            "py": [],
+            "exit": False,
+        }
         self.cell_entry = None
         self.proof_mode = False
 
@@ -3990,7 +4522,10 @@ class Interp:
         else:
             ok = what in c[cap]
         if not ok:
-            raise Stress("interference", f"{kind} denied, no capability grant covers '{what}' (grant with --allow-{kind} or --allow-all)")
+            raise Stress(
+                "interference",
+                f"{kind} denied, no capability grant covers '{what}' (grant with --allow-{kind} or --allow-all)",
+            )
 
     def new_scope(self, parent):
         return {"__parent__": parent}
@@ -4118,7 +4653,9 @@ class Interp:
         if len(self.notes) >= NOTE_CAP:
             self.notes_dropped += 1
             if self.notes_dropped == 1:
-                self.notes.append(Note(4, "note cap (10000) reached, further notes suppressed", line))
+                self.notes.append(
+                    Note(4, "note cap (10000) reached, further notes suppressed", line)
+                )
             return
         # loop-9 (C8): worker-note prefix parity — the Rust join path tags
         # every spawned worker note with "[task <name>] " (genes.rs); the
@@ -4156,7 +4693,7 @@ class Interp:
                         self.note(4, f"destructure: index {i} missing; null")
                         self.bind_pattern(env, ep, None)
                 if rest is not None:
-                    tail = list(v[len(elems):]) if len(elems) < n else []
+                    tail = list(v[len(elems) :]) if len(elems) < n else []
                     if rest in env:
                         self.note(4, f"rebinding '{rest}'")
                     env[rest] = tail
@@ -4173,7 +4710,7 @@ class Interp:
                         self.note(4, f"destructure: index {i} missing; null")
                         self.bind_pattern(env, ep, None)
                 if rest is not None:
-                    tail = chars[len(elems):] if len(elems) < n else []
+                    tail = chars[len(elems) :] if len(elems) < n else []
                     if rest in env:
                         self.note(4, f"rebinding '{rest}'")
                     env[rest] = tail
@@ -4219,11 +4756,11 @@ class Interp:
                     env[key] = None
 
     # ------------------------------------------------------------- W02 match-v2
-    def eval_pat_val(self, env, l):
+    def eval_pat_val(self, env, expr):
         """Mirror of the Rust pattern-literal eval: `?!` propagation is a
         return (never contained); any other stress becomes a note + null."""
         try:
-            return self.eval(env, l)
+            return self.eval(env, expr)
         except Stress as st:
             if st.prop is not None:
                 raise
@@ -4286,7 +4823,7 @@ class Interp:
                 if not self.match_pat(env, bindings, sv[i], ep):
                     return False
             if rest is not None:
-                bindings[rest] = sv[len(elems):]
+                bindings[rest] = sv[len(elems) :]
             return True
         if k == "map":
             _, keys = pat
@@ -4350,7 +4887,10 @@ class Interp:
             _, name, ann, ex = s
             v = self.eval(env, ex)
             if not ann_matches(v, ann):
-                raise Stress("unfolded", f"type annotation violated: '{name}' expects {ann_render(ann)}, got {type_name(v)}")
+                raise Stress(
+                    "unfolded",
+                    f"type annotation violated: '{name}' expects {ann_render(ann)}, got {type_name(v)}",
+                )
             if name in env:
                 self.note(4, f"rebinding '{name}'")
             env[name] = v
@@ -4708,7 +5248,10 @@ class Interp:
                     for seg in segs[kk:]:
                         nxt = table.get(seg) if isinstance(table, dict) else None
                         if nxt is None:
-                            self.note(4, f"use '{path}': segment '{seg}' is not a nested module table; import binds nothing")
+                            self.note(
+                                4,
+                                f"use '{path}': segment '{seg}' is not a nested module table; import binds nothing",
+                            )
                             hit = False
                             break
                         table = nxt
@@ -4733,13 +5276,16 @@ class Interp:
             # engines print and flat-bind identically. Last declaration wins.
             _, mname, mbody = s
             child = self.new_scope(env)
-            for st in mbody:
+            for stmt in mbody:
                 try:
-                    self.exec_stmt(child, st)
+                    self.exec_stmt(child, stmt)
                 except (Return, BreakLoop, ContinueLoop):
                     pass
-            exports = {kk: vv for kk, vv in child.items()
-                       if isinstance(kk, str) and kk != "__parent__" and not kk.startswith("#")}
+            exports = {
+                kk: vv
+                for kk, vv in child.items()
+                if isinstance(kk, str) and kk != "__parent__" and not kk.startswith("#")
+            }
             env[mname] = {kk: exports[kk] for kk in sorted(exports)}
         elif k == "raise":
             msg = self.eval(env, s[2])
@@ -4784,7 +5330,10 @@ class Interp:
             # @m6a-stabilized transcripts win dispatch among same-name candidates
             # (reg-bio-3 (B3): resistance reads the quantitative level >= 1)
             if not g.m6a and self.m6a_levels.get(name, 0) >= 1:
-                self.note(4, f"'{name}' is @m6a-stabilized; redefinition ignored (mark the new copy to replace it)")
+                self.note(
+                    4,
+                    f"'{name}' is @m6a-stabilized; redefinition ignored (mark the new copy to replace it)",
+                )
                 return
             if g.name and g.name not in self.defined_genes:
                 self.defined_genes.append(g.name)
@@ -4823,8 +5372,16 @@ class Interp:
             if chosen:
                 vname, vparams, body, vmarks, vline = chosen
                 self.note(1, f"splice '{root}' → variant '{vname}' active")
-                g = Gene(root, vparams, None, body,
-                         ac="acetylate" in vmarks, me="methylate" in vmarks, m6="m6a" in vmarks, line=vline)
+                g = Gene(
+                    root,
+                    vparams,
+                    None,
+                    body,
+                    ac="acetylate" in vmarks,
+                    me="methylate" in vmarks,
+                    m6="m6a" in vmarks,
+                    line=vline,
+                )
                 if root not in self.defined_genes:
                     self.defined_genes.append(root)
                 env[root] = g
@@ -4855,10 +5412,14 @@ class Interp:
                         continue
                     unit["members"].append((og, orbs))
                 if not unit["members"]:
-                    self.note(4, f"operon '{oname}': every cistron belonged to another unit; skipped")
+                    self.note(
+                        4, f"operon '{oname}': every cistron belonged to another unit; skipped"
+                    )
                 else:
                     self.operons.append(unit)
-                    self.note(1, f"operon '{oname}': {len(unit['members'])} cistron(s) on one transcript")
+                    self.note(
+                        1, f"operon '{oname}': {len(unit['members'])} cistron(s) on one transcript"
+                    )
         elif k == "enhance":
             for n in s[1]:
                 if n not in self.enhanced:
@@ -5141,7 +5702,19 @@ class Interp:
                 # z-s2-harden (#126.6): bytes collect as their int values
                 # 0..=255 (W029 mirror, the for-statement convention) — the
                 # comprehension used to yield [] for bytes
-                items = itv if isinstance(itv, list) else (list(itv) if isinstance(itv, str) else (list(itv) if isinstance(itv, bytes) else (_map_keys(itv) if isinstance(itv, dict) else [])))
+                items = (
+                    itv
+                    if isinstance(itv, list)
+                    else (
+                        list(itv)
+                        if isinstance(itv, str)
+                        else (
+                            list(itv)
+                            if isinstance(itv, bytes)
+                            else (_map_keys(itv) if isinstance(itv, dict) else [])
+                        )
+                    )
+                )
             out = []
             for item in items:
                 self.tick()
@@ -5174,6 +5747,7 @@ class Interp:
         # negative base). inf/nan bases and exponents already follow C99 in
         # python natively, so they fall through untouched.
         import math as _m
+
         if a == 0.0 and b < 0.0:
             if _m.copysign(1.0, a) < 0.0 and float(b).is_integer() and int(b) % 2 == 1:
                 return float("-inf")
@@ -5181,104 +5755,135 @@ class Interp:
         if _m.isfinite(a) and a < 0.0 and _m.isfinite(b) and not float(b).is_integer():
             return float("nan")
         try:
-            return a ** b
+            return a**b
         except OverflowError:
             if a < 0.0 and float(b).is_integer() and int(b) % 2 == 1:
                 return float("-inf")
             return float("inf")
 
-    def binop(self, op, l, r):
+    def binop(self, op, x, y):
         if op == "+":
-            if isinstance(l, bool) or isinstance(r, bool):
-                raise Stress("unfolded", f"cannot add {type_name(l)} and {type_name(r)}")
-            if isinstance(l, (int, float)) and isinstance(r, (int, float)):
-                if isinstance(l, int) and isinstance(r, int) and not (-(2**63) <= l + r <= 2**63 - 1):
+            if isinstance(x, bool) or isinstance(y, bool):
+                raise Stress("unfolded", f"cannot add {type_name(x)} and {type_name(y)}")
+            if isinstance(x, (int, float)) and isinstance(y, (int, float)):
+                if (
+                    isinstance(x, int)
+                    and isinstance(y, int)
+                    and not (-(2**63) <= x + y <= 2**63 - 1)
+                ):
                     raise Stress("overflow", "int overflow in '+'")
-                return l + r
-            if isinstance(l, str) and isinstance(r, str):
+                return x + y
+            if isinstance(x, str) and isinstance(y, str):
                 # reg-r4: concat ceiling parity with the Rust core, "exactly
                 # at the 512 MiB line" + concat must raise, not allocate 1 GiB
-                if len(l) + len(r) > 512 * 1024 * 1024:
+                if len(x) + len(y) > 512 * 1024 * 1024:
                     raise Stress("overflow", "string concat exceeds the 512 MiB ceiling")
-                return l + r
-            if isinstance(l, bytes) and isinstance(r, bytes):
+                return x + y
+            if isinstance(x, bytes) and isinstance(y, bytes):
                 # W029 mirror: bytes concat, same ceiling family as strings
-                if len(l) + len(r) > 512 * 1024 * 1024:
+                if len(x) + len(y) > 512 * 1024 * 1024:
                     raise Stress("overflow", "bytes concat exceeds the 512 MiB ceiling")
-                return l + r
-            if isinstance(l, list) and isinstance(r, list):
-                if len(l) + len(r) > 64 * 1024 * 1024:
+                return x + y
+            if isinstance(x, list) and isinstance(y, list):
+                if len(x) + len(y) > 64 * 1024 * 1024:
                     raise Stress("overflow", "list concat exceeds the 64M-element ceiling")
-                return l + r
-            raise Stress("unfolded", f"cannot add {type_name(l)} and {type_name(r)}")
+                return x + y
+            raise Stress("unfolded", f"cannot add {type_name(x)} and {type_name(y)}")
         if op in ("-", "*", "/", "//", "%"):
             # string repetition (Python parity): "ab" * 3 / 3 * "ab";
             # the count must be a true int (Rust matches Value::Int only, so
             # null/float/bool counts fall through to the generic arith error;
             # found by the W050 property harness, strings lane case 19)
-            if op == "*" and isinstance(l, str) and isinstance(r, int) and not isinstance(r, bool):
-                n = int(r)
+            if op == "*" and isinstance(x, str) and isinstance(y, int) and not isinstance(y, bool):
+                n = int(y)
                 if n < 0:
                     raise Stress("unfolded", "repeat count must be non-negative")
-                if n * len(l) > 512 * 1024 * 1024:
+                if n * len(x) > 512 * 1024 * 1024:
                     raise Stress("overflow", "repeat exceeds the 512 MiB string ceiling")
-                return l * n
+                return x * n
             # W029 mirror: bytes repetition (Python parity), same ceiling
-            if op == "*" and isinstance(l, bytes) and isinstance(r, int) and not isinstance(r, bool):
-                n = int(r)
+            if (
+                op == "*"
+                and isinstance(x, bytes)
+                and isinstance(y, int)
+                and not isinstance(y, bool)
+            ):
+                n = int(y)
                 if n < 0:
                     raise Stress("unfolded", "repeat count must be non-negative")
-                if n * len(l) > 512 * 1024 * 1024:
+                if n * len(x) > 512 * 1024 * 1024:
                     raise Stress("overflow", "repeat exceeds the 512 MiB bytes ceiling")
-                return l * n
-            if op == "*" and isinstance(r, str) and isinstance(l, int) and not isinstance(l, bool):
-                n = int(l)
+                return x * n
+            if op == "*" and isinstance(y, str) and isinstance(x, int) and not isinstance(x, bool):
+                n = int(x)
                 if n < 0:
                     raise Stress("unfolded", "repeat count must be non-negative")
-                if n * len(r) > 512 * 1024 * 1024:
+                if n * len(y) > 512 * 1024 * 1024:
                     raise Stress("overflow", "repeat exceeds the 512 MiB string ceiling")
-                return r * n
-            if op == "*" and isinstance(r, bytes) and isinstance(l, int) and not isinstance(l, bool):
-                n = int(l)
+                return y * n
+            if (
+                op == "*"
+                and isinstance(y, bytes)
+                and isinstance(x, int)
+                and not isinstance(x, bool)
+            ):
+                n = int(x)
                 if n < 0:
                     raise Stress("unfolded", "repeat count must be non-negative")
-                if n * len(r) > 512 * 1024 * 1024:
+                if n * len(y) > 512 * 1024 * 1024:
                     raise Stress("overflow", "repeat exceeds the 512 MiB bytes ceiling")
-                return r * n
-            if isinstance(l, (int, float)) and isinstance(r, (int, float)) and not isinstance(l, bool) and not isinstance(r, bool):
+                return y * n
+            if (
+                isinstance(x, (int, float))
+                and isinstance(y, (int, float))
+                and not isinstance(x, bool)
+                and not isinstance(y, bool)
+            ):
                 I64MIN, I64MAX = -(2**63), 2**63 - 1
                 if op == "-":
-                    if isinstance(l, int) and isinstance(r, int) and not (I64MIN <= l - r <= I64MAX):
+                    if (
+                        isinstance(x, int)
+                        and isinstance(y, int)
+                        and not (I64MIN <= x - y <= I64MAX)
+                    ):
                         raise Stress("overflow", "int overflow in '-'")
-                    return l - r
+                    return x - y
                 if op == "*":
-                    if isinstance(l, int) and isinstance(r, int) and not (I64MIN <= l * r <= I64MAX):
+                    if (
+                        isinstance(x, int)
+                        and isinstance(y, int)
+                        and not (I64MIN <= x * y <= I64MAX)
+                    ):
                         raise Stress("overflow", "int overflow in '*'")
-                    return l * r
+                    return x * y
                 if op == "/":
-                    if r == 0:
+                    if y == 0:
                         raise Stress("unfolded", "division by zero")
-                    return l / r
+                    return x / y
                 if op == "//":
-                    if r == 0:
+                    if y == 0:
                         raise Stress("unfolded", "division by zero in '//'")
                     # SPEC/parity: floor division, ALWAYS int (i64)
-                    q = l // r
+                    q = x // y
                     if isinstance(q, float):
                         # Z-132 (#132 class B): Python's float // IS the
                         # CPython float_divmod law (the Rust core's
                         # divmod_f64); an infinite or i64-overflowing
                         # quotient is the engine's CONTAINED overflow
                         # stress, never a Python crash.
-                        if not math.isfinite(q) or q >= 9.223372036854776e18 or q <= -9.223372036854776e18:
+                        if (
+                            not math.isfinite(q)
+                            or q >= 9.223372036854776e18
+                            or q <= -9.223372036854776e18
+                        ):
                             raise Stress("overflow", "int overflow in '//'")
                         q = int(q)
                     if not (-(2**63) <= q <= 2**63 - 1):
                         raise Stress("overflow", "int overflow in '//'")
                     return q
-                if r == 0:
+                if y == 0:
                     raise Stress("unfolded", "modulo by zero")
-                if isinstance(l, float) or isinstance(r, float):
+                if isinstance(x, float) or isinstance(y, float):
                     # Z-131-FLOORMOD: CPython's float_rem law — fmod
                     # (sign follows the dividend) adjusted into the
                     # divisor's sign class, and the zero remainder takes
@@ -5288,14 +5893,14 @@ class Interp:
                     # The old float path ran the int mirror formula,
                     # whose l - q*r subtraction always yields +0.0 on
                     # exact multiples (4.0 % -2.0 printed 0.0, not -0.0).
-                    m = math.fmod(l, r)
+                    m = math.fmod(x, y)
                     if m:
-                        if (m < 0) != (r < 0):
-                            m += r
+                        if (m < 0) != (y < 0):
+                            m += y
                     else:
-                        m = math.copysign(0.0, r)
+                        m = math.copysign(0.0, y)
                     return m
-                if l == -(2**63) and r == -1:
+                if x == -(2**63) and y == -1:
                     # i64 corner: the quotient 2**63 does not fit, so the
                     # Rust core raises before ever materializing the
                     # remainder, the oracle must mirror that (W32 corpus).
@@ -5308,15 +5913,15 @@ class Interp:
                 # without this mirror the oracle silently returns where the
                 # core raises (found by the W050 property harness, arith
                 # lane cases 76/88: i64::MIN % (2**63 - 1)).
-                q = abs(l) // abs(r)
-                if (l < 0) != (r < 0):
+                q = abs(x) // abs(y)
+                if (x < 0) != (y < 0):
                     q = -q
-                if (l < 0) != (r < 0) and q * r != l:
+                if (x < 0) != (y < 0) and q * y != x:
                     q -= 1  # floor rounds down
-                rb = q * r
+                rb = q * y
                 if not (-(2**63) <= rb <= 2**63 - 1):
                     raise Stress("overflow", "int overflow in '%'")
-                m = l - rb
+                m = x - rb
                 if not (-(2**63) <= m <= 2**63 - 1):
                     raise Stress("overflow", "int overflow in '%'")
                 return m
@@ -5326,17 +5931,30 @@ class Interp:
                 # non-numeric pair renders "numeric op needs numbers, found
                 # X and Y"; '-' and '*' keep the arith "cannot apply"
                 # fallthrough (probe-verified control, byte-identical).
-                raise Stress("unfolded", f"numeric op needs numbers, found {type_name(l)} and {type_name(r)}")
-            raise Stress("unfolded", f"cannot apply '{op}' to {type_name(l)} and {type_name(r)}")
+                raise Stress(
+                    "unfolded", f"numeric op needs numbers, found {type_name(x)} and {type_name(y)}"
+                )
+            raise Stress("unfolded", f"cannot apply '{op}' to {type_name(x)} and {type_name(y)}")
         if op == "**":
-            if isinstance(l, int) and isinstance(r, int) and not isinstance(l, bool) and not isinstance(r, bool) and r >= 0:
-                if r > 10_000_000:
+            if (
+                isinstance(x, int)
+                and isinstance(y, int)
+                and not isinstance(x, bool)
+                and not isinstance(y, bool)
+                and y >= 0
+            ):
+                if y > 10_000_000:
                     raise Stress("overflow", "int overflow in '**'")
-                val = l ** r
+                val = x**y
                 if not (-(2**63) <= val <= 2**63 - 1):
                     raise Stress("overflow", "int overflow in '**'")
                 return val
-            if isinstance(l, (int, float)) and isinstance(r, (int, float)) and not isinstance(l, bool) and not isinstance(r, bool):
+            if (
+                isinstance(x, (int, float))
+                and isinstance(y, (int, float))
+                and not isinstance(x, bool)
+                and not isinstance(y, bool)
+            ):
                 # S4-5/F1b+F1c: mirror Rust f64::powf — python raises
                 # ZeroDivisionError for 0 ** negative (rust: inf), returns a
                 # COMPLEX for a negative finite base with a fractional
@@ -5344,24 +5962,37 @@ class Interp:
                 # OverflowError where rust returns ±inf. The rust float path
                 # ALSO stresses when the RESULT is infinite with finite
                 # operands and a positive exponent — mirrored below.
-                out = self._f64_powf(float(l), float(r))
+                out = self._f64_powf(float(x), float(y))
                 import math as _m
-                if (out == float("inf") or out == float("-inf")) and _m.isfinite(float(l)) and _m.isfinite(float(r)) and float(r) > 0.0:
+
+                if (
+                    (out == float("inf") or out == float("-inf"))
+                    and _m.isfinite(float(x))
+                    and _m.isfinite(float(y))
+                    and float(y) > 0.0
+                ):
                     raise Stress("overflow", "float '**' overflowed to infinity")
                 return out
             # Z-NOTEPARITY-1: rust Pow's fallback is as_floats too
-            raise Stress("unfolded", f"numeric op needs numbers, found {type_name(l)} and {type_name(r)}")
+            raise Stress(
+                "unfolded", f"numeric op needs numbers, found {type_name(x)} and {type_name(y)}"
+            )
         if op in ("&", "|", "^", "<<", ">>"):
+
             def as_i(x):
                 if isinstance(x, bool):
                     return int(x)
                 if isinstance(x, int):
                     return x
                 raise Stress("unfolded", f"bitwise op needs ints, found {type_name(x)}")
-            a, b = as_i(l), as_i(r)
-            if op == "&": return a & b
-            if op == "|": return a | b
-            if op == "^": return a ^ b
+
+            a, b = as_i(x), as_i(y)
+            if op == "&":
+                return a & b
+            if op == "|":
+                return a | b
+            if op == "^":
+                return a ^ b
             if b < 0 or b > 63:
                 raise Stress("overflow", f"shift amount {b} out of range")
             if op == "<<":
@@ -5373,28 +6004,31 @@ class Interp:
                 return val
             return a >> b
         if op == "==":
-            return deep_eq(l, r)
+            return deep_eq(x, y)
         if op == "!=":
-            return not deep_eq(l, r)
+            return not deep_eq(x, y)
         if op in ("<", "<=", ">", ">="):
-            if isinstance(l, str) and isinstance(r, str):
+            if isinstance(x, str) and isinstance(y, str):
                 pass
-            elif isinstance(l, (int, float)) and isinstance(r, (int, float)):
+            elif isinstance(x, (int, float)) and isinstance(y, (int, float)):
                 pass
             else:
-                raise Stress("unfolded", f"cannot order {type_name(l)} and {type_name(r)}")
-            if op == "<": return l < r
-            if op == "<=": return l <= r
-            if op == ">": return l > r
-            return l >= r
+                raise Stress("unfolded", f"cannot order {type_name(x)} and {type_name(y)}")
+            if op == "<":
+                return x < y
+            if op == "<=":
+                return x <= y
+            if op == ">":
+                return x > y
+            return x >= y
         if op == "in":
-            if isinstance(r, list):
-                return any(deep_eq(l, x) for x in r)
-            if isinstance(r, str) and isinstance(l, str):
-                return l in r
-            if isinstance(r, dict):
-                return _map_has(r, l)
-            raise Stress("unfolded", f"'in' not defined for {type_name(r)}")
+            if isinstance(y, list):
+                return any(deep_eq(x, x) for x in y)
+            if isinstance(y, str) and isinstance(x, str):
+                return x in y
+            if isinstance(y, dict):
+                return _map_has(y, x)
+            raise Stress("unfolded", f"'in' not defined for {type_name(y)}")
         raise Stress("unfolded", f"unknown op {op}")
 
     # ---- calls
@@ -5411,7 +6045,10 @@ class Interp:
                         active = (a_on and this_is_a) or ((not a_on) and (not this_is_a))
                         if not active and not callee.acetylate:
                             winner = a if a_on else b
-                            self.note(4, f"toggle repressed: '{gname}' is the inactive allele ('{winner}' is on)")
+                            self.note(
+                                4,
+                                f"toggle repressed: '{gname}' is the inactive allele ('{winner}' is on)",
+                            )
                             return None
                         break
             if callee.seq:
@@ -5419,7 +6056,6 @@ class Interp:
                 # GRN veto, methylation, toggle, in call_gene_inner order
                 # (mirror of the Rust branch; reg-r1 gated only the toggle)
                 seq_name = callee.name or "<seq>"
-                dl = getattr(callee, "line", 0)
                 veto = self.grn_veto(seq_name)
                 if veto is not None:
                     self.note(4, f"grn gate: sequence '{seq_name}' call suppressed ({veto})")
@@ -5427,7 +6063,10 @@ class Interp:
                 if not callee.acetylate:
                     lvl = self.methyl_levels.get(seq_name, 0)
                     if lvl >= self.methyl_threshold:
-                        self.note(4, f"methylation silences: sequence '{seq_name}' (level {lvl} >= threshold {self.methyl_threshold}), call returns null")
+                        self.note(
+                            4,
+                            f"methylation silences: sequence '{seq_name}' (level {lvl} >= threshold {self.methyl_threshold}), call returns null",
+                        )
                         return None
                 # reg-r4 (re-audit B-1): the toggle gate was missing here,
                 # a toggle-repressed sequence created via a value binding
@@ -5438,14 +6077,19 @@ class Interp:
                         active = (a_on and this_is_a) or ((not a_on) and (not this_is_a))
                         if not active and not callee.acetylate:
                             winner = a if a_on else b
-                            self.note(4, f"toggle repressed: sequence '{seq_name}' is the inactive allele ('{winner}' is on)")
+                            self.note(
+                                4,
+                                f"toggle repressed: sequence '{seq_name}' is the inactive allele ('{winner}' is on)",
+                            )
                             return None
                         break
                 # reg-bio (F-1): promoter gate last, the pinned funnel order
                 # ends here (bursting is the promoter's own stochastic
                 # dynamics; no @acetylate exemption, open chromatin bursts too)
                 if self._promoter_veto(seq_name, callee.burst):
-                    self.note(4, f"promoter inactive: sequence '{seq_name}' burst-off, call returns null")
+                    self.note(
+                        4, f"promoter inactive: sequence '{seq_name}' burst-off, call returns null"
+                    )
                     return None
                 return SeqObj(self, callee, args)
             return self.call_gene(callee, args)
@@ -5481,7 +6125,10 @@ class Interp:
             captured = u < p
             if not captured and name not in self.risc_escaped:
                 self.risc_escaped.add(name)
-                self.note(4, f"RISC escape: '{name}' escaped silencing (strength {entries[0][2]!r}, sites {entries[0][3]})")
+                self.note(
+                    4,
+                    f"RISC escape: '{name}' escaped silencing (strength {entries[0][2]!r}, sites {entries[0][3]})",
+                )
         if not captured:
             return "proceed"
         to = entries[0][1]
@@ -5522,7 +6169,9 @@ class Interp:
                 immune = isinstance(target_gene, Gene) and target_gene.acetylate
                 if not active and not immune:
                     winner = a if a_on else b
-                    self.note(4, f"toggle repressed: '{name}' is the inactive allele ('{winner}' is on)")
+                    self.note(
+                        4, f"toggle repressed: '{name}' is the inactive allele ('{winner}' is on)"
+                    )
                     return None
                 break
         tgt = self.lookup(env, name)
@@ -5702,7 +6351,9 @@ class Interp:
             lvl = self.grn_levels[frm]
         elif self.repressi_ring and frm in self.repressi_ring:
             idx = self.repressi_ring.index(frm)
-            lvls = repressilator_levels(len(self.repressi_ring), self.repressi_tick, self.repressi_params)
+            lvls = repressilator_levels(
+                len(self.repressi_ring), self.repressi_tick, self.repressi_params
+            )
             lvl = min(lvls[idx] / self.repressi_params["alpha"], 1.0)
         elif frm in self.ligands:
             # reg-bio-2 (A4/C7): a ligand edge source reads its metabolite
@@ -5749,19 +6400,19 @@ class Interp:
         DNA-available fraction: (1) decoy titration (subtractive), then
         (2) allosteric modulation (inducers: Π(1 − occ), cofactors: Π occ,
         occ = L/(k+L))."""
-        l = raw
+        lvl = raw
         for d, tf, cap in self.decoys:
             if tf == frm:
-                l -= cap * self.grn_levels.get(d, 0.0)
-        if l < 0.0:
-            l = 0.0
+                lvl -= cap * self.grn_levels.get(d, 0.0)
+        if lvl < 0.0:
+            lvl = 0.0
         factor = 1.0
         for tf, lg, inducer, k in self.grn_binds:
             if tf == frm:
                 lig = self._ligand_level(lg)
                 occ = (lig / (k + lig)) if k > 0.0 else 1.0
                 factor *= (1.0 - occ) if inducer else occ
-        out = l * factor
+        out = lvl * factor
         # reg-bio-3 (C10): gene dosage, @copies amplifies the CONCENTRATION
         # the gene feeds its edges, saturating on the 0..1 lattice (mirror)
         c = self.copies.get(frm)
@@ -5791,7 +6442,13 @@ class Interp:
             except (TypeError, ValueError):
                 return dflt
 
-        return (armed, catch, _g("rho.queue_floor", 0.5), _g("ribosome.queue_cap", 1.0), _g("ribosome.drain", 0.5))
+        return (
+            armed,
+            catch,
+            _g("rho.queue_floor", 0.5),
+            _g("ribosome.queue_cap", 1.0),
+            _g("ribosome.drain", 0.5),
+        )
 
     def _trans_integrate(self):
         """reg-bio-2 (C1): mirror of the Rust trans_integrate, one Euler
@@ -5799,7 +6456,7 @@ class Interp:
         where Δcalls is the source's call-count delta since the last
         integration (checkpoints start at 0)."""
         # loop-10 (F-8 + R10 kinetics jury L1): ribosome queue drain (mirror)
-        #, at ENTRY (before the empty-check: "every integration point") and
+        # , at ENTRY (before the empty-check: "every integration point") and
         # before the edge loop (pinned order; both entry points reach
         # _trans_integrate). Exists only under rho.termination; max(0.0) is
         # mirror-safe.
@@ -5947,6 +6604,7 @@ class Interp:
                 mf = 0.0
             if mf > 0.0:
                 import math as _math
+
                 for k2 in list(self.m6a_levels):
                     x = self.m6a_levels[k2] * (1.0 - mf) - 0.5
                     self.m6a_levels[k2] = max(0, int(_math.ceil(x)))
@@ -5978,7 +6636,11 @@ class Interp:
             now_active = u < kon
         self.promoter_states[name] = now_active
         e = self.promoter_tel.get(name, (0, 0, 0))
-        self.promoter_tel[name] = (e[0] + 1, e[1] + (1 if now_active else 0), e[2] + (1 if (not now_active) and was_active else 0))
+        self.promoter_tel[name] = (
+            e[0] + 1,
+            e[1] + (1 if now_active else 0),
+            e[2] + (1 if (not now_active) and was_active else 0),
+        )
         if not now_active:
             self.burst_off[name] = self.burst_off.get(name, 0) + 1
             return True
@@ -5997,7 +6659,10 @@ class Interp:
         if not g.acetylate:
             lvl = self.methyl_levels.get(name, 0)
             if lvl >= self.methyl_threshold:
-                self.note(4, f"methylation silences: '{name}' (level {lvl} >= threshold {self.methyl_threshold}), call returns null")
+                self.note(
+                    4,
+                    f"methylation silences: '{name}' (level {lvl} >= threshold {self.methyl_threshold}), call returns null",
+                )
                 return None
         # loop-9 (F-5): CIS riboswitch, after chromatin, before the
         # promoter. The pinned order extends to
@@ -6089,7 +6754,9 @@ class Interp:
                             terminated = g2
                         break
                 if terminated is not None:
-                    self.note(4, f"rho terminated: transcript lost at '{terminated}', call returns null")
+                    self.note(
+                        4, f"rho terminated: transcript lost at '{terminated}', call returns null"
+                    )
                     return None
         # reg-bio-3 (A1/A7): the call passed every gate, one transcript of
         # the unit is made (a suppressed call is NOT expression) (mirror)
@@ -6120,20 +6787,40 @@ class Interp:
             if i < len(args):
                 # W01 (L2c): soft param annotation at the funnel (mirror).
                 anns = g.param_anns
-                if i < len(anns) and anns[i] is not None and not ann_is_typaram(anns[i], g.type_params) and not ann_matches(args[i], anns[i]):
-                    raise Stress("unfolded", f"argument '{pname}' for gene '{name}' expects {ann_render(anns[i])}, got {type_name(args[i])}")
+                if (
+                    i < len(anns)
+                    and anns[i] is not None
+                    and not ann_is_typaram(anns[i], g.type_params)
+                    and not ann_matches(args[i], anns[i])
+                ):
+                    raise Stress(
+                        "unfolded",
+                        f"argument '{pname}' for gene '{name}' expects {ann_render(anns[i])}, got {type_name(args[i])}",
+                    )
                 fenv[pname] = args[i]
             elif dflt is not None:
                 dv = self.eval(fenv, dflt)
                 anns = g.param_anns
-                if i < len(anns) and anns[i] is not None and not ann_is_typaram(anns[i], g.type_params) and not ann_matches(dv, anns[i]):
-                    raise Stress("unfolded", f"default of '{pname}' for gene '{name}' expects {ann_render(anns[i])}, got {type_name(dv)}")
+                if (
+                    i < len(anns)
+                    and anns[i] is not None
+                    and not ann_is_typaram(anns[i], g.type_params)
+                    and not ann_matches(dv, anns[i])
+                ):
+                    raise Stress(
+                        "unfolded",
+                        f"default of '{pname}' for gene '{name}' expects {ann_render(anns[i])}, got {type_name(dv)}",
+                    )
                 fenv[pname] = dv
             else:
                 self.note(4, f"missing argument '{pname}' in call to {name}; bound null", g.line)
                 fenv[pname] = None
         if len(args) > len(g.params) and g.params:
-            self.note(4, f"{len(args) - len(g.params)} extra argument(s) in call to {name} ignored", g.line)
+            self.note(
+                4,
+                f"{len(args) - len(g.params)} extra argument(s) in call to {name} ignored",
+                g.line,
+            )
         if g.guard is not None:
             cond, gbody = g.guard
             ok = False
@@ -6176,10 +6863,16 @@ class Interp:
             return v
         if explicit:
             if not ann_is_typaram(g.ret_ann, g.type_params) and not ann_matches(v, g.ret_ann):
-                raise Stress("unfolded", f"return of gene '{name}' expects {ann_render(g.ret_ann)}, got {type_name(v)}")
+                raise Stress(
+                    "unfolded",
+                    f"return of gene '{name}' expects {ann_render(g.ret_ann)}, got {type_name(v)}",
+                )
         else:
             if not ann_is_typaram(g.ret_ann, g.type_params) and not ann_matches(None, g.ret_ann):
-                raise Stress("unfolded", f"return of gene '{name}' expects {ann_render(g.ret_ann)}, got null (no return statement ran)")
+                raise Stress(
+                    "unfolded",
+                    f"return of gene '{name}' expects {ann_render(g.ret_ann)}, got null (no return statement ran)",
+                )
         return v
 
     # ---- methods
@@ -6194,7 +6887,10 @@ class Interp:
             if not g.acetylate:
                 lvl = self.methyl_levels.get(name, 0)
                 if lvl >= self.methyl_threshold:
-                    self.note(4, f"methylation silences: '{name}' (level {lvl} >= threshold {self.methyl_threshold}), call returns null")
+                    self.note(
+                        4,
+                        f"methylation silences: '{name}' (level {lvl} >= threshold {self.methyl_threshold}), call returns null",
+                    )
                     return None
             # reg-bio (F-1): promoter gate (funnel order preserved)
             if self._promoter_veto(name):
@@ -6218,8 +6914,16 @@ class Interp:
                 if i < len(args):
                     # W01 (L2c): method param annotations, same soft contract.
                     anns = g.param_anns
-                    if i < len(anns) and anns[i] is not None and not ann_is_typaram(anns[i], g.type_params) and not ann_matches(args[i], anns[i]):
-                        raise Stress("unfolded", f"argument '{pname}' for method '{name}' expects {ann_render(anns[i])}, got {type_name(args[i])}")
+                    if (
+                        i < len(anns)
+                        and anns[i] is not None
+                        and not ann_is_typaram(anns[i], g.type_params)
+                        and not ann_matches(args[i], anns[i])
+                    ):
+                        raise Stress(
+                            "unfolded",
+                            f"argument '{pname}' for method '{name}' expects {ann_render(anns[i])}, got {type_name(args[i])}",
+                        )
                     fenv[pname] = args[i]
                 elif dflt is not None:
                     fenv[pname] = self.eval(fenv, dflt)
@@ -6264,10 +6968,16 @@ class Interp:
             return v
         if explicit:
             if not ann_is_typaram(g.ret_ann, g.type_params) and not ann_matches(v, g.ret_ann):
-                raise Stress("unfolded", f"return of method '{name}' expects {ann_render(g.ret_ann)}, got {type_name(v)}")
+                raise Stress(
+                    "unfolded",
+                    f"return of method '{name}' expects {ann_render(g.ret_ann)}, got {type_name(v)}",
+                )
         else:
             if not ann_is_typaram(g.ret_ann, g.type_params) and not ann_matches(None, g.ret_ann):
-                raise Stress("unfolded", f"return of method '{name}' expects {ann_render(g.ret_ann)}, got null (no return statement ran)")
+                raise Stress(
+                    "unfolded",
+                    f"return of method '{name}' expects {ann_render(g.ret_ann)}, got null (no return statement ran)",
+                )
         return v
 
     def call_method(self, env, recv, name, args):
@@ -6334,7 +7044,8 @@ class Interp:
                 a = int(args[0]) if len(args) > 0 else 0
                 b = int(args[1]) if len(args) > 1 else len(recv)
                 return recv[a:b]
-            if name == "len": return len(recv)
+            if name == "len":
+                return len(recv)
             self.note(4, f"unknown bytes method '{name}'; null")
             return None
         if isinstance(recv, str):
@@ -6351,9 +7062,12 @@ class Interp:
                     return args[1]
                 self.note(4, "char index out of range; null")
                 return None
-            if name == "upper": return recv.upper()
-            if name == "lower": return recv.lower()
-            if name == "trim": return recv.strip()
+            if name == "upper":
+                return recv.upper()
+            if name == "lower":
+                return recv.lower()
+            if name == "trim":
+                return recv.strip()
             if name == "split":
                 sep = v_display(args[0]) if args else " "
                 return recv.split(sep)
@@ -6363,15 +7077,20 @@ class Interp:
                 return sep.join(v_display(x) for x in lst)
             if name == "replace":
                 return recv.replace(v_display(args[0]), v_display(args[1]))
-            if name == "contains": return v_display(args[0]) in recv
-            if name == "starts": return recv.startswith(v_display(args[0]))
-            if name == "ends": return recv.endswith(v_display(args[0]))
-            if name == "repeat": return recv * int(args[0])
+            if name == "contains":
+                return v_display(args[0]) in recv
+            if name == "starts":
+                return recv.startswith(v_display(args[0]))
+            if name == "ends":
+                return recv.endswith(v_display(args[0]))
+            if name == "repeat":
+                return recv * int(args[0])
             if name == "slice":
                 a = int(args[0]) if len(args) > 0 else 0
                 b = int(args[1]) if len(args) > 1 else len(recv)
                 return recv[a:b]
-            if name == "len": return len(recv)
+            if name == "len":
+                return len(recv)
         elif isinstance(recv, list):
             if name == "map":
                 return [self.call_value(env, args[0], [x]) for x in recv]
@@ -6405,14 +7124,22 @@ class Interp:
                             else:
                                 break
                     return out
-                return sorted(recv, key=lambda x: (
-                    (0, float(x), "") if isinstance(x, (int, float)) and not isinstance(x, bool)
-                    else ((0, float(int(x)), "") if isinstance(x, bool)
-                          else ((1, 0.0, x) if isinstance(x, str)
-                                else (2, 0.0, v_repr(x))))
-                ))
-            if name == "reverse": return list(reversed(recv))
-            if name == "contains": return any(deep_eq(x, args[0]) for x in recv)
+                return sorted(
+                    recv,
+                    key=lambda x: (
+                        (0, float(x), "")
+                        if isinstance(x, (int, float)) and not isinstance(x, bool)
+                        else (
+                            (0, float(int(x)), "")
+                            if isinstance(x, bool)
+                            else ((1, 0.0, x) if isinstance(x, str) else (2, 0.0, v_repr(x)))
+                        )
+                    ),
+                )
+            if name == "reverse":
+                return list(reversed(recv))
+            if name == "contains":
+                return any(deep_eq(x, args[0]) for x in recv)
             if name == "index_of":
                 for i, x in enumerate(recv):
                     if deep_eq(x, args[0]):
@@ -6425,12 +7152,14 @@ class Interp:
             if name == "join":
                 sep = v_display(args[0]) if args else ""
                 return sep.join(v_display(x) for x in recv)
-            if name == "len": return len(recv)
+            if name == "len":
+                return len(recv)
             if name == "push":
                 if self.is_frozen(recv):
                     raise self._frozen_stress("list")
                 self._cycle_note_insert(recv, args[0])  # W013: before the edge lands
-                recv.append(args[0]); return recv
+                recv.append(args[0])
+                return recv
             if name == "pop":
                 if self.is_frozen(recv):
                     raise self._frozen_stress("list")
@@ -6449,9 +7178,12 @@ class Interp:
                 self.note(4, "index out of range; null")
                 return None
         elif isinstance(recv, dict):
-            if name == "keys": return _map_keys(recv)
-            if name == "values": return _map_values(recv)
-            if name == "items": return [[k, v] for k, v in _map_items(recv)]
+            if name == "keys":
+                return _map_keys(recv)
+            if name == "values":
+                return _map_values(recv)
+            if name == "items":
+                return [[k, v] for k, v in _map_items(recv)]
             if name == "get":
                 # L1a: safe key access with an optional default
                 # #214: _map_lookup already covers BOTH stores with the
@@ -6464,13 +7196,15 @@ class Interp:
                     return args[1]
                 self.note(4, f"key '{v_display(key_q)}' missing; null")
                 return None
-            if name == "has": return _map_has(recv, args[0])
+            if name == "has":
+                return _map_has(recv, args[0])
             if name == "del":
                 if self.is_frozen(recv):
                     raise self._frozen_stress("map")
                 _map_del(recv, args[0])
                 return None
-            if name == "len": return _map_len(recv)
+            if name == "len":
+                return _map_len(recv)
             if name in recv and isinstance(recv[name], (Gene,)):
                 return self.call_value(env, recv[name], args)
         self.note(4, f"{type_name(recv)} has no method '{name}'; null")
@@ -6512,7 +7246,7 @@ class Interp:
     def _cycle_prune(self):
         # strong-ref registrations persist by design (no GC, D-013): a
         # detected cycle stays in the gauge for the rest of the run
-        pass
+        return None  # deliberate no-op; see the D-013 note above
 
     def _cycle_walk_reaches(self, root, v):
         # does the walk from v reach the container at address root?
@@ -6550,22 +7284,28 @@ class Interp:
             budget[0] -= 1
             if isinstance(cur, list):
                 a = id(cur)
-                if a in registered: return  # a member of this subgraph is registered
-                if a in seen: continue
+                if a in registered:
+                    return  # a member of this subgraph is registered
+                if a in seen:
+                    continue
                 seen.add(a)
                 stack.extend(cur)
             elif isinstance(cur, dict):
                 a = id(cur)
-                if a in registered: return
-                if a in seen: continue
+                if a in registered:
+                    return
+                if a in seen:
+                    continue
                 seen.add(a)
                 # Z-MAPORDER: a nested promoted map carries tail values too
                 stack.extend(cur.values())
                 stack.extend(p[1] for p in _side(cur))
             elif isinstance(cur, ObjInst):
                 a = id(cur.fields)
-                if a in registered: return
-                if a in seen: continue
+                if a in registered:
+                    return
+                if a in seen:
+                    continue
                 seen.add(a)
                 stack.extend(cur.fields.values())
             elif isinstance(cur, Variant):
@@ -6583,8 +7323,10 @@ class Interp:
         # is persistence of what is already registered
         if isinstance(target, ObjInst):
             target = target.fields
-        if isinstance(v, (list, dict, ObjInst, Variant)) and \
-                self._cycle_walk_reaches(id(target), v) is True:
+        if (
+            isinstance(v, (list, dict, ObjInst, Variant))
+            and self._cycle_walk_reaches(id(target), v) is True
+        ):
             self._cycle_register(target)
 
     def _live_cycles(self):
@@ -6630,22 +7372,28 @@ class Interp:
             budget[0] -= 1
             if isinstance(cur, list):
                 a = id(cur)
-                if a == root: return True
-                if a in seen: continue
+                if a == root:
+                    return True
+                if a in seen:
+                    continue
                 seen.add(a)
                 stack.extend(cur)
             elif isinstance(cur, dict):
                 a = id(cur)
-                if a == root: return True
-                if a in seen: continue
+                if a == root:
+                    return True
+                if a in seen:
+                    continue
                 seen.add(a)
                 # Z-MAPORDER: a nested promoted map carries tail values too
                 stack.extend(cur.values())
                 stack.extend(p[1] for p in _side(cur))
             elif isinstance(cur, ObjInst):
                 a = id(cur.fields)
-                if a == root: return True
-                if a in seen: continue
+                if a == root:
+                    return True
+                if a in seen:
+                    continue
                 seen.add(a)
                 stack.extend(cur.fields.values())
             elif isinstance(cur, Variant):
@@ -6670,11 +7418,17 @@ class Interp:
         if name == "bytes_from_str":
             s = args[0] if args and isinstance(args[0], str) else None
             if s is None:
-                raise Stress("unfolded", f"bytes_from_str needs a str, got {type_name(args[0] if args else None)}")
+                raise Stress(
+                    "unfolded",
+                    f"bytes_from_str needs a str, got {type_name(args[0] if args else None)}",
+                )
             if len(args) > 1:
                 enc = v_display(args[1]).lower().replace("-", "")
                 if enc != "utf8":
-                    raise Stress("unfolded", f"unsupported encoding '{v_display(args[1])}' (bytes are UTF-8 only)")
+                    raise Stress(
+                        "unfolded",
+                        f"unsupported encoding '{v_display(args[1])}' (bytes are UTF-8 only)",
+                    )
             return s.encode("utf-8")
         if name == "str_from_bytes":
             b = args[0] if args and isinstance(args[0], bytes) else None
@@ -6683,7 +7437,10 @@ class Interp:
             if len(args) > 1:
                 enc = v_display(args[1]).lower().replace("-", "")
                 if enc != "utf8":
-                    raise Stress("unfolded", f"unsupported encoding '{v_display(args[1])}' (bytes are UTF-8 only)")
+                    raise Stress(
+                        "unfolded",
+                        f"unsupported encoding '{v_display(args[1])}' (bytes are UTF-8 only)",
+                    )
             if b is None:
                 return ""
             try:
@@ -6695,11 +7452,11 @@ class Interp:
         if name == "bytes_from_list":
             if not args or args[0] is None:
                 return b""
-            l = args[0]
-            if not isinstance(l, list):
-                raise Stress("unfolded", f"bytes_from_list needs a list, got {type_name(l)}")
+            xs = args[0]
+            if not isinstance(xs, list):
+                raise Stress("unfolded", f"bytes_from_list needs a list, got {type_name(xs)}")
             out = bytearray()
-            for v in l:
+            for v in xs:
                 if isinstance(v, bool) or not isinstance(v, int):
                     raise Stress("unfolded", f"bytes_from_list needs ints, got {type_name(v)}")
                 if not (0 <= v <= 255):
@@ -6717,7 +7474,8 @@ class Interp:
             if self.is_frozen(args[0]):
                 raise self._frozen_stress("list")
             self._cycle_note_insert(args[0], args[1])  # W013: before the edge lands
-            args[0].append(args[1]); return args[0]
+            args[0].append(args[1])
+            return args[0]
         if name == "pop":
             if self.is_frozen(args[0]):
                 raise self._frozen_stress("list")
@@ -6727,7 +7485,8 @@ class Interp:
                 raise self._frozen_stress("list")
             idx = self.as_index(args[1], len(args[0]))
             self._cycle_note_insert(args[0], args[2])  # W013: before the edge lands
-            args[0].insert(min(idx, len(args[0])), args[2]); return args[0]
+            args[0].insert(min(idx, len(args[0])), args[2])
+            return args[0]
         if name == "remove":
             if self.is_frozen(args[0]):
                 raise self._frozen_stress("list")
@@ -6763,9 +7522,7 @@ class Interp:
             # P2P3P5 pin found the latent gap: the Rust engine notes and
             # returns [] on any non-int arg; the oracle walked into Python
             # TypeError instead (int < str). Mirror the note + [] exactly.
-            if not all(
-                isinstance(x, int) and not isinstance(x, bool) for x in args
-            ):
+            if not all(isinstance(x, int) and not isinstance(x, bool) for x in args):
                 # F-DELNOTE sibling found during the fix: the range note had
                 # the same latent line=0 rendering gap (unlocated stderr vs
                 # the engine's located render). Same one-line law.
@@ -6829,9 +7586,11 @@ class Interp:
             return acc
         if name == "clock":
             import time
+
             return time.monotonic()
         if name == "now":
             import time
+
             return time.monotonic()
         if name == "exit":
             # sec-r2 (audit C-11) mirror: process exit is a capability,
@@ -6841,8 +7600,14 @@ class Interp:
             # allow-all (enabled False) implies exit, as Caps::allow_all does.
             c = self.caps
             if c["enabled"] and not c.get("exit"):
-                self.note(4, "exit denied: capability 'exit' not granted (grant with --allow-exit or .cell allow.exit = true)")
-                raise Stress("interference", "exit denied, capability 'exit' not granted (grant with --allow-exit or .cell allow.exit = true)")
+                self.note(
+                    4,
+                    "exit denied: capability 'exit' not granted (grant with --allow-exit or .cell allow.exit = true)",
+                )
+                raise Stress(
+                    "interference",
+                    "exit denied, capability 'exit' not granted (grant with --allow-exit or .cell allow.exit = true)",
+                )
             sys.exit(int(args[0]) if args else 0)
         if name == "assert":
             ok = truthy(args[0]) if args else False
@@ -6857,17 +7622,81 @@ class Interp:
         if name == "codon":
             s = v_display(args[0]) if args else ""
             # mirror of the C++ kernel: 3-letter groups scored by usage class
-            USAGE = [7,1,5,3,15,6,8,4,3,2,0,0,4,6,0,5,
-                     4,1,2,13,5,2,4,1,6,2,12,9,5,3,9,4,
-                     3,1,2,15,8,5,6,2,14,7,12,6,2,1,8,3,
-                     6,2,8,1,8,3,6,10,4,2,13,11,6,7,3,9]
+            USAGE = [
+                7,
+                1,
+                5,
+                3,
+                15,
+                6,
+                8,
+                4,
+                3,
+                2,
+                0,
+                0,
+                4,
+                6,
+                0,
+                5,
+                4,
+                1,
+                2,
+                13,
+                5,
+                2,
+                4,
+                1,
+                6,
+                2,
+                12,
+                9,
+                5,
+                3,
+                9,
+                4,
+                3,
+                1,
+                2,
+                15,
+                8,
+                5,
+                6,
+                2,
+                14,
+                7,
+                12,
+                6,
+                2,
+                1,
+                8,
+                3,
+                6,
+                2,
+                8,
+                1,
+                8,
+                3,
+                6,
+                10,
+                4,
+                2,
+                13,
+                11,
+                6,
+                7,
+                3,
+                9,
+            ]
+
             def bidx(c):
                 return {"t": 0, "u": 0, "c": 1, "a": 2, "g": 3}.get(c.lower(), -1)
+
             acc, groups = 0, 0
             s2 = v_display(args[0]) if args else ""
             i = 0
             while i + 2 < len(s2):
-                b1, b2, b3 = bidx(s2[i]), bidx(s2[i+1]), bidx(s2[i+2])
+                b1, b2, b3 = bidx(s2[i]), bidx(s2[i + 1]), bidx(s2[i + 2])
                 if b1 < 0 or b2 < 0 or b3 < 0:
                     # reg-r4 (re-audit B-2): NEUTRAL 50, mirroring the kernel
                     # (never reward biological nonsense, never punish ids)
@@ -6920,26 +7749,76 @@ class Interp:
             s2 = s.replace("U", "T")
             i = 0
             while i + 3 <= len(s2):
-                codon = s2[i:i + 3]
+                codon = s2[i : i + 3]
                 if codon in ("TAA", "TAG", "TGA"):
                     break
                 aa = None
-                for kk, vv in (("TTT","F"),("TTC","F"),("TTA","L"),("TTG","L"),
-                               ("TCT","S"),("TCC","S"),("TCA","S"),("TCG","S"),
-                               ("TAT","Y"),("TAC","Y"),("TAA","*"),("TAG","*"),
-                               ("TGT","C"),("TGC","C"),("TGA","*"),("TGG","W"),
-                               ("CTT","L"),("CTC","L"),("CTA","L"),("CTG","L"),
-                               ("CCT","P"),("CCC","P"),("CCA","P"),("CCG","P"),
-                               ("CAT","H"),("CAC","H"),("CAA","Q"),("CAG","Q"),
-                               ("CGT","R"),("CGC","R"),("CGA","R"),("CGG","R"),
-                               ("ATT","I"),("ATC","I"),("ATA","I"),("ATG","M"),
-                               ("ACT","T"),("ACC","T"),("ACA","T"),("ACG","T"),
-                               ("AAT","N"),("AAC","N"),("AAA","K"),("AAG","K"),
-                               ("AGT","S"),("AGC","S"),("AGA","R"),("AGG","R"),
-                               ("GTT","V"),("GTC","V"),("GTA","V"),("GTG","V"),
-                               ("GCT","A"),("GCC","A"),("GCA","A"),("GCG","A"),
-                               ("GAT","D"),("GAC","D"),("GAA","E"),("GAG","E"),
-                               ("GGT","G"),("GGC","G"),("GGA","G"),("GGG","G")):
+                for kk, vv in (
+                    ("TTT", "F"),
+                    ("TTC", "F"),
+                    ("TTA", "L"),
+                    ("TTG", "L"),
+                    ("TCT", "S"),
+                    ("TCC", "S"),
+                    ("TCA", "S"),
+                    ("TCG", "S"),
+                    ("TAT", "Y"),
+                    ("TAC", "Y"),
+                    ("TAA", "*"),
+                    ("TAG", "*"),
+                    ("TGT", "C"),
+                    ("TGC", "C"),
+                    ("TGA", "*"),
+                    ("TGG", "W"),
+                    ("CTT", "L"),
+                    ("CTC", "L"),
+                    ("CTA", "L"),
+                    ("CTG", "L"),
+                    ("CCT", "P"),
+                    ("CCC", "P"),
+                    ("CCA", "P"),
+                    ("CCG", "P"),
+                    ("CAT", "H"),
+                    ("CAC", "H"),
+                    ("CAA", "Q"),
+                    ("CAG", "Q"),
+                    ("CGT", "R"),
+                    ("CGC", "R"),
+                    ("CGA", "R"),
+                    ("CGG", "R"),
+                    ("ATT", "I"),
+                    ("ATC", "I"),
+                    ("ATA", "I"),
+                    ("ATG", "M"),
+                    ("ACT", "T"),
+                    ("ACC", "T"),
+                    ("ACA", "T"),
+                    ("ACG", "T"),
+                    ("AAT", "N"),
+                    ("AAC", "N"),
+                    ("AAA", "K"),
+                    ("AAG", "K"),
+                    ("AGT", "S"),
+                    ("AGC", "S"),
+                    ("AGA", "R"),
+                    ("AGG", "R"),
+                    ("GTT", "V"),
+                    ("GTC", "V"),
+                    ("GTA", "V"),
+                    ("GTG", "V"),
+                    ("GCT", "A"),
+                    ("GCC", "A"),
+                    ("GCA", "A"),
+                    ("GCG", "A"),
+                    ("GAT", "D"),
+                    ("GAC", "D"),
+                    ("GAA", "E"),
+                    ("GAG", "E"),
+                    ("GGT", "G"),
+                    ("GGC", "G"),
+                    ("GGA", "G"),
+                    ("GGG", "G"),
+                ):
                     if kk == codon:
                         aa = vv
                         break
@@ -6951,12 +7830,12 @@ class Interp:
             out = []
             i = 0
             while i + 2 < len(s):
-                if s[i:i+3] == "ATG":
+                if s[i : i + 3] == "ATG":
                     j = i
                     protein = []
                     stopped = False
                     while j + 2 < len(s):
-                        c2 = s[j:j+3]
+                        c2 = s[j : j + 3]
                         if c2 in ("TAA", "TAG", "TGA"):
                             stopped = True
                             break
@@ -6976,8 +7855,7 @@ class Interp:
             # cycle gauge (insertion registers, reclamation prunes); the
             # other three keys are Rust symbol-table gauges the sequential
             # oracle does not have (zeros, the pre-existing shape contract).
-            return {"arena_bytes": 0, "interns": 0, "allocs": 0,
-                    "cycles": self._live_cycles()}
+            return {"arena_bytes": 0, "interns": 0, "allocs": 0, "cycles": self._live_cycles()}
         if name == "weak":
             # W013: supported targets are the container values (list, map,
             # phenotype instance); everything else is refused (SPEC §19f).
@@ -6994,16 +7872,16 @@ class Interp:
             if isinstance(v, ObjInst):
                 self.weak_targets[id(v.fields)] = ("phenotype", v.fields, v.defn)
                 return WeakRef("phenotype", id(v.fields), v.defn)
-            raise Stress("unfolded",
-                         f"weak() needs a list, map, or phenotype, found {type_name(v)}")
+            raise Stress(
+                "unfolded", f"weak() needs a list, map, or phenotype, found {type_name(v)}"
+            )
         if name == "strengthen":
             if not args:
                 # no-argument call mirrors the Rust None-arm message exactly
                 raise Stress("unfolded", "strengthen(w) needs a weak handle")
             w = args[0]
             if not isinstance(w, WeakRef):
-                raise Stress("unfolded",
-                             f"strengthen(w) needs a weak handle, found {type_name(w)}")
+                raise Stress("unfolded", f"strengthen(w) needs a weak handle, found {type_name(w)}")
             entry = self.weak_targets.get(w.addr)
             if entry is None or not self._weak_binding_alive(env, w.addr):
                 # no GC: the last strong ref freed the target immediately;
@@ -7019,8 +7897,10 @@ class Interp:
             v = self.cell.get(k)
             if v is None:
                 return d
-            if v == "true": return True
-            if v == "false": return False
+            if v == "true":
+                return True
+            if v == "false":
+                return False
             try:
                 return int(v)
             except ValueError:
@@ -7041,12 +7921,23 @@ class Interp:
             if not any(v[0] == variant for v in variants):
                 cur = self.choose_variant(root, variants)
                 cur = cur[0] if cur else ""
-                self.note(4, f"splice_shift: variant '{variant}' not declared in splice '{root}'; selection unchanged")
+                self.note(
+                    4,
+                    f"splice_shift: variant '{variant}' not declared in splice '{root}'; selection unchanged",
+                )
                 return cur
             self.splice_shift[root] = variant
             vname, vparams, body, vmarks, vline = self.choose_variant(root, variants)
-            g = Gene(root, vparams, None, body,
-                     ac="acetylate" in vmarks, me="methylate" in vmarks, m6="m6a" in vmarks, line=vline)
+            g = Gene(
+                root,
+                vparams,
+                None,
+                body,
+                ac="acetylate" in vmarks,
+                me="methylate" in vmarks,
+                m6="m6a" in vmarks,
+                line=vline,
+            )
             if root not in self.defined_genes:
                 self.defined_genes.append(root)
             # trans-acting factor: replace the binding up the env chain
@@ -7056,7 +7947,11 @@ class Interp:
         if name in ("m6a_write", "m6a_erase"):
             # reg-bio-3 (B3): quantitative m6A site density 0..=3 (mirror)
             k = v_display(args[0]) if args else ""
-            n = args[1] if len(args) > 1 and isinstance(args[1], int) and not isinstance(args[1], bool) else 1
+            n = (
+                args[1]
+                if len(args) > 1 and isinstance(args[1], int) and not isinstance(args[1], bool)
+                else 1
+            )
             n = max(n, 0)
             if name == "m6a_write":
                 lvl = min(self.m6a_levels.get(k, 0) + n, 3)
@@ -7067,15 +7962,25 @@ class Interp:
             self.m6a_levels[k] = lvl
             marked = lvl >= 1
             if not self.methyl_quiet:
-                self.note(2, f"m6A {verb}: '{k}' (level {lvl}), redefinition {'resisted' if marked else 'no longer resisted'}")
+                self.note(
+                    2,
+                    f"m6A {verb}: '{k}' (level {lvl}), redefinition {'resisted' if marked else 'no longer resisted'}",
+                )
             return lvl
         if name == "passage":
             # reg-bio-3 (B2/B6): cell divisions, marks dilute unless
             # maintained (mirror of the Rust passage builtin)
-            n = args[0] if args and isinstance(args[0], int) and not isinstance(args[0], bool) else 1
+            n = (
+                args[0]
+                if args and isinstance(args[0], int) and not isinstance(args[0], bool)
+                else 1
+            )
             n = max(n, 0)
             if n > 1_000_000:
-                self.note(4, "passage: n clamped to 1000000 divisions (a culture that old is not a useful model)")
+                self.note(
+                    4,
+                    "passage: n clamped to 1000000 divisions (a culture that old is not a useful model)",
+                )
                 n = 1_000_000
             f = self.cell.get("methyl.maintenance")
             fv = 0.5
@@ -7085,6 +7990,7 @@ class Interp:
                 except ValueError:
                     fv = 0.5
             import math as _math
+
             for _i in range(n):
                 for k2 in list(self.methyl_levels):
                     x = self.methyl_levels[k2] * fv - 0.5
@@ -7104,7 +8010,9 @@ class Interp:
                     self.medium[k2] = int(_math.floor(self.medium[k2] * qdv))
             self.generation += n
             if not self.methyl_quiet:
-                self.note(1, f"passage: {n} divisions (maintenance {fv!r}), generation {self.generation}")
+                self.note(
+                    1, f"passage: {n} divisions (maintenance {fv!r}), generation {self.generation}"
+                )
             return self.generation
         if name == "methylate":
             # A12 (reg-r2): mirror of the Rust runtime API, same graded
@@ -7171,12 +8079,17 @@ class Interp:
             # reg-bio-3 (A1/A7/B2): polycistronic transcript counts + division
             # counter (sorted-key determinism, D9) (mirror)
             transcripts = {u["name"]: u["transcripts"] for u in self.operons}
-            return {"calls": dict(sorted(self.call_counts.items())), "burst": burst_avg,
-                    "burst_by_gene": dict(sorted(burst_by.items())),
-                    "bursts": dict(sorted(self.burst_off.items())),
-                    "mature": mature, "nascent": nascent, "maturation": maturation,
-                    "transcripts": dict(sorted(transcripts.items())),
-                    "generation": self.generation}
+            return {
+                "calls": dict(sorted(self.call_counts.items())),
+                "burst": burst_avg,
+                "burst_by_gene": dict(sorted(burst_by.items())),
+                "bursts": dict(sorted(self.burst_off.items())),
+                "mature": mature,
+                "nascent": nascent,
+                "maturation": maturation,
+                "transcripts": dict(sorted(transcripts.items())),
+                "generation": self.generation,
+            }
         if name == "toggle_on":
             nm = v_display(args[0]) if args else ""
             for i, (a, b, _on) in enumerate(self.toggles):
@@ -7208,7 +8121,9 @@ class Interp:
             if ms == 0:
                 self.note(4, "repressi_start period must be > 0 ms")
                 return False
-            self.note(1, f"repressilator oscillating every {ms} ms (sequential oracle: manual ring only)")
+            self.note(
+                1, f"repressilator oscillating every {ms} ms (sequential oracle: manual ring only)"
+            )
             return True
         if name == "repressi_state":
             # A11 (reg-r2), mirror of the Rust core: the ring integrates
@@ -7257,7 +8172,10 @@ class Interp:
             # loop-9 (C8): firing a signal species directly would shadow the
             # medium read, the Rust core refuses with a note (mirror).
             if seed in self.signals:
-                self.note(4, f"'{seed}' is a signal species: its level lives in the shared medium, use secrete()")
+                self.note(
+                    4,
+                    f"'{seed}' is a signal species: its level lives in the shared medium, use secrete()",
+                )
             else:
                 self.grn_levels[seed] = min(self.grn_levels.get(seed, 0.0) + 1.0, 1.0)
             # reg-r3 (re-audit): TWO-PHASE fire, mirroring the Rust core and
@@ -7270,7 +8188,18 @@ class Interp:
             for wave in range(1, 11):
                 changed = False
                 snap = dict(self.grn_levels)
-                for frm, to, st, inh, thr, hill, is_any, occupy, is_sum, attenuating in self.grn_edges:
+                for (
+                    frm,
+                    to,
+                    st,
+                    inh,
+                    thr,
+                    hill,
+                    is_any,
+                    occupy,
+                    is_sum,
+                    attenuating,
+                ) in self.grn_edges:
                     if inh:
                         continue  # inhibitors propagate in phase 2
                     if is_sum:
@@ -7306,7 +8235,18 @@ class Interp:
                 # reg-bio-2 (B7): pooled (`sum`) edges, group pass per wave,
                 # BEFORE the convergence check (mirror of the Rust core).
                 groups = []
-                for frm, to, st, inh, thr, hill, is_any, occupy, is_sum, attenuating in self.grn_edges:
+                for (
+                    frm,
+                    to,
+                    st,
+                    inh,
+                    thr,
+                    hill,
+                    is_any,
+                    occupy,
+                    is_sum,
+                    attenuating,
+                ) in self.grn_edges:
                     if inh or not is_sum:
                         continue
                     if thr is None or thr <= 0.0:
@@ -7390,7 +8330,8 @@ class Interp:
                     if isinstance(_a, WeakRef):
                         raise Stress(
                             "membrane",
-                            "spawn() refuses a weak payload; weak handles cannot cross the snapshot membrane")
+                            "spawn() refuses a weak payload; weak handles cannot cross the snapshot membrane",
+                        )
                 # reg-r4: SendValue depth ceiling mirror (Rust SEND_DEPTH_CAP
                 # = 100_000), deep spawn payloads raise a catchable
                 # `overflow` stress exactly like the Rust serialization path
@@ -7421,7 +8362,7 @@ class Interp:
                 self.rng = _derived
                 spawn_name = callee.name
                 # loop-9 (C8): the Rust worker tags its notes "[task <name>]"
-                #, mirror the prefix while the body runs inline
+                # , mirror the prefix while the body runs inline
                 _saved_prefix = getattr(self, "task_note_prefix", None)
                 self.task_note_prefix = f"[task {spawn_name or '<lambda>'}]"
                 # loop-9: worker-cell isolation (mirror of the snapshot
@@ -7608,8 +8549,10 @@ class Interp:
             # membrane first, then the depth pre-flight, then closed (the
             # Rust order: a handle payload is refused even on a closed chan)
             if isinstance(v, (Gene, SeqObj, ObjInst, Channel, WeakRef)):
-                raise Stress("membrane",
-                             f"send() refuses a {type_name(v)} payload; channels carry data, not handles")
+                raise Stress(
+                    "membrane",
+                    f"send() refuses a {type_name(v)} payload; channels carry data, not handles",
+                )
             _stack = [(v, 0)]
             while _stack:
                 _item, _d = _stack.pop()
@@ -7655,12 +8598,15 @@ class Interp:
                     return i
             if all(c.closed for c in args):
                 return -1
-            raise Stress("blocked", "oracle cannot block on select; buffered sends must precede select")
+            raise Stress(
+                "blocked", "oracle cannot block on select; buffered sends must precede select"
+            )
         # ---- math
         if name == "floor":
             v = args[0] if args else 0
             if isinstance(v, float):
                 import math as _m
+
                 if not _m.isfinite(v) or v >= 9.223372036854776e18 or v <= -9.223372036854776e18:
                     raise Stress("overflow", "float too large for floor/ceil to int")
                 return int(_m.floor(v))
@@ -7669,6 +8615,7 @@ class Interp:
             v = args[0] if args else 0
             if isinstance(v, float):
                 import math as _m
+
                 if not _m.isfinite(v) or v >= 9.223372036854776e18 or v <= -9.223372036854776e18:
                     raise Stress("overflow", "float too large for floor/ceil to int")
                 return int(_m.ceil(v))
@@ -7688,7 +8635,7 @@ class Interp:
             v = float(v0)
             if v < 0:
                 raise Stress("unfolded", "sqrt of negative number")
-            return v ** 0.5
+            return v**0.5
         if name == "pow":
             # mirror the Rust builtin exactly: arity < 2 → note + the
             # (0.0, 0.0) fallback → 1.0 (rust DISCARDS provided args in the
@@ -7702,11 +8649,20 @@ class Interp:
                 self.note(4, "pow(x, y) needs two numbers; 0")
                 return 1.0
             a0, b0 = args[0], args[1]
-            if isinstance(a0, bool) or not isinstance(a0, (int, float)) or isinstance(b0, bool) or not isinstance(b0, (int, float)):
-                raise Stress("unfolded", f"numeric op needs numbers, found {type_name(a0)} and {type_name(b0)}")
+            if (
+                isinstance(a0, bool)
+                or not isinstance(a0, (int, float))
+                or isinstance(b0, bool)
+                or not isinstance(b0, (int, float))
+            ):
+                raise Stress(
+                    "unfolded",
+                    f"numeric op needs numbers, found {type_name(a0)} and {type_name(b0)}",
+                )
             return self._f64_powf(float(a0), float(b0))
         if name in ("re_match", "re_find", "re_groups"):
             import re as _re
+
             pat = args[0] if args else ""
             subj = args[1] if len(args) > 1 else ""
             try:
@@ -7723,8 +8679,12 @@ class Interp:
                     return None
                 if name == "re_groups":
                     return [g if g is not None else None for g in m.groups()]
-                return {"text": m.group(0), "start": m.start(), "end": m.end(),
-                        "groups": [g if g is not None else None for g in m.groups()]}
+                return {
+                    "text": m.group(0),
+                    "start": m.start(),
+                    "end": m.end(),
+                    "groups": [g if g is not None else None for g in m.groups()],
+                }
             except _re.error as e:
                 raise Stress("unfolded", f"regex: {e}")
             except RecursionError:
@@ -7733,6 +8693,7 @@ class Interp:
             # dx-r6 mirror of the Rust implementation: global literal
             # substitution (empty patterns behave like Python re.sub)
             import re as _re
+
             pat = args[0] if args else ""
             subj = args[1] if len(args) > 1 else ""
             repl = args[2] if len(args) > 2 else ""
@@ -7745,28 +8706,44 @@ class Interp:
             return rx.sub(lambda _m: repl, subj)
         if name == "unix_time":
             import time as _t
+
             return int(_t.time())
         if name == "date_parts":
             import time as _t
+
             ts = int(args[0]) if args else 0
-            st = _t.gmtime(ts)
-            return {"year": st.tm_year, "month": st.tm_mon, "day": st.tm_mday,
-                    "hour": st.tm_hour, "min": st.tm_min, "sec": st.tm_sec,
-                    "wday": (st.tm_wday + 1) % 7}
+            tm = _t.gmtime(ts)
+            return {
+                "year": tm.tm_year,
+                "month": tm.tm_mon,
+                "day": tm.tm_mday,
+                "hour": tm.tm_hour,
+                "min": tm.tm_min,
+                "sec": tm.tm_sec,
+                "wday": (tm.tm_wday + 1) % 7,
+            }
         if name == "date_fmt":
             import time as _t
+
             ts = int(args[0]) if args else 0
             fmt = args[1] if len(args) > 1 else "%Y-%m-%d %H:%M:%S"
-            st = _t.gmtime(ts)
+            tm = _t.gmtime(ts)
             out = []
             i = 0
             while i < len(fmt):
                 if fmt[i] == "%" and i + 1 < len(fmt):
                     c = fmt[i + 1]
-                    out.append({"Y": f"{st.tm_year:04d}", "m": f"{st.tm_mon:02d}",
-                                "d": f"{st.tm_mday:02d}", "H": f"{st.tm_hour:02d}",
-                                "M": f"{st.tm_min:02d}", "S": f"{st.tm_sec:02d}",
-                                "%": "%"}.get(c, "%" + c))
+                    out.append(
+                        {
+                            "Y": f"{st.tm_year:04d}",
+                            "m": f"{st.tm_mon:02d}",
+                            "d": f"{st.tm_mday:02d}",
+                            "H": f"{st.tm_hour:02d}",
+                            "M": f"{st.tm_min:02d}",
+                            "S": f"{st.tm_sec:02d}",
+                            "%": "%",
+                        }.get(c, "%" + c)
+                    )
                     i += 2
                 else:
                     out.append(fmt[i])
@@ -7806,7 +8783,7 @@ class Interp:
             j = args[2] if len(args) > 2 else 0
             a = max(0, min(n, n + i if i < 0 else i))
             b = max(0, min(n, n + j if j < 0 else j))
-            return "".join(chars[a:max(a, b)])
+            return "".join(chars[a : max(a, b)])
         if name in ("norm_nfc", "norm_nfd", "casefold", "char_category"):
             # W28 stage 2 (SPEC §3): normalization, full case folding,
             # categories. The Rust core runs GENERATED tables (emitted from
@@ -7901,15 +8878,15 @@ class Interp:
             return Variant("Err", f"num() failed: cannot parse {type_name(v)} as a number")
         if name == "try_index":
             if len(args) != 2:
-                raise Stress("unfolded", "try_index(l, i) needs exactly 2 arguments")
-            l, i = args[0], args[1]
-            if not isinstance(l, list):
-                return Variant("Err", f"try_index needs a list, got {type_name(l)}")
+                raise Stress("unfolded", "try_index(xs, i) needs exactly 2 arguments")
+            xs, i = args[0], args[1]
+            if not isinstance(xs, list):
+                return Variant("Err", f"try_index needs a list, got {type_name(xs)}")
             if not isinstance(i, int) or isinstance(i, bool):
                 return Variant("Err", f"index needs an int, got {type_name(i)}")
-            if i < 0 or i >= len(l):
-                return Variant("Err", f"index {i} out of range for list of length {len(l)}")
-            return Variant("Ok", l[i])
+            if i < 0 or i >= len(xs):
+                return Variant("Err", f"index {i} out of range for list of length {len(xs)}")
+            return Variant("Ok", xs[i])
         if name == "try_get":
             if len(args) != 2:
                 raise Stress("unfolded", "try_get(m, k) needs exactly 2 arguments")
@@ -7924,13 +8901,13 @@ class Interp:
             return Variant("Err", f"no key '{v_display(k)}'")
         if name == "try_pop":
             if len(args) != 1:
-                raise Stress("unfolded", "try_pop(l) needs exactly 1 argument")
-            l = args[0]
-            if not isinstance(l, list):
-                return Variant("Err", f"try_pop needs a list, got {type_name(l)}")
-            if not l:
+                raise Stress("unfolded", "try_pop(xs) needs exactly 1 argument")
+            xs = args[0]
+            if not isinstance(xs, list):
+                return Variant("Err", f"try_pop needs a list, got {type_name(xs)}")
+            if not xs:
                 return Variant("Err", "pop from an empty list")
-            return Variant("Ok", l.pop())
+            return Variant("Ok", xs.pop())
         # ---- try_* wave 2 (W06 stage 2, v2.7.0): extraction, environment
         # and parsing families. Same law as wave 1: Result-returning
         # ADDITIONS, legacy null/stress contracts stay pinned. Err payloads
@@ -7973,7 +8950,9 @@ class Interp:
             j = len(chars) + i if i < 0 else i
             if 0 <= j < len(chars):
                 return Variant("Ok", chars[j])
-            return Variant("Err", f"char_at index {i} out of range for string of length {len(chars)}")
+            return Variant(
+                "Err", f"char_at index {i} out of range for string of length {len(chars)}"
+            )
         if name == "try_env":
             if len(args) != 1:
                 raise Stress("unfolded", "try_env(name) needs exactly 1 argument")
@@ -7994,6 +8973,7 @@ class Interp:
             if len(args) != 2:
                 raise Stress("unfolded", "try_re_groups(pat, s) needs exactly 2 arguments")
             import re as _re
+
             pat = v_display(args[0])
             subj = v_display(args[1])
             try:
@@ -8099,12 +9079,21 @@ class Interp:
             attempts, on_total, episodes = self.promoter_tel.get(nm, (0, 0, 0))
             on_frac = (on_total / attempts) if attempts > 0 else 0.0
             burst_size = (on_total / episodes) if episodes > 0 else 0.0
-            return {"attempts": attempts, "on_total": on_total, "episodes": episodes,
-                    "on_frac": on_frac, "burst_size": burst_size}
+            return {
+                "attempts": attempts,
+                "on_total": on_total,
+                "episodes": episodes,
+                "on_frac": on_frac,
+                "burst_size": burst_size,
+            }
         if name == "burst_set":
             # loop-9 (R9): runtime promoter-rate modulation (mirror)
             nm = v_display(args[0]) if args else ""
-            if len(args) >= 3 and isinstance(args[1], (int, float)) and isinstance(args[2], (int, float)):
+            if (
+                len(args) >= 3
+                and isinstance(args[1], (int, float))
+                and isinstance(args[2], (int, float))
+            ):
                 kon = min(max(float(args[1]), 0.0), 1.0)
                 koff = min(max(float(args[2]), 0.0), 1.0)
                 self.burst_overrides[nm] = (kon, koff)
@@ -8122,7 +9111,11 @@ class Interp:
             koff = 0.1
             if args and isinstance(args[0], (int, float)) and not isinstance(args[0], bool):
                 kon = min(max(float(args[0]), 0.0), 1.0)
-            if len(args) > 1 and isinstance(args[1], (int, float)) and not isinstance(args[1], bool):
+            if (
+                len(args) > 1
+                and isinstance(args[1], (int, float))
+                and not isinstance(args[1], bool)
+            ):
                 koff = min(max(float(args[1]), 0.0), 1.0)
             self.expr_stochastic = True
             self.expr_kon = kon
@@ -8136,10 +9129,19 @@ class Interp:
             # reg-bio-2 (C2): mirror of the Rust builtin, in-source switch
             # for the decay clock (interval n, optional fraction f)
             n = None
-            if args and isinstance(args[0], (int, float)) and not isinstance(args[0], bool) and args[0] > 0:
+            if (
+                args
+                and isinstance(args[0], (int, float))
+                and not isinstance(args[0], bool)
+                and args[0] > 0
+            ):
                 n = int(args[0])
             frac = None
-            if len(args) > 1 and isinstance(args[1], (int, float)) and not isinstance(args[1], bool):
+            if (
+                len(args) > 1
+                and isinstance(args[1], (int, float))
+                and not isinstance(args[1], bool)
+            ):
                 frac = min(max(float(args[1]), 0.0), 1.0)
             self.decay_clock_n = n
             self.decay_clock_f = frac
@@ -8152,7 +9154,11 @@ class Interp:
         if name == "ligand_set":
             nm = v_display(args[0]) if args else ""
             v = 0.0
-            if len(args) > 1 and isinstance(args[1], (int, float)) and not isinstance(args[1], bool):
+            if (
+                len(args) > 1
+                and isinstance(args[1], (int, float))
+                and not isinstance(args[1], bool)
+            ):
                 v = min(max(float(args[1]), 0.0), 1.0)
             if nm not in self.ligands:
                 self.ligands.append(nm)
@@ -8192,7 +9198,9 @@ class Interp:
                 nxt = min(cur + amt, 1_000_000_000)
                 self.medium[nm] = nxt
                 committed = nxt - cur
-            self.note(1, f"secrete '{nm}': +{committed} molecules (level {fmt_float(committed / 1e9)})")
+            self.note(
+                1, f"secrete '{nm}': +{committed} molecules (level {fmt_float(committed / 1e9)})"
+            )
             return committed
         if name == "quorum":
             # loop-9 (C8): mirror, one arg -> level; two args -> level >= t.
@@ -8237,6 +9245,7 @@ class Interp:
             return ord(s[0]) if s else 0
         if name == "sleep":
             import time as _t
+
             ms = 0
             if args and isinstance(args[0], (int, float)):
                 ms = max(args[0], 0)
@@ -8288,7 +9297,9 @@ class Interp:
             if isinstance(body, str):
                 body = body.encode("utf-8")
             elif not isinstance(body, bytes):
-                raise Stress("unfolded", f"write_file_bytes needs bytes (or str), got {type_name(body)}")
+                raise Stress(
+                    "unfolded", f"write_file_bytes needs bytes (or str), got {type_name(body)}"
+                )
             self.cap_check("write", "write", path)
             try:
                 with open(path, "wb") as f:
@@ -8349,12 +9360,22 @@ class Interp:
         # ---- process / net (capability-gated)
         if name == "run":
             prog = v_display(args[0]) if args else ""
-            pargs = [v_display(x) for x in args[1]] if len(args) > 1 and isinstance(args[1], list) else []
+            pargs = (
+                [v_display(x) for x in args[1]]
+                if len(args) > 1 and isinstance(args[1], list)
+                else []
+            )
             self.cap_check("run", "run", prog)
             import subprocess as _sp
+
             try:
                 cp = _sp.run([prog] + pargs, capture_output=True, text=True)
-                return {"code": cp.returncode, "stdout": cp.stdout, "stderr": cp.stderr, "ok": cp.returncode == 0}
+                return {
+                    "code": cp.returncode,
+                    "stdout": cp.stdout,
+                    "stderr": cp.stderr,
+                    "ok": cp.returncode == 0,
+                }
             except OSError as e:
                 raise Stress("missing", f"run '{prog}': {io_err(e)}")
         if name == "http_get":
@@ -8363,9 +9384,12 @@ class Interp:
             path = v_display(args[2]) if len(args) > 2 else "/"
             self.cap_check("net", "net", f"{host}:{port}")
             import socket as _s
+
             try:
                 s = _s.create_connection((host, port), timeout=10)
-                s.sendall(f"GET {path} HTTP/1.0\r\nHost: {host}\r\nUser-Agent: operon\r\n\r\n".encode())
+                s.sendall(
+                    f"GET {path} HTTP/1.0\r\nHost: {host}\r\nUser-Agent: operon\r\n\r\n".encode()
+                )
                 buf = b""
                 while True:
                     chunk = s.recv(65536)
@@ -8374,7 +9398,11 @@ class Interp:
                     buf += chunk
                 s.close()
                 pos = buf.find(b"\r\n\r\n")
-                return buf[pos + 4:].decode("utf-8", "replace") if pos >= 0 else buf.decode("utf-8", "replace")
+                return (
+                    buf[pos + 4 :].decode("utf-8", "replace")
+                    if pos >= 0
+                    else buf.decode("utf-8", "replace")
+                )
             except OSError as e:
                 raise Stress("missing", f"http_get '{host}:{port}': {io_err(e)}")
         if name in ("serve", "recv_request", "send_response"):
@@ -8395,12 +9423,14 @@ class Interp:
             # send_response mirror (rust interp.rs arm): header-safety check
             # FIRST, then the conn dispatch — with no server, the only
             # reachable outcome is 'server not running'.
-            conn = args[0] if args and isinstance(args[0], int) else 0
             status = v_display(args[1]) if len(args) > 1 else "200"
             ctype = v_display(args[2]) if len(args) > 2 else "text/html"
             body = v_display(args[3]) if len(args) > 3 else ""
             if any(ord(c) < 0x20 or c == "\x7f" for c in status + ctype):
-                raise Stress("interference", "send_response: status/content-type contain control characters (header injection refused)")
+                raise Stress(
+                    "interference",
+                    "send_response: status/content-type contain control characters (header injection refused)",
+                )
             raise Stress("missing", "send_response: server not running")
         # ---- json
         if name == "json_parse":
@@ -8458,6 +9488,7 @@ class Interp:
                 raise Stress("missing", "py: module name required")
             self.cap_check("py", "py", module)
             import importlib as _il
+
             try:
                 mod = _il.import_module(module)
                 obj = mod
@@ -8468,6 +9499,7 @@ class Interp:
                 return {"ok": True, "value": val, "error": None, "code": 0}
             except BaseException as e:
                 import traceback as _tb
+
                 msg = "".join(_tb.format_exception_only(type(e), e)).strip()
                 return {"ok": False, "value": None, "error": msg, "code": 1}
         if name == "call":
@@ -8521,12 +9553,17 @@ class Interp:
                             break
             else:
                 # identical key to the .sort() method, one ordering contract
-                out.sort(key=lambda x: (
-                    (0, float(x), "") if isinstance(x, (int, float)) and not isinstance(x, bool)
-                    else ((0, float(int(x)), "") if isinstance(x, bool)
-                          else ((1, 0.0, x) if isinstance(x, str)
-                                else (2, 0.0, v_repr(x))))
-                ))
+                out.sort(
+                    key=lambda x: (
+                        (0, float(x), "")
+                        if isinstance(x, (int, float)) and not isinstance(x, bool)
+                        else (
+                            (0, float(int(x)), "")
+                            if isinstance(x, bool)
+                            else ((1, 0.0, x) if isinstance(x, str) else (2, 0.0, v_repr(x)))
+                        )
+                    )
+                )
             return out
         if name == "reversed":
             v = args[0] if args else None
@@ -8634,7 +9671,7 @@ class Interp:
                 self.note(4, "chunk size must be positive; empty")
                 return []
             if isinstance(v, list):
-                return [v[i:i + n] for i in range(0, len(v), n)]
+                return [v[i : i + n] for i in range(0, len(v), n)]
             self.note(4, f"chunk of a {type_name(v)}; null")
             return None
         if name == "round":
@@ -8654,7 +9691,7 @@ class Interp:
             if isinstance(v, float):
                 if v != v or v in (float("inf"), float("-inf")):
                     return v
-                scale = 10.0 ** d
+                scale = 10.0**d
                 r = (abs(v) * scale + 0.5) // 1 / scale
                 r = r if v >= 0 else -r
                 if d == 0:
@@ -8669,9 +9706,14 @@ class Interp:
             lo = args[1] if len(args) > 1 else None
             hi = args[2] if len(args) > 2 else None
             nums = (int, float)
-            if not (isinstance(v, nums) and not isinstance(v, bool)
-                    and isinstance(lo, nums) and not isinstance(lo, bool)
-                    and isinstance(hi, nums) and not isinstance(hi, bool)):
+            if not (
+                isinstance(v, nums)
+                and not isinstance(v, bool)
+                and isinstance(lo, nums)
+                and not isinstance(lo, bool)
+                and isinstance(hi, nums)
+                and not isinstance(hi, bool)
+            ):
                 self.note(4, "clamp needs three numbers; null")
                 return None
             if v < lo:
@@ -8697,10 +9739,14 @@ class Interp:
             _seen = set()
         if _depth > 512:
             return "null"
-        if v is None: return "null"
-        if v is True: return "true"
-        if v is False: return "false"
-        if isinstance(v, int): return str(v)
+        if v is None:
+            return "null"
+        if v is True:
+            return "true"
+        if v is False:
+            return "false"
+        if isinstance(v, int):
+            return str(v)
         if isinstance(v, float):
             # RFC 8259 honesty (SPEC §10): JSON has no NaN/Inf, non-finite
             # floats serialize as null, exactly like the Rust json_stringify_g
@@ -8709,7 +9755,8 @@ class Interp:
             if v != v or v == float("inf") or v == float("-inf"):
                 return "null"
             return fmt_float(v)
-        if isinstance(v, str): return _json.dumps(v)
+        if isinstance(v, str):
+            return _json.dumps(v)
         # W029 mirror: JSON has no bytes type, the lossless view is the int
         # list (the Rust json_stringify_g Bytes arm).
         if isinstance(v, bytes):
@@ -8726,10 +9773,16 @@ class Interp:
                 # Rust json_stringify_g key law — container keys stringify
                 # via the display form, e.g. {"[1, 2]":5}), never Python str()
                 # (dict keys would render with Python quoting)
-                out = "{" + ",".join(
-                    _json.dumps(k if isinstance(k, str) else v_repr(k, _seen, _depth + 1))
-                    + ":" + Interp._json_str(val, _seen, _depth + 1)
-                    for k, val in _map_items(v)) + "}"
+                out = (
+                    "{"
+                    + ",".join(
+                        _json.dumps(k if isinstance(k, str) else v_repr(k, _seen, _depth + 1))
+                        + ":"
+                        + Interp._json_str(val, _seen, _depth + 1)
+                        for k, val in _map_items(v)
+                    )
+                    + "}"
+                )
             _seen.discard(marker)
             return out
         # W06 (D-014) mirror: variants serialize as single-key objects,
@@ -8741,7 +9794,9 @@ class Interp:
             if v.tag == "None":
                 return "null"
             key = {"Some": "some", "Ok": "ok", "Err": "err"}.get(v.tag, "none")
-            return "{" + _json.dumps(key) + ":" + Interp._json_str(v.payload, _seen, _depth + 1) + "}"
+            return (
+                "{" + _json.dumps(key) + ":" + Interp._json_str(v.payload, _seen, _depth + 1) + "}"
+            )
         return _json.dumps(v_display(v))
 
     def construct_obj(self, p, args, site_env=None):
@@ -8771,7 +9826,10 @@ class Interp:
                     continue
                 provided = any(g.name == req.name for dd in chain for g in dd.methods)
                 if not provided:
-                    self.note(4, f"phenotype '{p.name}' implements '{tname}' but does not provide '{req.name}()'")
+                    self.note(
+                        4,
+                        f"phenotype '{p.name}' implements '{tname}' but does not provide '{req.name}()'",
+                    )
         for dd in reversed(chain):
             for g in dd.methods:
                 if g.name == "init":
@@ -8806,7 +9864,7 @@ class Interp:
             if p == dep_name + ".op":
                 cands.append(os.path.join(dep_dir, p))
             elif p.startswith(seg):
-                cands.append(os.path.join(dep_dir, p[len(seg):]))
+                cands.append(os.path.join(dep_dir, p[len(seg) :]))
         resolved = next((c for c in cands if os.path.exists(c)), None)
         if resolved is None:
             # W025 stage 2: None = not found, distinct from an existing but
@@ -8821,7 +9879,9 @@ class Interp:
         canon_key = os.path.realpath(resolved)
         if canon_key in self.modules:
             return self.modules[canon_key]
-        src = open(resolved, encoding="utf-8", errors="replace").read()  # W59: explicit UTF-8 (Windows locale default is cp1252)
+        src = open(
+            resolved, encoding="utf-8", errors="replace"
+        ).read()  # W59: explicit UTF-8 (Windows locale default is cp1252)
         self.loading.append(path)
         stmts, notes, pubs = parse(src)
         for nt in notes:
@@ -8844,8 +9904,9 @@ class Interp:
         # W24 mirror: under .cell modules.visibility = strict, a module with
         # pub marks exports ONLY those names (anchors win when present); a
         # strict module with zero pub marks keeps default-open + a note.
-        has_anchor = any(s[0] == "anchor_export" for s in stmts) or \
-            any(s[0] == "tad" and any(x[0] == "anchor_export" for x in s[2]) for s in stmts)
+        has_anchor = any(s[0] == "anchor_export" for s in stmts) or any(
+            s[0] == "tad" and any(x[0] == "anchor_export" for x in s[2]) for s in stmts
+        )
         strict = str(self.cell.get("modules.visibility", "")).lower() == "strict"
         exports = {}
         if has_anchor:
@@ -8866,12 +9927,20 @@ class Interp:
                 v = self.lookup(menv, nm)
                 if v is not None or nm in menv:
                     exports[nm] = v
-            hidden = sum(1 for kk in menv if isinstance(kk, str) and not kk.startswith("#")) - len(exports)
+            hidden = sum(1 for kk in menv if isinstance(kk, str) and not kk.startswith("#")) - len(
+                exports
+            )
             if hidden > 0:
-                self.note(4, f"strict visibility: {hidden} private name(s) hidden in '{path}' (mark with pub or anchor export)")
+                self.note(
+                    4,
+                    f"strict visibility: {hidden} private name(s) hidden in '{path}' (mark with pub or anchor export)",
+                )
         else:
             if strict:
-                self.note(4, f"strict visibility: '{path}' has no pub marks, default-open retained (add pub or anchor export)")
+                self.note(
+                    4,
+                    f"strict visibility: '{path}' has no pub marks, default-open retained (add pub or anchor export)",
+                )
             for kk, vv in menv.items():
                 # W24 fix (latent): tuple keys are internal const markers,
                 # they are never exports (a module with `const` used to crash
@@ -8881,8 +9950,10 @@ class Interp:
         self.modules[canon_key] = exports
         return exports
 
+
 def collect_structure(stmts):
     proofs, frames, exports, tad_exports, tad_members, ires = [], [], [], [], [], []
+
     def walk(body):
         for s in body:
             if s[0] == "frame":
@@ -8914,22 +9985,32 @@ def collect_structure(stmts):
             elif s[0] == "splice":
                 for _, _vp, vb, _mk, _vl in s[2]:
                     walk(vb)
+
     walk(stmts)
     return proofs, frames, exports, tad_exports, tad_members, ires
+
 
 # ----------------------------------------------------------------------------
 # nmd + orf helpers (mirror of genes.rs)
 
+
 def nmd_sweep(stmts, called, enhanced):
     findings = []
+
     def scan_body(body):
         returned = False
         for s in body:
             if returned:
-                findings.append(("premature-stop", "statement after unconditional return (premature stop codon)"))
+                findings.append(
+                    (
+                        "premature-stop",
+                        "statement after unconditional return (premature stop codon)",
+                    )
+                )
             scan_inner(s)
             if s[0] == "return":
                 returned = True
+
     def scan_inner(s):
         k = s[0]
         if k == "gene":
@@ -8953,6 +10034,7 @@ def nmd_sweep(stmts, called, enhanced):
             scan_body(s[2])
             if s[3]:
                 scan_body(s[3][1])
+
     for s in stmts:
         scan_inner(s)
     for s in stmts:
@@ -8961,17 +10043,23 @@ def nmd_sweep(stmts, called, enhanced):
             if name in ("main",) or name in enhanced or name in called:
                 continue
             if not s[1].methylate:
-                findings.append(("untranslated", f"gene '{name}' defined but never translated (dead transcript)"))
+                findings.append(
+                    (
+                        "untranslated",
+                        f"gene '{name}' defined but never translated (dead transcript)",
+                    )
+                )
     return findings
+
 
 def find_orfs_python(dna):
     out = []
     i = 0
     while i + 2 < len(dna):
-        if dna[i:i+3] == "ATG":
+        if dna[i : i + 3] == "ATG":
             j, protein, stopped = i, [], False
             while j + 2 < len(dna):
-                c2 = dna[j:j+3]
+                c2 = dna[j : j + 3]
                 if c2 in ("TAA", "TAG", "TGA"):
                     stopped = True
                     break
@@ -8982,22 +10070,83 @@ def find_orfs_python(dna):
         i += 1
     return out
 
+
 def translate_codon(codon):
     T = {}
-    pairs = [("TTT","F"),("TTC","F"),("TTA","L"),("TTG","L"),("TCT","S"),("TCC","S"),("TCA","S"),("TCG","S"),
-             ("TAT","Y"),("TAC","Y"),("TAA","*"),("TAG","*"),("TGT","C"),("TGC","C"),("TGA","*"),("TGG","W"),
-             ("CTT","L"),("CTC","L"),("CTA","L"),("CTG","L"),("CCT","P"),("CCC","P"),("CCA","P"),("CCG","P"),
-             ("CAT","H"),("CAC","H"),("CAA","Q"),("CAG","Q"),("CGT","R"),("CGC","R"),("CGA","R"),("CGG","R"),
-             ("ATT","I"),("ATC","I"),("ATA","I"),("ATG","M"),("ACT","T"),("ACC","T"),("ACA","T"),("ACG","T"),
-             ("AAT","N"),("AAC","N"),("AAA","K"),("AAG","K"),("AGT","S"),("AGC","S"),("AGA","R"),("AGG","R"),
-             ("GTT","V"),("GTC","V"),("GTA","V"),("GTG","V"),("GCT","A"),("GCC","A"),("GCA","A"),("GCG","A"),
-             ("GAT","D"),("GAC","D"),("GAA","E"),("GAG","E"),("GGT","G"),("GGC","G"),("GGA","G"),("GGG","G")]
+    pairs = [
+        ("TTT", "F"),
+        ("TTC", "F"),
+        ("TTA", "L"),
+        ("TTG", "L"),
+        ("TCT", "S"),
+        ("TCC", "S"),
+        ("TCA", "S"),
+        ("TCG", "S"),
+        ("TAT", "Y"),
+        ("TAC", "Y"),
+        ("TAA", "*"),
+        ("TAG", "*"),
+        ("TGT", "C"),
+        ("TGC", "C"),
+        ("TGA", "*"),
+        ("TGG", "W"),
+        ("CTT", "L"),
+        ("CTC", "L"),
+        ("CTA", "L"),
+        ("CTG", "L"),
+        ("CCT", "P"),
+        ("CCC", "P"),
+        ("CCA", "P"),
+        ("CCG", "P"),
+        ("CAT", "H"),
+        ("CAC", "H"),
+        ("CAA", "Q"),
+        ("CAG", "Q"),
+        ("CGT", "R"),
+        ("CGC", "R"),
+        ("CGA", "R"),
+        ("CGG", "R"),
+        ("ATT", "I"),
+        ("ATC", "I"),
+        ("ATA", "I"),
+        ("ATG", "M"),
+        ("ACT", "T"),
+        ("ACC", "T"),
+        ("ACA", "T"),
+        ("ACG", "T"),
+        ("AAT", "N"),
+        ("AAC", "N"),
+        ("AAA", "K"),
+        ("AAG", "K"),
+        ("AGT", "S"),
+        ("AGC", "S"),
+        ("AGA", "R"),
+        ("AGG", "R"),
+        ("GTT", "V"),
+        ("GTC", "V"),
+        ("GTA", "V"),
+        ("GTG", "V"),
+        ("GCT", "A"),
+        ("GCC", "A"),
+        ("GCA", "A"),
+        ("GCG", "A"),
+        ("GAT", "D"),
+        ("GAC", "D"),
+        ("GAA", "E"),
+        ("GAG", "E"),
+        ("GGT", "G"),
+        ("GGC", "G"),
+        ("GGA", "G"),
+        ("GGG", "G"),
+    ]
     for k, v in pairs:
         T[k] = v
     return T.get(codon, "X")
 
+
 # ----------------------------------------------------------------------------
 # load & run
+
 
 def parse_cell(src):
     out = {}
@@ -9014,6 +10163,7 @@ def parse_cell(src):
             kk = f"{section}.{k.strip()}" if section else k.strip()
             out[kk] = v.strip().strip('"')
     return out
+
 
 def apply_rna(src, patch_src, stem):
     applied = []
@@ -9042,6 +10192,7 @@ def apply_rna(src, patch_src, stem):
                         applied.append(f"{target}: '{frm}' -> '{to}'")
     return text, applied
 
+
 def load_file(path, cell=None, variant=None, rna=None, args=None, caps=None):
     src = open(path, encoding="utf-8", errors="replace").read()  # W59: explicit UTF-8
     stem = os.path.basename(path).rsplit(".", 1)[0]
@@ -9069,7 +10220,8 @@ def load_file(path, cell=None, variant=None, rna=None, args=None, caps=None):
                     rev = line.split("=", 1)[1].strip().strip('"')
                 if name and rev:
                     dd = os.environ.get("OPERON_DEPS") or os.path.join(
-                        os.path.expanduser("~"), ".operon", "deps")
+                        os.path.expanduser("~"), ".operon", "deps"
+                    )
                     it.lock_dirs.append((name, os.path.join(dd, "%s-%s" % (name, rev[:12]))))
                     name = rev = None
             break
@@ -9097,19 +10249,25 @@ def load_file(path, cell=None, variant=None, rna=None, args=None, caps=None):
     cell_explicit = cell is not None and isinstance(cell, dict)
     for k, v in list(it.cell.items()):
         if k.startswith("allow."):
-            rest = k[len("allow."):]
+            rest = k[len("allow.") :]
             if rest == "exit":
                 # sec-r2 (audit C-11): exit is a BOOLEAN capability
                 # (rust tools.rs: exit_allowed = (v == "true")), not a
                 # comma-separated grant list like the other six.
                 if not cell_explicit:
-                    it.note(1, f"cell key '{k}={v}' ignored: auto-detected operon.cell cannot grant capabilities (pass --cell explicitly)")
+                    it.note(
+                        1,
+                        f"cell key '{k}={v}' ignored: auto-detected operon.cell cannot grant capabilities (pass --cell explicitly)",
+                    )
                     continue
                 it.caps["exit"] = v == "true"
                 continue
             if rest in ("read", "write", "run", "net", "env", "py"):
                 if not cell_explicit:
-                    it.note(1, f"cell key '{k}={v}' ignored: auto-detected operon.cell cannot grant capabilities (pass --cell explicitly)")
+                    it.note(
+                        1,
+                        f"cell key '{k}={v}' ignored: auto-detected operon.cell cannot grant capabilities (pass --cell explicitly)",
+                    )
                     continue
                 # cell values may carry a comma-separated grant list (parity
                 # with the Rust runner's cell parsing)
@@ -9127,7 +10285,9 @@ def load_file(path, cell=None, variant=None, rna=None, args=None, caps=None):
         try:
             it.methyl_threshold = int(str(_mthr).strip())
         except ValueError:
-            it.note(4, f"cell key 'methylate.threshold = {_mthr}' ignored: needs a non-negative integer")
+            it.note(
+                4, f"cell key 'methylate.threshold = {_mthr}' ignored: needs a non-negative integer"
+            )
     # reg-bio (F-6): enhancer dose (default 0.25)
     _ed = it.cell.get("enhance.delta")
     if _ed is not None:
@@ -9161,8 +10321,12 @@ def load_file(path, cell=None, variant=None, rna=None, args=None, caps=None):
         except ValueError:
             it.note(4, f"cell key 'expression.seed = {_esd}' ignored: needs an integer")
     # reg-bio (F-5): repressilator kinetics, plasmid engineering surface
-    for _ck, _lo, _hi in (("repressi.alpha", None, None), ("repressi.gamma", None, None),
-                          ("repressi.basal", None, None), ("repressi.noise", None, None)):
+    for _ck, _lo, _hi in (
+        ("repressi.alpha", None, None),
+        ("repressi.gamma", None, None),
+        ("repressi.basal", None, None),
+        ("repressi.noise", None, None),
+    ):
         _cv = it.cell.get(_ck)
         if _cv is None:
             continue
@@ -9217,6 +10381,7 @@ def load_file(path, cell=None, variant=None, rna=None, args=None, caps=None):
     proofs, frames, exports, tad_exports, tad_members, ires = collect_structure(stmts)
     return it, stmts, proofs, frames
 
+
 def resolve_entry(it, stmts, entry=None, use_ires=False):
     if entry:
         return entry
@@ -9229,6 +10394,7 @@ def resolve_entry(it, stmts, entry=None, use_ires=False):
     if it.ires:
         return it.ires[0]
     return None
+
 
 def run(path, cell=None, variant=None, rna=None, entry=None, frame=None, args=None, caps=None):
     it, stmts, proofs, frames = load_file(path, cell, variant, rna, args, caps)
@@ -9267,6 +10433,7 @@ def run(path, cell=None, variant=None, rna=None, entry=None, frame=None, args=No
                 it.call_named(it.globals, e, [argv])
     return it
 
+
 def main():
     argv = sys.argv[1:]
     if not argv or argv[0] in ("-h", "--help"):
@@ -9280,29 +10447,74 @@ def main():
     while i < len(rest):
         a = rest[i]
         if a == "--cell":
-            i += 1; opts["cell"] = rest[i]
+            i += 1
+            opts["cell"] = rest[i]
         elif a == "--variant":
-            i += 1; opts["variant"] = rest[i]
+            i += 1
+            opts["variant"] = rest[i]
         elif a == "--rna":
-            i += 1; opts["rna"] = rest[i]
+            i += 1
+            opts["rna"] = rest[i]
         elif a == "--entry":
-            i += 1; opts["entry"] = rest[i]
+            i += 1
+            opts["entry"] = rest[i]
         elif a == "--frame":
-            i += 1; opts["frame"] = rest[i]
+            i += 1
+            opts["frame"] = rest[i]
         elif a == "--json":
             opts["json"] = True
-        elif a in ("--allow-read", "--allow-write", "--allow-run", "--allow-net", "--allow-env", "--allow-py"):
+        elif a in (
+            "--allow-read",
+            "--allow-write",
+            "--allow-run",
+            "--allow-net",
+            "--allow-env",
+            "--allow-py",
+        ):
             i += 1
             cap = a.replace("--allow-", "")
-            it_caps = opts.setdefault("caps", {"enabled": True, "read": [], "write": [], "run": [], "net": [], "env": [], "py": [], "exit": False})
+            it_caps = opts.setdefault(
+                "caps",
+                {
+                    "enabled": True,
+                    "read": [],
+                    "write": [],
+                    "run": [],
+                    "net": [],
+                    "env": [],
+                    "py": [],
+                    "exit": False,
+                },
+            )
             it_caps[cap].append(rest[i])
         elif a == "--allow-exit":
             # sec-r2 (audit C-11): exit() is a capability, default-deny
             # (S3: the coverage audit caught the missing flag mirror)
-            it_caps = opts.setdefault("caps", {"enabled": True, "read": [], "write": [], "run": [], "net": [], "env": [], "py": [], "exit": False})
+            it_caps = opts.setdefault(
+                "caps",
+                {
+                    "enabled": True,
+                    "read": [],
+                    "write": [],
+                    "run": [],
+                    "net": [],
+                    "env": [],
+                    "py": [],
+                    "exit": False,
+                },
+            )
             it_caps["exit"] = True
         elif a == "--allow-all":
-            opts["caps"] = {"enabled": False, "read": [], "write": [], "run": [], "net": [], "env": [], "py": [], "exit": False}
+            opts["caps"] = {
+                "enabled": False,
+                "read": [],
+                "write": [],
+                "run": [],
+                "net": [],
+                "env": [],
+                "py": [],
+                "exit": False,
+            }
         else:
             pos.append(a)
         i += 1
@@ -9322,10 +10534,24 @@ def main():
         # traceback here turned every would-be honest differential into an
         # anonymous crash wall (both sides non-zero, class rides through).
         try:
-            it = run(pos[0], cell_dict, opts["variant"], opts["rna"], opts["entry"], opts["frame"], pos[1:], caps=opts.get("caps"))
+            it = run(
+                pos[0],
+                cell_dict,
+                opts["variant"],
+                opts["rna"],
+                opts["entry"],
+                opts["frame"],
+                pos[1:],
+                caps=opts.get("caps"),
+            )
         except Stress as err:
-            code = {"missing": "E1002", "unfolded": "E1003", "unwrap": "E1004",
-                    "overflow": "E1020", "burned": "E1021"}.get(err.kind, "E1000")
+            code = {
+                "missing": "E1002",
+                "unfolded": "E1003",
+                "unwrap": "E1004",
+                "overflow": "E1020",
+                "burned": "E1021",
+            }.get(err.kind, "E1000")
             block = f"error[{code}]: {err.message}\n"
             if err.chain:
                 block += "\n"
@@ -9422,14 +10648,18 @@ def main():
                     it.exec_block(it.new_scope(it.globals), pf)
                 except (Return, BreakLoop, ContinueLoop):
                     failed += 1
-                    failures.append(f"{f} proof #{pi+1}: exited early (return/break inside proof)")
+                    failures.append(
+                        f"{f} proof #{pi + 1}: exited early (return/break inside proof)"
+                    )
                     continue
                 except Stress as st:
                     failed += 1
                     # W06 (D-014) mirror: propagation abandoning a proof frame
                     # is a failure (the frame did not complete).
                     if st.prop is not None:
-                        failures.append(f"{f}: propagation left the proof frame ({v_repr(st.prop)})")
+                        failures.append(
+                            f"{f}: propagation left the proof frame ({v_repr(st.prop)})"
+                        )
                     else:
                         failures.append(f"{f}: [{st.kind}] {st.message}")
                 except Exception as ex:
@@ -9438,10 +10668,14 @@ def main():
                 else:
                     if it.asserts_run == asserts_before:
                         failed += 1
-                        failures.append(f"{f} proof #{pi+1}: no assertion exercised (vacuous proof)")
+                        failures.append(
+                            f"{f} proof #{pi + 1}: no assertion exercised (vacuous proof)"
+                        )
                     else:
                         passed += 1
-        print(f"operon test, {files_t} file(s), {proofs} proof(s): {passed} passed, {failed} failed")
+        print(
+            f"operon test, {files_t} file(s), {proofs} proof(s): {passed} passed, {failed} failed"
+        )
         for f in failures:
             print(f"  FAIL {f}", file=sys.stderr)
         if failed:
@@ -9449,12 +10683,25 @@ def main():
     elif cmd == "check":
         src = open(pos[0], encoding="utf-8", errors="replace").read()  # W59: explicit UTF-8
         stmts, notes, _ = parse(src)
-        score = 100 - sum(1 if n.rung == 2 else (2 if n.rung == 3 else (3 if n.rung == 4 else 0)) for n in notes)
-        letter = "A" if score >= 90 else "B" if score >= 80 else "C" if score >= 70 else "D" if score >= 60 else "F"
+        score = 100 - sum(
+            1 if n.rung == 2 else (2 if n.rung == 3 else (3 if n.rung == 4 else 0)) for n in notes
+        )
+        letter = (
+            "A"
+            if score >= 90
+            else "B"
+            if score >= 80
+            else "C"
+            if score >= 70
+            else "D"
+            if score >= 60
+            else "F"
+        )
         print(f"operon check: {pos[0]}, score {max(score, 50)}/100 (grade {letter})")
     else:
         print("oracle supports: run | test | check | version", file=sys.stderr)
         sys.exit(2)
+
 
 if __name__ == "__main__":
     # deep recursion support: run on a worker thread with a large stack and a
@@ -9494,6 +10741,7 @@ if __name__ == "__main__":
             _rc["code"] = _e.code if isinstance(_e.code, int) else (0 if _e.code is None else 1)
         except BaseException:
             import traceback
+
             traceback.print_exc()
             _rc["code"] = 1
 

@@ -16,6 +16,7 @@ Usage:
   python3 superbench.py --phase both --json out.json
   python3 superbench.py --only num_int_add,ctl_fib
 """
+
 import argparse
 import json
 import math

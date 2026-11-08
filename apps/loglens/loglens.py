@@ -178,8 +178,8 @@ def cmd_table(text, path, n):
     head = ["host", "url", "status", "bytes"]
     shown = [[r[0], r[1], r[2], str(r[3])] for r in recs[:n]]
     lines = render_table(head, shown)
-    for l in lines:
-        print(l)
+    for ln in lines:
+        print(ln)
 
 
 def dashes(widths):

@@ -48,7 +48,8 @@ def build_rust():
         return False
     p = subprocess.run(
         [RUSTC, "-O", os.path.join(APP, "loglens.rs"), "-o", RS_BIN],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     if p.returncode != 0:
         sys.stderr.write(p.stderr[:2000])
@@ -59,7 +60,7 @@ def build_rust():
 WORKLOADS = [
     # (name, argv-tail, runs) — argv passed after `--` to operon, verbatim
     # to python/node/rust
-    ("startup", None, 15),                      # usage() print, no file work
+    ("startup", None, 15),  # usage() print, no file work
     ("stats_big", ["stats", BIG], 7),
     ("top_url_big", ["top", BIG, "url", "8"], 7),
     ("top_status_big", ["top", BIG, "status", "8"], 7),
@@ -73,9 +74,17 @@ RUNS_FILE = os.path.join(HERE, "results_v1.json")
 
 def eng_cmd(engine, tail):
     if engine == "operon":
-        cmd = [OPERON, "run", os.path.join(APP, "loglens.op"), "--cell",
-               os.path.join(APP, "loglens.cell"), "--allow-read", ROOT,
-               "--fuel", "20000000000"]
+        cmd = [
+            OPERON,
+            "run",
+            os.path.join(APP, "loglens.op"),
+            "--cell",
+            os.path.join(APP, "loglens.cell"),
+            "--allow-read",
+            ROOT,
+            "--fuel",
+            "20000000000",
+        ]
         if tail:
             cmd += ["--"] + tail
         return cmd
@@ -119,8 +128,7 @@ def bench_engine(engine, tail, runs):
 
 def main():
     rust_ok = build_rust()
-    engines = ["operon", "python"] + (["node"] if NODE else []) + \
-              (["rust"] if rust_ok else [])
+    engines = ["operon", "python"] + (["node"] if NODE else []) + (["rust"] if rust_ok else [])
     meta = {
         "cpu": os.uname().machine,
         "kernel": os.uname().release,
@@ -130,14 +138,22 @@ def main():
         "fixture_small": SMALL,
         "engines": engines,
         "versions": {
-            "operon": subprocess.run([OPERON, "version"], capture_output=True,
-                                     text=True).stdout.splitlines()[0],
-            "python": subprocess.run([PYTHON, "--version"], capture_output=True,
-                                     text=True).stdout.strip(),
-            "node": subprocess.run([NODE, "--version"], capture_output=True,
-                                   text=True).stdout.strip() if NODE else None,
-            "rust": subprocess.run([RUSTC, "--version"], capture_output=True,
-                                   text=True).stdout.strip() if rust_ok else None,
+            "operon": subprocess.run(
+                [OPERON, "version"], capture_output=True, text=True
+            ).stdout.splitlines()[0],
+            "python": subprocess.run(
+                [PYTHON, "--version"], capture_output=True, text=True
+            ).stdout.strip(),
+            "node": subprocess.run(
+                [NODE, "--version"], capture_output=True, text=True
+            ).stdout.strip()
+            if NODE
+            else None,
+            "rust": subprocess.run(
+                [RUSTC, "--version"], capture_output=True, text=True
+            ).stdout.strip()
+            if rust_ok
+            else None,
         },
     }
     out = {"meta": meta, "workloads": {}}
@@ -146,8 +162,7 @@ def main():
         row = {}
         for eng in engines:
             row[eng] = bench_engine(eng, tail, runs)
-        cks = {eng: row[eng].get("cs") for eng in engines
-               if row[eng].get("status") == "ok"}
+        cks = {eng: row[eng].get("cs") for eng in engines if row[eng].get("status") == "ok"}
         row["cs_identical"] = len(set(cks.values())) == 1 and len(cks) == len(engines)
         if not row["cs_identical"]:
             bad.append(wname)
@@ -157,9 +172,7 @@ def main():
             if m and base:
                 row[f"ratio_{eng}_over_op"] = round(m / base, 2)
         out["workloads"][wname] = row
-        pretty = " | ".join(
-            f"{eng} {row[eng].get('median_ms')} ms" for eng in engines
-        )
+        pretty = " | ".join(f"{eng} {row[eng].get('median_ms')} ms" for eng in engines)
         print(f"{wname}: {pretty} | cs_identical={row['cs_identical']}")
 
     with open(RUNS_FILE, "w") as f:

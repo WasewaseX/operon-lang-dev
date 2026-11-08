@@ -1,0 +1,15 @@
+# Default zizmor policy for consumers of Master CI.
+#
+# The hygiene job copies this to .github/zizmor.yml when your repository
+# does not have one (delete it or commit your own to override). It keeps
+# the strong default - every `uses:` must be pinned to a commit SHA - and
+# carves out exactly one exception: calling the Master CI reusable
+# workflows by release tag, which is the documented consumer setup in
+# examples/ci.yml. Forks publishing their own template should add their
+# own slug with ref-pin next to it.
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        "WasewaseX/master-ci/*": ref-pin
+        "*": hash-pin
