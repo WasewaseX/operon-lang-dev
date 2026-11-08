@@ -196,7 +196,8 @@ pub fn parse(src: &str) -> Program {
         .map(|(_, l)| *l)
         .unwrap_or(1);
     // Z-111-PARSERTHREAD: the recursive descent runs on a dedicated
-    // 1 GiB thread. The 4096-frame budget's worst case needs ~2.9 MiB
+    // thread with a profile-conditional reservation (64 MiB release /
+    // 512 MiB debug). The 4096-frame budget's worst case needs ~2.9 MiB
     // of stack in release but 3-4 physical frames per level at ~40-64 KiB
     // each in debug builds (up to ~1 GiB at full budget depth), and
     // embedders call parse() on host threads as
@@ -209,9 +210,21 @@ pub fn parse(src: &str) -> Program {
     // descent moves into the thread with zero copying; the AST and the
     // note trail cross back through the scope, and a parser panic still
     // propagates to the caller via join -> resume_unwind.
+    // Profile-conditional reservation: release needs ~14 MiB at full
+    // budget depth (5 physical frames x ~0.7 KiB x 4096), so 64 MiB keeps
+    // >4x headroom with a cheap mmap (the 1 GiB reservation measurably
+    // cost ~5 ms end-to-end via THP setup on the perf-gate strings
+    // workload). Debug builds spend 3-5 frames x 40-128 KiB per level;
+    // the corpus pins that need deep debug descents are containment-skipped
+    // (tests/fix_corpus.rs), so 512 MiB carries everything debug runs.
+    let stack_bytes: usize = if cfg!(debug_assertions) {
+        512 * 1024 * 1024
+    } else {
+        64 * 1024 * 1024
+    };
     let (stmts, mut parser_notes, module_doc, pub_names) = std::thread::scope(|s| {
         std::thread::Builder::new()
-            .stack_size(1024 * 1024 * 1024)
+            .stack_size(stack_bytes)
             .name("operon-parser".to_string())
             .spawn_scoped(s, move || {
                 let mut p = Parser {
