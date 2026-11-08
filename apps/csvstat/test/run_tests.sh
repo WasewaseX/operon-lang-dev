@@ -40,7 +40,7 @@ expect_eq "table line1" "| 2028     | north  | beta    | 8   | 3782       | ok  
 
 # ---- failure paths ----
 bash "$HERE/../csvstat.sh" stats /nonexistent/file.csv > /dev/null 2>&1; rc=$?
-[ $rc -ne 0 ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL: missing file must exit nonzero"; }
+if [ "$rc" -ne 0 ]; then pass=$((pass+1)); else fail=$((fail+1)); echo "FAIL: missing file must exit nonzero"; fi
 out="$(bash "$HERE/../csvstat.sh" stats /nonexistent/file.csv 2>/dev/null)"
 expect_eq "missing file message" "csvstat: cannot read /nonexistent/file.csv" "$out"
 out="$(bash "$HERE/../csvstat.sh" 2>/dev/null)"
@@ -50,8 +50,8 @@ expect_eq "unknown subcommand = usage" "usage: csvstat info FILE" "$(printf '%s\
 
 # ---- cross-language byte identity (the app-level differential) ----
 for w in "stats" "info" "table" "table 7"; do
-  bash "$HERE/../csvstat.sh" $w "$BIG" > /tmp/csvstat_op_big.txt 2>/dev/null
-  python3 "$HERE/../csvstat.py" $w "$BIG" > /tmp/csvstat_py_big.txt
+  bash "$HERE/../csvstat.sh" "$w" "$BIG" > /tmp/csvstat_op_big.txt 2>/dev/null
+  python3 "$HERE/../csvstat.py" "$w" "$BIG" > /tmp/csvstat_py_big.txt
   if cmp -s /tmp/csvstat_op_big.txt /tmp/csvstat_py_big.txt; then
     pass=$((pass+1))
   else
@@ -59,8 +59,8 @@ for w in "stats" "info" "table" "table 7"; do
   fi
 done
 for w in "stats" "info" "top product 3" "top note 10" "table" "table 3"; do
-  bash "$HERE/../csvstat.sh" $w "$SMALL" > /tmp/csvstat_op_small.txt 2>/dev/null
-  python3 "$HERE/../csvstat.py" $w "$SMALL" > /tmp/csvstat_py_small.txt
+  bash "$HERE/../csvstat.sh" "$w" "$SMALL" > /tmp/csvstat_op_small.txt 2>/dev/null
+  python3 "$HERE/../csvstat.py" "$w" "$SMALL" > /tmp/csvstat_py_small.txt
   if cmp -s /tmp/csvstat_op_small.txt /tmp/csvstat_py_small.txt; then
     pass=$((pass+1))
   else

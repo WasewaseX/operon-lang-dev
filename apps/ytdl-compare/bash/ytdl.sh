@@ -134,7 +134,7 @@ cmd_queue() {
     cmd_get "$line" --out "$OUT" --quality "$QUALITY" ${AUDIO:+--audio "$AUDIO"} \
       ${FMT:+--format "$FMT"} --max-attempts "$MAXA" >/dev/null 2>&1
     rc=$?
-    if [ "$rc" = 0 ]; then echo "ok\t1\t$line"; else echo "FAIL\t$MAXA\t$line"; failures=$((failures+1)); fi
+    if [ "$rc" = 0 ]; then printf 'ok\t1\t%s\n' "$line"; else printf 'FAIL\t%s\t%s\n' "$MAXA" "$line"; failures=$((failures+1)); fi
   done < "$file"
   echo "queue: $total items, $failures failed (workers: 1 — bash has no safe concurrency here)"
   [ "$failures" -gt 0 ] && exit 1

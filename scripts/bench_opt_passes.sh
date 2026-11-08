@@ -41,6 +41,8 @@ for w in "${WORKLOADS[@]}"; do
     best=""
     for _ in $(seq 1 "$RUNS"); do
       t0=$(date +%s%N)
+      # deliberate split: the pass list is a flag set
+      # shellcheck disable=SC2086
       out=$("$BIN" run "$w" $flags 2>/dev/null); rc=$?
       t1=$(date +%s%N)
       ms=$(( (t1 - t0) / 1000000 ))

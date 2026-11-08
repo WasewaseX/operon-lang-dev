@@ -10,6 +10,10 @@ on:
     # to dodge runner congestion. The fuzz-nightly job gates on this event.
     - cron: "17 3 * * *"
 
+# least privilege: nothing in this workflow writes to the repo
+permissions:
+  contents: read
+
 jobs:
   linux:
     runs-on: ubuntu-latest
@@ -48,7 +52,12 @@ jobs:
         run: python3 bootstrap/oracle.py test tests/
       - name: LSP seed smoke (operon-ls stdio session)
         run: python3 tests/lsp_smoke.py
-      - name: DAP re-entrancy pin (Z-121 — a debug evaluate must never re-enter the trap mid-request; the pre-fix bug re-armed the pending step inside the evaluated call and deferred the response behind a nested serve_at_trap forever. Wired here per the #196 lesson: a pin no workflow executes is the rot class)
+      # Z-121 — a debug evaluate must never re-enter the trap mid-request;
+      # the pre-fix bug re-armed the pending step inside the evaluated call
+      # and deferred the response behind a nested serve_at_trap forever.
+      # Wired here per the #196 lesson: a pin no workflow executes is the
+      # rot class.
+      - name: DAP re-entrancy pin
         run: python3 tests/dap_reentry_e2e.py
       - name: Playground smoke
         run: node web/playground/smoke.js

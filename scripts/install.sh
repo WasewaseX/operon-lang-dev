@@ -81,7 +81,7 @@ fi
 # asset 404'd, which is exactly the downgrade/substitution hole curl|sh
 # must never have.
 if [ "$(uname -s)" = "Darwin" ]; then SHASUM="shasum -a 256"; else SHASUM="sha256sum"; fi
-if ! command -v ${SHASUM%% *} >/dev/null 2>&1; then
+if ! command -v "${SHASUM%% *}" >/dev/null 2>&1; then
   echo "error: no checksum tool found; refusing to install unverified" >&2
   exit 1
 fi
@@ -94,8 +94,12 @@ else
     exit 1
   fi
 fi
-(cd "$TMP" && $SHASUM -c "$ASSET.sha256" >/dev/null) && echo "==> checksum ok" \
-  || { echo "error: checksum mismatch; refusing to install" >&2; exit 1; }
+if (cd "$TMP" && $SHASUM -c "$ASSET.sha256" >/dev/null); then
+  echo "==> checksum ok"
+else
+  echo "error: checksum mismatch; refusing to install" >&2
+  exit 1
+fi
 
 # B1-U3 (supply chain): SHA256SUMS manifest cross-check. The release
 # workflow's sha256sums job publishes a SHA256SUMS file next to the release
@@ -119,7 +123,7 @@ if [ "$SUMS_GOT" = "1" ]; then
   WANT=$(tr -s ' \t' ' ' < "$TMP/SHA256SUMS" | while IFS=' ' read -r h n; do
     [ "$n" = "$ASSET" ] && printf '%s\n' "$h"
   done | head -n1)
-  WANT=$(printf '%s' "$WANT" | tr 'A-Z' 'a-z')
+  WANT=$(printf '%s' "$WANT" | tr '[:upper:]' '[:lower:]')
   GOT=$($SHASUM "$TMP/$ASSET" | cut -d' ' -f1)
   if [ -z "$WANT" ]; then
     if [ "$INSTALL_MODE" = "verify" ]; then

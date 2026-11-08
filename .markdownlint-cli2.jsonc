@@ -1,0 +1,38 @@
+{
+  // Vendored from master-ci v1.16.0 (configs/.markdownlint-cli2.jsonc) with
+  // operon house overrides. Content-integrity rules (tables, emphasis,
+  // headings, trailing spaces) stay ON and are fixed for real; the
+  // disabled entries below are STYLE conventions of this documentation
+  // set, each deliberate:
+  // - MD022/MD032: compact heading/list spacing inside bullet-nested
+  //   spec sections (the SPEC nests tables and lists under bullets)
+  // - MD004: bullet glyphs vary between guides on purpose
+  // - MD040: `.op` code fences render as plain blocks by design
+  // - MD025: docs with badge rows and lead-in H1 paragraphs
+  // - MD014: examples deliberately SHOW the command output after the prompt
+  // - MD026: headings may end with ':' / '?' where the spec asks a question
+  // - MD055: list-nested tables use the indented pipe style
+  // - .github/collab/ is the multi-agent coordination ledger (keeper-synced
+  //   mirror); its table cells deliberately contain pipes in path lists
+  "config": {
+    "MD007": { "indent": 2 },
+    "MD012": { "maximum": 3 },
+    "MD013": false,
+    "MD022": false,
+    "MD024": { "siblings_only": true },
+    "MD026": false,
+    "MD029": false,
+    "MD032": false,
+    "MD004": false,
+    "MD014": false,
+    "MD025": false,
+    "MD040": false,
+    "MD055": false,
+    "MD033": false,
+    "MD036": false,
+    "MD041": false,
+    "MD060": false
+  },
+  "globs": ["**/*.md"],
+  "ignores": ["**/node_modules/**", "**/_ci/**", "**/dist/**", "**/build/**", "**/.github/collab/**"]
+}

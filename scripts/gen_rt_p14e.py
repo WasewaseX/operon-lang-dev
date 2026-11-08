@@ -13,6 +13,7 @@ O(N) queue update per call must stay inside the fuel/note contract
   c1498 strength 0.5  -> stochastic nakedness at distance 1 (q = 0.5)
 queue_cap = 0.0 keeps every cistron unshielded so terminations can happen.
 """
+
 N = 1500
 out = []
 out.append("# reg-bio-4 loop-10 (F-9): megacistron + Rho termination - adversarial")

@@ -24,6 +24,7 @@ Run:  python3 scripts/bench/bars_check.py
       python3 scripts/bench/bars_check.py --print
       python3 scripts/bench/bars_check.py --self-test
 """
+
 import argparse
 import hashlib
 import json
@@ -51,20 +52,34 @@ def expected_rows(data):
     """The rows BARS.md must carry, derived from the JSON."""
     suites = []
     for name, r in data["suites"].items():
-        barc = "refused" if r.get("barc", {}).get("refused") \
-            else (f"{r['barc']['min']*1000:.1f}" if "barc" in r else "-")
-        suites.append("| {} | {} | {} | {} | {} | {}x | {} |".format(
-            name, f"{r['head']['min']*1000:.1f}", f"{r['bara']['min']*1000:.1f}",
-            f"{r['barb']['min']*1000:.1f}", barc,
-            f"{r['head']['min']/r['barb']['min']:.1f}",
-            f"{r['head']['min']/r['bara']['min']:.2f}"))
+        barc = (
+            "refused"
+            if r.get("barc", {}).get("refused")
+            else (f"{r['barc']['min'] * 1000:.1f}" if "barc" in r else "-")
+        )
+        suites.append(
+            "| {} | {} | {} | {} | {} | {}x | {} |".format(
+                name,
+                f"{r['head']['min'] * 1000:.1f}",
+                f"{r['bara']['min'] * 1000:.1f}",
+                f"{r['barb']['min'] * 1000:.1f}",
+                barc,
+                f"{r['head']['min'] / r['barb']['min']:.1f}",
+                f"{r['head']['min'] / r['bara']['min']:.2f}",
+            )
+        )
     scaling = []
     for name, s in data["scaling"].items():
         if name in NO_SCALE:
             continue
-        scaling.append("| {} | {} | {} | {} |".format(
-            name, f"{s['head']['ratio']:.2f}", f"{s['bara']['ratio']:.2f}",
-            f"{s['barc']['ratio']:.2f}" if s.get("barc") else "-"))
+        scaling.append(
+            "| {} | {} | {} | {} |".format(
+                name,
+                f"{s['head']['ratio']:.2f}",
+                f"{s['bara']['ratio']:.2f}",
+                f"{s['barc']['ratio']:.2f}" if s.get("barc") else "-",
+            )
+        )
     return suites, scaling
 
 
@@ -100,31 +115,33 @@ def check(fail):
     for row in exp_suites:
         name = row.split("|")[1].strip()
         if got_suites.get(name) != [c.strip() for c in row.split("|")[2:-1]]:
-            fail(f"suite row drift for {name}:\n  doc: {got_suites.get(name)}\n"
-                 f"  json: {row}")
+            fail(f"suite row drift for {name}:\n  doc: {got_suites.get(name)}\n  json: {row}")
     for row in exp_scaling:
         name = row.split("|")[1].strip()
         if got_scaling.get(name) != [c.strip() for c in row.split("|")[2:-1]]:
-            fail(f"scaling row drift for {name}:\n  doc: {got_scaling.get(name)}\n"
-                 f"  json: {row}")
+            fail(f"scaling row drift for {name}:\n  doc: {got_scaling.get(name)}\n  json: {row}")
 
     # 2. pins
     for label, want in (
-            ("HEAD pin", data["meta"]["head"]["source"]),
-            ("Bar A pin", data["meta"]["bara"].get("source", "")),
-            ("Bar A tarball sha256", data["meta"]["bara"].get("tarball_sha256", ""))):
+        ("HEAD pin", data["meta"]["head"]["source"]),
+        ("Bar A pin", data["meta"]["bara"].get("source", "")),
+        ("Bar A tarball sha256", data["meta"]["bara"].get("tarball_sha256", "")),
+    ):
         if want and want not in doc:
             fail(f"{label} `{want}` not pinned in BARS.md")
     tarball = data["meta"]["bara"].get("asset")
     tar_sha = data["meta"]["bara"].get("tarball_sha256")
-    cache = os.path.join(os.environ.get("OPERON_BARS_CACHE", "/tmp/operon-bars-cache"),
-                         tarball or "")
+    cache = os.path.join(
+        os.environ.get("OPERON_BARS_CACHE", "/tmp/operon-bars-cache"), tarball or ""
+    )
     sums = os.path.join(os.path.dirname(cache), "SHA256SUMS")
     if tarball and os.path.exists(cache) and os.path.exists(sums):
-        line = [l.split()[0] for l in open(sums) if l.split()[1:2] == [tarball]]
+        line = [ln.split()[0] for ln in open(sums) if ln.split()[1:2] == [tarball]]
         if line and line[0] != tar_sha:
-            fail(f"cached tarball sha256 {sha256(cache)} != release SHA256SUMS "
-                 f"{line[0]} — the Bar A chain is broken")
+            fail(
+                f"cached tarball sha256 {sha256(cache)} != release SHA256SUMS "
+                f"{line[0]} — the Bar A chain is broken"
+            )
 
     # 3. refusals agree
     for name in REFUSALS:
@@ -135,8 +152,12 @@ def check(fail):
             fail(f"refusal mismatch on {name}: doc={bool(doc_refused)} json={json_refused}")
 
     # 4. recipe paths exist
-    for p in ("scripts/bench/bars.py", "scripts/bench/bars_check.py",
-              "docs/perf/bars.json", "scripts/build.sh"):
+    for p in (
+        "scripts/bench/bars.py",
+        "scripts/bench/bars_check.py",
+        "docs/perf/bars.json",
+        "scripts/build.sh",
+    ):
         if not os.path.exists(os.path.join(ROOT, p)):
             fail(f"recipe path missing: {p}")
     for name in data["suites"]:
@@ -164,7 +185,9 @@ def main():
     fails = []
     if args.self_test:
         # mutate the JSON copy -> the checker must notice
-        import shutil, tempfile
+        import shutil
+        import tempfile
+
         tmp = tempfile.mkdtemp()
         shutil.copy(DOC, tmp)
         data = json.load(open(JSN))
@@ -175,8 +198,9 @@ def main():
         globals()["JSN"] = bad
         check(lambda msg: fails.append(msg))
         globals()["JSN"] = orig
-        print("self-test:", "PASS (drift caught)" if fails else
-              "FAIL (checker missed the mutation)")
+        print(
+            "self-test:", "PASS (drift caught)" if fails else "FAIL (checker missed the mutation)"
+        )
         sys.exit(0 if fails else 1)
 
     check(lambda msg: fails.append(msg))
@@ -185,8 +209,10 @@ def main():
         for f in fails:
             print(" -", f)
         sys.exit(1)
-    print("bars_check: OK — every BARS.md number re-derives from bars.json, "
-          "pins intact, refusals agree, recipe paths exist")
+    print(
+        "bars_check: OK — every BARS.md number re-derives from bars.json, "
+        "pins intact, refusals agree, recipe paths exist"
+    )
 
 
 if __name__ == "__main__":

@@ -1,0 +1,56 @@
+# Quality gates via WasewaseX/master-ci v1.16.0.
+#
+# Install receipt (builder-A, 2026-11-08):
+# - Profile `standard`: every deterministic content defect BLOCKS
+#   (ai-integrity blocking score cap 8), OSV/duplication/complexity are
+#   enforced, and the repo passes the AI-integrity gate with its defaults
+#   (blocking 0, deficit 21 <= ceiling 30). The `strict` preset's
+#   structural budgets (--enforce-bloat) and the 20-point deficit ceiling
+#   are unattainable for a ~350k-line hand-written recursive-descent core
+#   without blinding the scan entirely; the repo-side
+#   `.ai-integrity-ignore` scopes the fixture class with written reasons
+#   instead, which keeps the sharp end of the gate real.
+# - Trivy stays advisory here (standard profile); gitleaks + osv-scanner +
+#   cargo-deny carry the security floor and are enforced.
+# - Vendored configs pin every tool contract in-repo: ruff.toml, mypy.ini,
+#   deny.toml, .yamllint.yaml, .markdownlint-cli2.jsonc, .editorconfig,
+#   .semgrepignore, .gitleaks.toml, .shellcheckrc, .ai-integrity-ignore,
+#   .github/zizmor.yml.
+# - Supply chain: workflow refs SHA-pinned to the v1.16.0 commit (house
+#   D-6 convention); template_ref pinned to the same release. Dependabot
+#   keeps both current (.github/dependabot.yml).
+
+name: Quality Gates (master-ci)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  master:
+    uses: WasewaseX/master-ci/.github/workflows/master-ci.yml@fc691546b0015d9b8e1c5885dc4ed08e59fba17e # v1.16.0 (SHA-pinned, D-6)
+    with:
+      profile: standard
+      template_repo: WasewaseX/master-ci
+      template_ref: v1.16.0
+      # Stack scoping: the repo carries no Node project (editors/vscode is
+      # a manifest-only package; web/playground is plain JS audited by the
+      # detector + editorconfig) and no Go/JVM/C++/.NET/Ruby/PHP/Docker
+      # trees, so those stacks are deselected rather than left to fire on
+      # manifests. Everything else runs; typo-proof (meta fails on unknown
+      # names).
+      select: hygiene,secrets,ai-integrity,docs,python,rust,security,deps-review,scorecard
+    permissions:
+      contents: read
+      security-events: write
+      pull-requests: write
+      id-token: write
+
+  codeql:
+    uses: WasewaseX/master-ci/.github/workflows/codeql.yml@fc691546b0015d9b8e1c5885dc4ed08e59fba17e # v1.16.0 (SHA-pinned, D-6)
+    with:
+      languages: rust,python
+    permissions:
+      contents: read
+      security-events: write

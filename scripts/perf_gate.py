@@ -19,6 +19,7 @@ Exit codes: 0 = within threshold, 1 = regression, 2 = usage/data error.
 Usage:
   python3 scripts/perf_gate.py base.json head.json [--threshold 20] [--noise 5]
 """
+
 import argparse
 import json
 import sys
@@ -65,7 +66,10 @@ def main():
     base = load_rows(args.base)
     head = load_rows(args.head)
     if not base or not head:
-        print(f"perf_gate: could not parse workload rows from {args.base} / {args.head}", file=sys.stderr)
+        print(
+            f"perf_gate: could not parse workload rows from {args.base} / {args.head}",
+            file=sys.stderr,
+        )
         return 2
 
     common = sorted(set(base) & set(head))
@@ -73,7 +77,9 @@ def main():
         print("perf_gate: no common workloads between base and head", file=sys.stderr)
         return 2
 
-    print(f"perf_gate: threshold {args.threshold:.0f}%  noise band ±{args.noise:.0f}%  ({len(common)} workloads)")
+    print(
+        f"perf_gate: threshold {args.threshold:.0f}%  noise band ±{args.noise:.0f}%  ({len(common)} workloads)"
+    )
     overrides = {n: NOISY_THRESHOLDS[n] for n in common if n in NOISY_THRESHOLDS}
     if overrides:
         ov = ", ".join(f"{n}@{t:.0f}%" for n, t in sorted(overrides.items()))

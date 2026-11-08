@@ -5,8 +5,8 @@ cd "$(dirname "$0")/.."
 count() { # language, find-expr
   local lang="$1"; shift
   local files lines
-  files=$(find "$@" -type f 2>/dev/null | grep -v '^\./\.git' | wc -l)
-  lines=$(find "$@" -type f 2>/dev/null | xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}')
+  files=$(find "$@" -type f 2>/dev/null | grep -cv '^\./\.git')
+  lines=$(find "$@" -type f -exec wc -l {} + 2>/dev/null | tail -1 | awk '{print $1}')
   [ "${lines:-0}" -gt 0 ] && printf "%-12s %8s %8s\n" "$lang" "$lines" "$files"
 }
 printf "%-12s %8s %8s\n" "language" "lines" "files"
@@ -25,4 +25,4 @@ count Operon3 examples -name '*.op'
 count Operon4 apps -name '*.op'
 count Operon5 tools -name '*.op'
 echo "---"
-echo "total Operon (.op) lines: $(find std tests examples apps tools -name '*.op' 2>/dev/null | xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}')"
+echo "total Operon (.op) lines: $(find std tests examples apps tools -name '*.op' -exec wc -l {} + 2>/dev/null | tail -1 | awk '{print $1}')"

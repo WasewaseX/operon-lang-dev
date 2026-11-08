@@ -44,6 +44,7 @@ unicodedata for
   (4) the category RLE reconstructs unicodedata.category for all codepoints.
 Run: python3 scripts/gen_unicode_tables.py    (from the repo root)
 """
+
 import random
 import sys
 import unicodedata
@@ -81,11 +82,11 @@ def hangul_decomp(cp):
     """Hangul syllable -> jamo list, or None. Algorithmic per UAX #15."""
     if 0xAC00 <= cp <= 0xD7A3:
         s = cp - 0xAC00
-        l = 0x1100 + s // 588
+        lbase = 0x1100 + s // 588
         v = 0x1161 + (s % 588) // 28
         if s % 28 == 0:
-            return [l, v]
-        return [l, v, 0x11A7 + s % 28]
+            return [lbase, v]
+        return [lbase, v, 0x11A7 + s % 28]
     return None
 
 
@@ -167,7 +168,7 @@ def model_category(cp):
 
 print(f"collecting unicode data (unicodedata {UNIDATA_VERSION}) ...")
 
-DECOMP = {}        # cp -> tuple of cps, canonical, fully expanded, ordered
+DECOMP = {}  # cp -> tuple of cps, canonical, fully expanded, ordered
 for cp in range(MAX_CP):
     ch = chr(cp)
     if 0xAC00 <= cp <= 0xD7A3:
@@ -176,7 +177,7 @@ for cp in range(MAX_CP):
     if d != ch:
         DECOMP[cp] = tuple(ord(c) for c in d)
 
-FIRSTLEVEL = {}    # cp -> one-level decomposition (UnicodeData text field)
+FIRSTLEVEL = {}  # cp -> one-level decomposition (UnicodeData text field)
 for cp in range(MAX_CP):
     if 0xAC00 <= cp <= 0xD7A3:
         continue  # Hangul is algorithmic, never tabulated
@@ -185,7 +186,7 @@ for cp in range(MAX_CP):
         continue  # no decomposition, or a <compat>/<super>/<fraction> form
     FIRSTLEVEL[cp] = tuple(int(x, 16) for x in d.split())
 
-COMPOSE = {}       # (a, b) -> composite
+COMPOSE: dict[tuple[int, int], int] = {}  # (a, b) -> composite
 # Pairs come from ONE-LEVEL decompositions, not the fully expanded form: a
 # character like U+01D5 (U with diaeresis and macron) decomposes to
 # (U+00DC, U+0304) at the first level and the composition walk composes
@@ -202,8 +203,9 @@ for cp, seq in sorted(FIRSTLEVEL.items()):
     if len(seq) == 2:
         prev = COMPOSE.get((seq[0], seq[1]))
         if prev is not None and prev != cp:
-            sys.exit(f"FATAL: pair ({seq[0]:04X}, {seq[1]:04X}) maps to both "
-                     f"{prev:04X} and {cp:04X}")
+            sys.exit(
+                f"FATAL: pair ({seq[0]:04X}, {seq[1]:04X}) maps to both {prev:04X} and {cp:04X}"
+            )
         COMPOSE[(seq[0], seq[1])] = cp
     else:
         multi_pending.append((cp, seq))
@@ -228,8 +230,10 @@ while multi_pending and changed:
                     if len(seq2) == 2 and seq2[0] == cur and seq2[1] == nxt:
                         if unicodedata.normalize("NFC", chr(cp2)) == chr(cp2):
                             if target is not None:
-                                sys.exit(f"FATAL: ambiguous intermediate "
-                                         f"composite for ({cur:04X}, {nxt:04X})")
+                                sys.exit(
+                                    f"FATAL: ambiguous intermediate "
+                                    f"composite for ({cur:04X}, {nxt:04X})"
+                                )
                             target = cp2
                 if target is None:
                     ok = False
@@ -241,15 +245,16 @@ while multi_pending and changed:
         if not ok:
             still.append((cp, seq))
         elif cur != cp:
-            sys.exit(f"FATAL: recomposition walk of U+{cp:04X} landed on "
-                     f"U+{cur:04X}")
+            sys.exit(f"FATAL: recomposition walk of U+{cp:04X} landed on U+{cur:04X}")
     multi_pending = still
 if multi_pending:
-    sys.exit(f"FATAL: {len(multi_pending)} multi-char decompositions could not "
-             "be recomposed from derived pairs")
+    sys.exit(
+        f"FATAL: {len(multi_pending)} multi-char decompositions could not "
+        "be recomposed from derived pairs"
+    )
 
-FOLD_SINGLE = {}   # cp -> cp
-FOLD_MULTI = {}    # cp -> tuple of cps
+FOLD_SINGLE = {}  # cp -> cp
+FOLD_MULTI = {}  # cp -> tuple of cps
 for cp in range(MAX_CP):
     ch = chr(cp)
     f = ch.casefold()
@@ -261,8 +266,8 @@ for cp in range(MAX_CP):
     else:
         FOLD_MULTI[cp] = tuple(cfs)
 
-CAT_NAMES = []     # two-letter category strings, indexed by CAT_RUNS
-CAT_RUNS = []      # (start, end, name index)
+CAT_NAMES = []  # two-letter category strings, indexed by CAT_RUNS
+CAT_RUNS = []  # (start, end, name index)
 prev_name = None
 run_start = 0
 for cp in range(MAX_CP):
@@ -274,6 +279,7 @@ for cp in range(MAX_CP):
             CAT_RUNS.append((run_start, cp - 1, CAT_NAMES.index(prev_name)))
         prev_name = name
         run_start = cp
+assert prev_name is not None  # set by the run loop above; original code would TypeError on None
 if prev_name not in CAT_NAMES:
     CAT_NAMES.append(prev_name)
 CAT_RUNS.append((run_start, MAX_CP - 1, CAT_NAMES.index(prev_name)))
@@ -285,8 +291,7 @@ print(f"  categories: {len(CAT_RUNS)} runs over {len(CAT_NAMES)} names")
 
 # ---------------------------------------------------------------- verify
 
-print("verification 1/4: per-codepoint NFC/NFD round trip over "
-      f"{MAX_CP} codepoints ...")
+print(f"verification 1/4: per-codepoint NFC/NFD round trip over {MAX_CP} codepoints ...")
 nfd_hits = nfc_hits = 0
 for cp in range(MAX_CP):
     ch = chr(cp)
@@ -312,8 +317,7 @@ for m1 in marks:
         want_nfc = [ord(c) for c in unicodedata.normalize("NFC", s)]
         want_nfd = [ord(c) for c in unicodedata.normalize("NFD", s)]
         if model_nfc(cps) != want_nfc or model_nfd(cps) != want_nfd:
-            sys.exit("FAIL: mark-pair sweep diverges on "
-                     + " ".join(f"U+{c:04X}" for c in cps))
+            sys.exit("FAIL: mark-pair sweep diverges on " + " ".join(f"U+{c:04X}" for c in cps))
         sweep += 1
 composites = sorted(set(COMPOSE.values()))
 for cp in composites:
@@ -322,19 +326,17 @@ for cp in composites:
         s = "".join(chr(c) for c in cps)
         want = [ord(c) for c in unicodedata.normalize("NFC", s)]
         if model_nfc(cps) != want:
-            sys.exit("FAIL: composite sweep diverges on "
-                     + " ".join(f"U+{c:04X}" for c in cps))
+            sys.exit("FAIL: composite sweep diverges on " + " ".join(f"U+{c:04X}" for c in cps))
         sweep += 1
-for l in range(0x1100, 0x1113):
+for lbase in range(0x1100, 0x1113):
     for v in range(0x1161, 0x1176):
         for t in [None] + list(range(0x11A8, 0x11C3)):
-            cps = [l, v] if t is None else [l, v, t]
+            cps = [lbase, v] if t is None else [lbase, v, t]
             s = "".join(chr(c) for c in cps)
             want_nfc = [ord(c) for c in unicodedata.normalize("NFC", s)]
             want_nfd = [ord(c) for c in unicodedata.normalize("NFD", s)]
             if model_nfc(cps) != want_nfc or model_nfd(cps) != want_nfd:
-                sys.exit("FAIL: Hangul sweep diverges on "
-                         + " ".join(f"U+{c:04X}" for c in cps))
+                sys.exit("FAIL: Hangul sweep diverges on " + " ".join(f"U+{c:04X}" for c in cps))
             sweep += 1
 print(f"  OK: {sweep} sweep strings match unicodedata")
 
@@ -357,14 +359,13 @@ while sample < 20000:
     sample += 1
 sigma = 0
 for cp in range(MAX_CP):
-    cps = [cp, 0x3C2, cp]   # final sigma flanked on both sides
+    cps = [cp, 0x3C2, cp]  # final sigma flanked on both sides
     s = "".join(chr(c) for c in cps)
     got = "".join(chr(c) for c in model_casefold(cps))
     if got != s.casefold():
         sys.exit(f"FAIL: sigma context diverges around U+{cp:04X}")
     sigma += 1
-print(f"  OK: {sample} sampled strings, {sigma} sigma-context strings match "
-      "str.casefold")
+print(f"  OK: {sample} sampled strings, {sigma} sigma-context strings match str.casefold")
 
 print("verification 4/4: category run-length reconstruction ...")
 cat_checked = 0
@@ -400,7 +401,7 @@ HEADER = f"""//! unicode_tables.rs, GENERATED by scripts/gen_unicode_tables.py. 
 pub const UNIDATA_VERSION: &str = "{UNIDATA_VERSION}";
 """
 
-ACCESSORS = '''
+ACCESSORS = """
 /// Canonical decomposition of one codepoint, fully expanded (empty when the
 /// codepoint has none). Hangul syllables are handled by the caller (interp).
 pub fn canon_decomp(cp: u32) -> &'static [u32] {
@@ -461,7 +462,7 @@ pub fn category(cp: u32) -> &'static str {
         .map(|i| CAT_NAMES[CAT_RUNS[i].2 as usize])
         .unwrap_or("Cn")
 }
-'''
+"""
 
 
 def u32s(cps):
@@ -472,8 +473,8 @@ lines = [HEADER]
 
 lines.append("\n// canonical decompositions (codepoint, pool offset, pool length)\n")
 lines.append("pub static DECOMP_INDEX: &[(u32, u32, u32)] = &[\n")
-pool = []
-index = []
+pool: list[int] = []
+index: list[tuple[int, int, int]] = []
 for cp in sorted(DECOMP):
     seq = DECOMP[cp]
     index.append((cp, len(pool), len(seq)))
@@ -484,7 +485,7 @@ lines.append("];\n")
 lines.append("\n// expanded decompositions, one flat codepoint pool\n")
 lines.append("pub static DECOMP_POOL: &[u32] = &[\n")
 for i in range(0, len(pool), 10):
-    lines.append("    " + u32s(pool[i:i + 10]) + ",\n")
+    lines.append("    " + u32s(pool[i : i + 10]) + ",\n")
 lines.append("];\n")
 
 lines.append("\n// composition pairs (starter, next, composite), sorted by (starter, next)\n")
@@ -507,38 +508,37 @@ for cp in range(MAX_CP):
         run_start = cp
 if prev != 0:
     runs.append((run_start, MAX_CP - 1, prev))
-for s, e, k in runs:
-    lines.append(f"    (0x{s:X}, 0x{e:X}, {k}),\n")
+for lo, hi, kk in runs:
+    lines.append(f"    (0x{lo:X}, 0x{hi:X}, {kk}),\n")
 lines.append("];\n")
 
 lines.append("\n// full case folding, single-char mappings (codepoint, folded)\n")
 lines.append("pub static FOLD_SINGLE: &[(u32, u32)] = &[\n")
-for cp, t in sorted(FOLD_SINGLE.items()):
-    lines.append(f"    (0x{cp:X}, 0x{t:X}),\n")
+for cp, tgt in sorted(FOLD_SINGLE.items()):
+    lines.append(f"    (0x{cp:X}, 0x{tgt:X}),\n")
 lines.append("];\n")
 lines.append("\n// full case folding, multi-char mappings (codepoint, folded slice)\n")
 lines.append("pub static FOLD_MULTI: &[(u32, &[u32])] = &[\n")
-for cp, t in sorted(FOLD_MULTI.items()):
-    lines.append(f"    (0x{cp:X}, &[{u32s(t)}]),\n")
+for cp, pieces in sorted(FOLD_MULTI.items()):
+    lines.append(f"    (0x{cp:X}, &[{u32s(pieces)}]),\n")
 lines.append("];\n")
 
 lines.append("\n// general category names, indexed by CAT_RUNS third field\n")
 lines.append("pub static CAT_NAMES: &[&str] = &[\n")
-for n in CAT_NAMES:
-    lines.append(f'    "{n}",\n')
+for nm in CAT_NAMES:
+    lines.append(f'    "{nm}",\n')
 lines.append("];\n")
 lines.append("\n// general category runs (start, end inclusive, CAT_NAMES index)\n")
 lines.append("pub static CAT_RUNS: &[(u32, u32, u8)] = &[\n")
-for s, e, idx in CAT_RUNS:
-    lines.append(f"    (0x{s:X}, 0x{e:X}, {idx}),\n")
+for lo, hi, cidx in CAT_RUNS:
+    lines.append(f"    (0x{lo:X}, 0x{hi:X}, {cidx}),\n")
 lines.append("];\n")
 
 lines.append(ACCESSORS)
 
 out = "".join(lines)
-with open("src/unicode_tables.rs", "w", encoding="utf-8") as f:
-    f.write(out)
+with open("src/unicode_tables.rs", "w", encoding="utf-8") as fh:
+    fh.write(out)
 kb = len(out.encode("utf-8")) // 1024
 print(f"wrote src/unicode_tables.rs ({kb} KiB, unicodedata {UNIDATA_VERSION})")
-print(f"VERIFICATION PASSED: tables and runtime model agree with unicodedata "
-      f"{UNIDATA_VERSION}")
+print(f"VERIFICATION PASSED: tables and runtime model agree with unicodedata {UNIDATA_VERSION}")

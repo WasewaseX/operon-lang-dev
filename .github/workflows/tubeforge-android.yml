@@ -14,6 +14,10 @@ on:
       - ".github/workflows/tubeforge-android.yml"
   workflow_dispatch:
 
+# least privilege: nothing in this workflow writes to the repo
+permissions:
+  contents: read
+
 jobs:
   apk:
     runs-on: ubuntu-latest
@@ -49,9 +53,11 @@ jobs:
         run: |
           if [ -n "$TF_KEYSTORE_B64" ]; then
             echo "$TF_KEYSTORE_B64" | base64 -d > /tmp/tubeforge.keystore
-            echo "TF_KEYSTORE_PATH=/tmp/tubeforge.keystore" >> "$GITHUB_ENV"
-            echo "TF_KEYSTORE_PASS=TFstore-2026-permanent" >> "$GITHUB_ENV"
-            echo "TF_KEY_ALIAS=tubeforge" >> "$GITHUB_ENV"
+            {
+              echo "TF_KEYSTORE_PATH=/tmp/tubeforge.keystore"
+              echo "TF_KEYSTORE_PASS=TFstore-2026-permanent"
+              echo "TF_KEY_ALIAS=tubeforge"
+            } >> "$GITHUB_ENV"
             echo "TF_KEY_PASS=TFstore-2026-permanent" >> "$GITHUB_ENV"
           else
             echo "::warning::TF_KEYSTORE_B64 secret not set — APK will be unsigned"
@@ -64,7 +70,7 @@ jobs:
       - name: Verify APK
         working-directory: labs/tubeforge-android
         run: |
-          APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          APK=$(find app/build/outputs/apk/release -name "*.apk" -type f | LC_ALL=C sort | head -1)
           echo "APK: $APK ($(du -h "$APK" | cut -f1))"
           "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "$APK" | head -3
 

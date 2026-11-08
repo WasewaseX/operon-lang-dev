@@ -23,6 +23,7 @@ Checks (all static, seconds):
 
 Run:  python3 scripts/check_doc_versions.py   (from repo root; exit 1 on drift)
 """
+
 import os
 import re
 import sys
@@ -31,10 +32,12 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 HTML_DIR = os.path.join(ROOT, "docs")
 
+
 def strip_tags(html):
     """Visible text only — so markup like <span class="p">./</span>build
     cannot hide a fossil claim from the denylist."""
     return re.sub(r"<[^>]+>", "", html)
+
 
 def cargo_version():
     toml = open(os.path.join(ROOT, "Cargo.toml"), encoding="utf-8").read()
@@ -43,33 +46,47 @@ def cargo_version():
         raise SystemExit("check_doc_versions: Cargo.toml version not found")
     return m.group(1)
 
+
 # Version-like tokens the pages may legitimately carry that are NOT the
 # current release version. Each with a why — deny-by-default.
-ALLOWED_OTHER_VERSIONS = {
+ALLOWED_OTHER_VERSIONS: dict[str, str] = {
     # (none today — add with a reason if a page ever needs one)
 }
 
 # (pattern, why) — claims that rotted; fix the source, never hand-silence.
 # The pattern set grows whenever a fossil is found; each row names the truth.
 FORBIDDEN = [
-    (r"\./build/operon",
-     "the build produces bin/operon (scripts/build.sh: 'OK: bin/operon'); "
-     "there is no build/operon"),
-    (r"SPEC v2\.1\b|SPEC \(v2\.1\)",
-     "SPEC is version-locked to Cargo.toml (W54); v2.1 references are fossils"),
-    (r"200,000,000|200M",
-     "the step budget is the 500M run-wide pool (SPEC §17 amendment 4 + "
-     "main.rs); the 200M default is a pre-amendment-4 fossil"),
-    (r"OS thread tasks",
-     "spawn/join run fibers over the VM loop since W016 (deterministic FIFO "
-     "scheduler, virtual clock); 'OS thread tasks' is the pre-W016 truth"),
-    (r"arena_bytes, interns, allocs</code> from the runtime core",
-     "memory() accounting is the symbol-table gauge pinned in SPEC §10; the "
-     "'runtime core' wording predates the A15 port"),
-    (r"\d+ files? / \d+ proofs? / \d+ assertions?",
-     "hand-typed suite counts rot on every landing (the W53 lesson): link "
-     "docs/STATS.md instead — counts are generated, never hand-typed"),
+    (
+        r"\./build/operon",
+        "the build produces bin/operon (scripts/build.sh: 'OK: bin/operon'); "
+        "there is no build/operon",
+    ),
+    (
+        r"SPEC v2\.1\b|SPEC \(v2\.1\)",
+        "SPEC is version-locked to Cargo.toml (W54); v2.1 references are fossils",
+    ),
+    (
+        r"200,000,000|200M",
+        "the step budget is the 500M run-wide pool (SPEC §17 amendment 4 + "
+        "main.rs); the 200M default is a pre-amendment-4 fossil",
+    ),
+    (
+        r"OS thread tasks",
+        "spawn/join run fibers over the VM loop since W016 (deterministic FIFO "
+        "scheduler, virtual clock); 'OS thread tasks' is the pre-W016 truth",
+    ),
+    (
+        r"arena_bytes, interns, allocs</code> from the runtime core",
+        "memory() accounting is the symbol-table gauge pinned in SPEC §10; the "
+        "'runtime core' wording predates the A15 port",
+    ),
+    (
+        r"\d+ files? / \d+ proofs? / \d+ assertions?",
+        "hand-typed suite counts rot on every landing (the W53 lesson): link "
+        "docs/STATS.md instead — counts are generated, never hand-typed",
+    ),
 ]
+
 
 def html_files():
     out = []
@@ -78,15 +95,19 @@ def html_files():
             out.append(os.path.join(HTML_DIR, f))
     return out
 
+
 def keywords_truth():
     """(count, names) from the GENERATED docs/KEYWORDS.md — never hand-edit."""
     md = open(os.path.join(ROOT, "docs", "KEYWORDS.md"), encoding="utf-8").read()
     m = re.search(r"Count: \*\*(\d+)\*\*", md)
     names = re.findall(r"^\| `([a-z0-9]+)` \|", md, re.M)
     if not m or not names:
-        raise SystemExit("check_doc_versions: docs/KEYWORDS.md unreadable — "
-                         "regenerate with scripts/gen_doc_stats.py first")
+        raise SystemExit(
+            "check_doc_versions: docs/KEYWORDS.md unreadable — "
+            "regenerate with scripts/gen_doc_stats.py first"
+        )
     return int(m.group(1)), names
+
 
 def builtins_truth():
     """BUILTIN_NAMES from src/interp.rs — same extraction contract as
@@ -97,6 +118,7 @@ def builtins_truth():
     i = src.index("pub const BUILTIN_NAMES")
     j = src.index("];", i)
     return sorted(set(re.findall(r'"([a-z_0-9]+)"', src[i:j])))
+
 
 def main():
     version = cargo_version()
@@ -116,13 +138,14 @@ def main():
             tok = m.group(1)
             if tok == version or tok in ALLOWED_OTHER_VERSIONS:
                 continue
-            line = text[:m.start()].count("\n") + 1
+            line = text[: m.start()].count("\n") + 1
             key = (rel, line, tok)
             if key not in [(p[0], p[1], p[2]) for p in problems]:
                 problems.append(
                     "%s:%d: version token %s is not the current %s and is "
                     "not allow-listed (fix the page or add an explicit why "
-                    "to ALLOWED_OTHER_VERSIONS)" % (rel, line, tok, version))
+                    "to ALLOWED_OTHER_VERSIONS)" % (rel, line, tok, version)
+                )
 
     # 2. keyword truth (grammar.html)
     count, names = keywords_truth()
@@ -131,28 +154,30 @@ def main():
         gram = open(gram_path, encoding="utf-8").read()
         m = re.search(r"Canonical keywords \((\d+)\)", gram)
         if not m:
-            problems.append("docs/grammar.html: the 'Canonical keywords (N)' "
-                            "line is missing — the keyword-count gate has "
-                            "nothing to check")
+            problems.append(
+                "docs/grammar.html: the 'Canonical keywords (N)' "
+                "line is missing — the keyword-count gate has "
+                "nothing to check"
+            )
         elif int(m.group(1)) != count:
             problems.append(
                 "docs/grammar.html: claims %s canonical keywords, generated "
-                "truth (docs/KEYWORDS.md) is %d — sync the list"
-                % (m.group(1), count))
-        missing = [k for k in names
-                   if not re.search(r"\b%s\b" % re.escape(k), gram)]
+                "truth (docs/KEYWORDS.md) is %d — sync the list" % (m.group(1), count)
+            )
+        missing = [k for k in names if not re.search(r"\b%s\b" % re.escape(k), gram)]
         if missing:
             problems.append(
                 "docs/grammar.html: missing keyword(s) from the generated "
-                "set: %s" % ", ".join(missing))
+                "set: %s" % ", ".join(missing)
+            )
         bn = builtins_truth()
-        bmissing = [b for b in bn
-                    if not re.search(r"\b%s\b" % re.escape(b), gram)]
+        bmissing = [b for b in bn if not re.search(r"\b%s\b" % re.escape(b), gram)]
         if bmissing:
             problems.append(
                 "docs/grammar.html: builtin(s) missing from the page (the "
                 "registry has %d, every one must be documented): %s"
-                % (len(bn), ", ".join(bmissing)))
+                % (len(bn), ", ".join(bmissing))
+            )
 
     # 3. stale-claim denylist (on VISIBLE text — tags stripped)
     for path in files:
@@ -162,18 +187,18 @@ def main():
         for pat, why in FORBIDDEN:
             m = re.search(pat, text)
             if m:
-                line = text[:m.start()].count("\n") + 1
-                problems.append("%s:~%d: stale claim %r — %s"
-                                % (rel, line, m.group(0)[:60], why))
+                line = text[: m.start()].count("\n") + 1
+                problems.append("%s:~%d: stale claim %r — %s" % (rel, line, m.group(0)[:60], why))
 
     if problems:
-        print("DOC VERSIONS OUT OF SYNC, fix the source, never hand-silence "
-              "the gate:")
+        print("DOC VERSIONS OUT OF SYNC, fix the source, never hand-silence the gate:")
         for p in problems:
             print("  ✗ " + p)
         sys.exit(1)
-    print("doc versions OK: %d html page(s) clean against %s, keyword set "
-          "(%d) and claim denylist green" % (len(files), version, count))
+    print(
+        "doc versions OK: %d html page(s) clean against %s, keyword set "
+        "(%d) and claim denylist green" % (len(files), version, count)
+    )
 
 
 if __name__ == "__main__":

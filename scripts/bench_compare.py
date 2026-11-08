@@ -21,6 +21,7 @@ Honesty notes:
   * native-py mirrors replicate the OBSERVED net semantics of each fixture
     (e.g. strings.op's template-replace idiom), not a re-interpretation.
 """
+
 import argparse
 import json
 import os
@@ -41,10 +42,13 @@ ORACLE = os.path.join(ROOT, "bootstrap", "oracle.py")
 # time. Keep these in lockstep with scripts/bench/*.op and micro/*.op.
 # --------------------------------------------------------------------------
 
+
 def native_fib():
     def fib(n):
         return n if n < 2 else fib(n - 1) + fib(n - 2)
+
     return fib(25)
+
 
 def native_loops():
     acc = 0
@@ -52,11 +56,13 @@ def native_loops():
         acc = acc + i % 7
     return acc
 
+
 def native_strings():
     s = ""
     for i in range(4000):
         s = s + "x{t}y".replace("{t}", str(i % 10))
     return len(s)
+
 
 def native_collections():
     m = {}
@@ -76,10 +82,13 @@ def native_collections():
         distinct += 1
     return (total, distinct)
 
+
 def native_recursion():
     def pasc(n, k):
         return 1 if (k == 0 or k == n) else pasc(n - 1, k - 1) + pasc(n - 1, k)
+
     return pasc(20, 10)
+
 
 def native_grn():
     # mirror of grn.op: per-call gate check (level >= threshold, one gene
@@ -107,14 +116,18 @@ def native_grn():
         acc = acc + worker_a(i) + worker_b(i) + reporter(i)
     return acc
 
+
 # W083: real-program workloads. native_* mirrors are ALGORITHM parity
 # except where noted (modules = import machinery shape-compare).
 def native_json():
     doc = {}
     for i in range(120):
         doc["row" + str(i)] = {
-            "id": i, "name": "item-" + str(i), "tags": ["a", "b", "c"],
-            "score": i * 1.5, "active": i % 2 == 0,
+            "id": i,
+            "name": "item-" + str(i),
+            "tags": ["a", "b", "c"],
+            "score": i * 1.5,
+            "active": i % 2 == 0,
         }
     acc = 0
     for i in range(200):
@@ -124,8 +137,10 @@ def native_json():
         acc += len(back["row" + str((i + 7) % 120)]["tags"])
     return acc
 
+
 def native_regex():
     import re as _re
+
     pats = [r"a+b", r"[0-9]{2,4}-[a-z]+", r"x.*y", r"(ab|cd)+e", r"f[aoi]o"]
     strs = ["aaab", "1234-abc", "xxxyyy", "abcde", "faoo", "aab", "99-x", "xabcy", "cde", "foi"]
     hits = 0
@@ -138,6 +153,7 @@ def native_regex():
                     hits += 1
     return hits
 
+
 def native_seq():
     seed = 42
     genome = []
@@ -147,9 +163,10 @@ def native_seq():
         genome.append(alpha[seed % 4])
     g = "".join(genome)
     gc = sum(1 for ch in g if ch in "GC")
-    kmers = sum(1 for i in range(len(g) - 3) if g[i:i + 3] == "ACG")
-    motifs = sum(1 for i in range(len(g) - 2) if g[i:i + 2] == "GT")
+    kmers = sum(1 for i in range(len(g) - 3) if g[i : i + 3] == "ACG")
+    motifs = sum(1 for i in range(len(g) - 2) if g[i : i + 2] == "GT")
     return gc + kmers + motifs
+
 
 def native_large_map():
     m = {}
@@ -159,6 +176,7 @@ def native_large_map():
     for i in range(6000):
         acc += m["key-" + str(i)]
     return acc
+
 
 def native_file_io():
     payload = "0123456789abcdef" * 16
@@ -172,6 +190,7 @@ def native_file_io():
             ok += 1
     return ok
 
+
 def native_modules():
     # shape-compare only: CPython's cached import machinery, six modules
     for name in ("json", "math", "os", "re", "time", "types"):
@@ -183,88 +202,131 @@ def native_modules():
         acc += 6
     return acc
 
+
 SUITES = [
-    ("fib25",        "scripts/bench/fib25.op",        native_fib,        242785, None),
-    ("loops",        "scripts/bench/loops.op",        native_loops,      200000, None),
-    ("strings",      "scripts/bench/strings.op",      native_strings,      4000, None),
-    ("collections",  "scripts/bench/collections.op",  native_collections, None, None),
-    ("recursion",    "scripts/bench/recursion.op",    native_recursion,  369511, None),
-    ("grn",          "scripts/bench/grn.op",          native_grn,         60000, None),
+    ("fib25", "scripts/bench/fib25.op", native_fib, 242785, None),
+    ("loops", "scripts/bench/loops.op", native_loops, 200000, None),
+    ("strings", "scripts/bench/strings.op", native_strings, 4000, None),
+    ("collections", "scripts/bench/collections.op", native_collections, None, None),
+    ("recursion", "scripts/bench/recursion.op", native_recursion, 369511, None),
+    ("grn", "scripts/bench/grn.op", native_grn, 60000, None),
     # W083 real-program workloads
-    ("json",         "scripts/bench/json_roundtrip.op", native_json,      10900, None),
-    ("regex",        "scripts/bench/regex_corpus.op",   native_regex,    10800, None),
-    ("seq",          "scripts/bench/seq_motifs.op",     native_seq,       5998, None),
-    ("large_map",    "scripts/bench/large_map.op",      native_large_map, None, None),
-    ("file_io",      "scripts/bench/file_io.op",        native_file_io,    300, ("--allow-write", "/tmp", "--allow-read", "/tmp")),
-    ("modules",      "scripts/bench/modules.op",        native_modules,   None, None),
+    ("json", "scripts/bench/json_roundtrip.op", native_json, 10900, None),
+    ("regex", "scripts/bench/regex_corpus.op", native_regex, 10800, None),
+    ("seq", "scripts/bench/seq_motifs.op", native_seq, 5998, None),
+    ("large_map", "scripts/bench/large_map.op", native_large_map, None, None),
+    (
+        "file_io",
+        "scripts/bench/file_io.op",
+        native_file_io,
+        300,
+        ("--allow-write", "/tmp", "--allow-read", "/tmp"),
+    ),
+    ("modules", "scripts/bench/modules.op", native_modules, None, None),
 ]
 
+
 # micro fixtures: (name, ops_per_iteration, native mirror)
-def native_m_empty(): return "ok"
+def native_m_empty():
+    return "ok"
+
+
 def native_m_call():
-    def nop(n): return n
+    def nop(n):
+        return n
+
     a = 0
-    for i in range(100000): a = a + nop(i)
+    for i in range(100000):
+        a = a + nop(i)
     return a
+
+
 def native_m_forrange():
     a = 0
-    for i in range(200000): a = a + 1
+    for i in range(200000):
+        a = a + 1
     return a
+
+
 def native_m_while():
     i, a = 200000, 0
     while i > 0:
         a = a + 1
         i = i - 1
     return a
+
+
 def native_m_varread():
     x, a = 7, 0
-    for i in range(200000): a = a + x
+    for i in range(200000):
+        a = a + x
     return a
+
+
 def native_m_intadd():
     a, b = 0, 1
-    for i in range(300000): a = a + b
+    for i in range(300000):
+        a = a + b
     return a
+
+
 def native_m_listpush():
     xs = []
-    for i in range(50000): xs.append(i)
+    for i in range(50000):
+        xs.append(i)
     return len(xs)
+
+
 def native_m_listidx():
     xs = [i for i in range(2000)]
     a = 0
-    for i in range(100000): a = a + xs[i % 2000]
+    for i in range(100000):
+        a = a + xs[i % 2000]
     return a
+
+
 def native_m_mapset():
     m = {}
-    for i in range(40000): m[str(i % 4000)] = i
+    for i in range(40000):
+        m[str(i % 4000)] = i
     return len(m)
+
+
 def native_m_mapget():
     m = {}
-    for i in range(4000): m[str(i)] = i
+    for i in range(4000):
+        m[str(i)] = i
     a = 0
-    for i in range(50000): a = a + m[str(i % 4000)]
+    for i in range(50000):
+        a = a + m[str(i % 4000)]
     return a
+
+
 def native_m_strcat():
     s = ""
-    for i in range(12000): s = s + "ab"
+    for i in range(12000):
+        s = s + "ab"
     return len(s)
 
+
 MICROS = [
-    ("m_empty",    0,      native_m_empty),
-    ("m_call",     300000, native_m_call),      # 100k calls, 3 evals each (loop+add+call)
+    ("m_empty", 0, native_m_empty),
+    ("m_call", 300000, native_m_call),  # 100k calls, 3 evals each (loop+add+call)
     ("m_forrange", 600000, native_m_forrange),  # 200k iters x (loop bookkeeping + add)
-    ("m_while",    600000, native_m_while),
-    ("m_varread",  600000, native_m_varread),
-    ("m_intadd",   900000, native_m_intadd),
+    ("m_while", 600000, native_m_while),
+    ("m_varread", 600000, native_m_varread),
+    ("m_intadd", 900000, native_m_intadd),
     ("m_listpush", 150000, native_m_listpush),
-    ("m_listidx",  300000, native_m_listidx),
-    ("m_mapset",   80000,  native_m_mapset),
-    ("m_mapget",   154000, native_m_mapget),
-    ("m_strcat",   24000,  native_m_strcat),
+    ("m_listidx", 300000, native_m_listidx),
+    ("m_mapset", 80000, native_m_mapset),
+    ("m_mapget", 154000, native_m_mapget),
+    ("m_strcat", 24000, native_m_strcat),
 ]
 
 # --------------------------------------------------------------------------
 # timing helpers
 # --------------------------------------------------------------------------
+
 
 def time_fn(fn, iters, warmup=1):
     """min / median wall time of fn() over iters runs after warmup."""
@@ -277,6 +339,7 @@ def time_fn(fn, iters, warmup=1):
         ts.append(time.perf_counter() - t0)
     return min(ts), statistics.median(ts)
 
+
 def time_cmd(cmd, cwd, iters, warmup=1):
     for _ in range(warmup):
         subprocess.run(cmd, capture_output=True, cwd=cwd)
@@ -287,13 +350,16 @@ def time_cmd(cmd, cwd, iters, warmup=1):
         ts.append(time.perf_counter() - t0)
     return min(ts), statistics.median(ts)
 
+
 def run_operon(path, iters, extra=None):
     cmd = [OPERON, "run", path] + list(extra or [])
     return time_cmd(cmd, ROOT, iters)
 
+
 def run_oracle(path, iters, extra=None):
     cmd = [sys.executable, ORACLE, "run", path] + list(extra or [])
     return time_cmd(cmd, ROOT, iters)
+
 
 def cpu_model():
     try:
@@ -304,6 +370,7 @@ def cpu_model():
     except OSError:
         pass
     return platform.processor() or "unknown"
+
 
 def meta(iters):
     return {
@@ -316,41 +383,81 @@ def meta(iters):
         "timing": "end-to-end process wall time, min over iters (1 warmup)",
     }
 
+
 # --------------------------------------------------------------------------
 # report
 # --------------------------------------------------------------------------
 
+
 def fmt_row(cells):
     return "  ".join(f"{c:>{w}}" for c, w in cells)
 
+
 def report_suites(results, iters):
-    hdr = [("workload", 12), ("operon", 10), ("oracle", 11), ("native-py", 11),
-           ("op/py", 8), ("op/oracle", 10), ("calls", 10)]
+    hdr = [
+        ("workload", 12),
+        ("operon", 10),
+        ("oracle", 11),
+        ("native-py", 11),
+        ("op/py", 8),
+        ("op/oracle", 10),
+        ("calls", 10),
+    ]
     print(fmt_row(hdr))
     print("  ".join("-" * w for _, w in hdr))
     for name, _path, _nat, calls, _extra in SUITES:
         r = results[name]
-        op, orc, nat = r["operon"]["min"] * 1000, r["oracle"]["min"] * 1000, r["native"]["min"] * 1000
-        cells = [(name, 12), (f"{op:.1f}", 10), (f"{orc:.1f}", 11), (f"{nat:.1f}", 11),
-                 (f"{op/nat:.1f}x", 8), (f"{orc/op:.1f}x", 10),
-                 (str(calls) if calls else "-", 10)]
+        op, orc, nat = (
+            r["operon"]["min"] * 1000,
+            r["oracle"]["min"] * 1000,
+            r["native"]["min"] * 1000,
+        )
+        cells = [
+            (name, 12),
+            (f"{op:.1f}", 10),
+            (f"{orc:.1f}", 11),
+            (f"{nat:.1f}", 11),
+            (f"{op / nat:.1f}x", 8),
+            (f"{orc / op:.1f}x", 10),
+            (str(calls) if calls else "-", 10),
+        ]
         print(fmt_row(cells))
     print("(times in ms, end-to-end incl. startup; op/py = operon vs native CPython, the v3.0 gap)")
 
+
 def report_micros(results, iters):
-    hdr = [("micro", 12), ("operon", 10), ("oracle", 11), ("native-py", 11),
-           ("op/py", 8), ("op ns/op", 11), ("py ns/op", 11)]
+    hdr = [
+        ("micro", 12),
+        ("operon", 10),
+        ("oracle", 11),
+        ("native-py", 11),
+        ("op/py", 8),
+        ("op ns/op", 11),
+        ("py ns/op", 11),
+    ]
     print(fmt_row(hdr))
     print("  ".join("-" * w for _, w in hdr))
     for name, ops, _nat in MICROS:
         r = results[name]
-        op, orc, nat = r["operon"]["min"] * 1000, r["oracle"]["min"] * 1000, r["native"]["min"] * 1000
+        op, orc, nat = (
+            r["operon"]["min"] * 1000,
+            r["oracle"]["min"] * 1000,
+            r["native"]["min"] * 1000,
+        )
         ns_op = f"{op * 1e6 / ops:.0f}" if ops else "-"
         py_ns = f"{nat * 1e6 / ops:.0f}" if ops else "-"
-        cells = [(name, 12), (f"{op:.1f}", 10), (f"{orc:.1f}", 11), (f"{nat:.1f}", 11),
-                 (f"{op/nat:.1f}x", 8), (ns_op, 11), (py_ns, 11)]
+        cells = [
+            (name, 12),
+            (f"{op:.1f}", 10),
+            (f"{orc:.1f}", 11),
+            (f"{nat:.1f}", 11),
+            (f"{op / nat:.1f}x", 8),
+            (ns_op, 11),
+            (py_ns, 11),
+        ]
         print(fmt_row(cells))
     print("(times in ms; ns/op = per documented ops-per-iteration count)")
+
 
 def main():
     ap = argparse.ArgumentParser(description="Operon benchmark suite")
@@ -405,6 +512,7 @@ def main():
         with open(args.json, "w") as f:
             json.dump(results, f, indent=2)
         print(f"\nJSON written to {args.json}")
+
 
 if __name__ == "__main__":
     main()

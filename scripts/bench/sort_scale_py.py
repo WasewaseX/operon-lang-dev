@@ -11,6 +11,7 @@ The comparator-call counts must equal the operon and rust counts EXACTLY
 for every n (differential law: same LCG -> same permutation -> same
 comparison sequence for the same algorithm).
 """
+
 import argparse
 import sys
 import time
@@ -72,10 +73,14 @@ def main():
             out = sorted(xs)
             dt = (time.perf_counter() - t0) * 1000.0
             best = dt if best is None else min(best, dt)
-        print(f"SCALE engine=cpython n={n} mode=builtin min_ms={best:.3f} cksum={sum(out)}", flush=True)
+        print(
+            f"SCALE engine=cpython n={n} mode=builtin min_ms={best:.3f} cksum={sum(out)}",
+            flush=True,
+        )
 
         # callback-bound floor: Timsort + python-level comparator
         from functools import cmp_to_key
+
         cmp_calls = 0
 
         def cmp(a, b):
@@ -86,7 +91,10 @@ def main():
         t0 = time.perf_counter()
         out = sorted(xs, key=cmp_to_key(cmp))
         dt = (time.perf_counter() - t0) * 1000.0
-        print(f"SCALE engine=cpython n={n} mode=cmptokey min_ms={dt:.3f} calls={cmp_calls} cksum={sum(out)}", flush=True)
+        print(
+            f"SCALE engine=cpython n={n} mode=cmptokey min_ms={dt:.3f} calls={cmp_calls} cksum={sum(out)}",
+            flush=True,
+        )
 
     return 0
 

@@ -1,0 +1,12 @@
+# master-ci self-update loop: Dependabot bumps the SHA-pinned `uses:` lines
+# in .github/workflows/quality-gates.yml when upstream releases land.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns:
+          - "*"

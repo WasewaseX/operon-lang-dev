@@ -50,7 +50,7 @@ run_ms() {  # n mode cfg -> prints "<n> <cfg> <min_ms>" progressively per rep
   esac
   local ms
   ms=$(CALL_FIB_N="$n" CALL_FIB_MODE="$mode" OPERON_W009A_ABLATE="$spec" \
-       "$BIN" run scripts/bench/call_fib.op $OPS 2>/dev/null \
+       "$BIN" run scripts/bench/call_fib.op "$OPS" 2>/dev/null \
        | sed -n 's/^CALLFIB n=[0-9]* \(r=[0-9]* \|calls_analytic=[0-9]*\)ms=\(.*\)$/\2/p')
   echo "$ms"
 }
@@ -58,12 +58,12 @@ run_ms() {  # n mode cfg -> prints "<n> <cfg> <min_ms>" progressively per rep
 echo "# call_ablate ladder — bin=$BIN reps=$REPS (min-of-N, in-process clock)"
 for n in $N25 $N30; do
   # analytic count anchor (mode=count, one run, no timing)
-  cnt=$(CALL_FIB_N="$n" CALL_FIB_MODE=count "$BIN" run scripts/bench/call_fib.op $OPS 2>/dev/null \
+  cnt=$(CALL_FIB_N="$n" CALL_FIB_MODE=count "$BIN" run scripts/bench/call_fib.op "$OPS" 2>/dev/null \
         | sed -n 's/^CALLFIB n=[0-9]* calls_analytic=\([0-9]*\)$/\1/p')
   echo "ANALYTIC n=$n calls=$cnt"
   # counters line (base config, counts on — also the telemetry-cost config)
   counters=$(CALL_FIB_N="$n" CALL_FIB_MODE=time OPERON_W009A_COUNTS=1 \
-             "$BIN" run scripts/bench/call_fib.op $OPS 2>&1 >/dev/null \
+             "$BIN" run scripts/bench/call_fib.op "$OPS" 2>&1 >/dev/null \
              | grep 'w009a counters:')
   echo "COUNTERS n=$n $counters"
   # interleaved ladder

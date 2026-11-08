@@ -9,8 +9,8 @@ VmHWM at exit. Unified output lines:
 
   LOOPRSS engine=<e> shape=<s> n=<N> outer=<O> time_ms=<t> hwm_kb=<hwm> ... <child extras>
 """
+
 import os
-import subprocess
 import sys
 import time
 
@@ -98,16 +98,29 @@ def main():
             eff_n = n // 1000 if shape == "nested" else n  # nested: OUTER x (n/1000)
             outer = 1000 if shape == "nested" else 1
             env = dict(os.environ)
-            env.update({"LOOP_MEM_SHAPE": shape, "LOOP_MEM_N": str(eff_n), "LOOP_MEM_OUTER": str(outer)})
+            env.update(
+                {"LOOP_MEM_SHAPE": shape, "LOOP_MEM_N": str(eff_n), "LOOP_MEM_OUTER": str(outer)}
+            )
 
-            out, hwm, status, ru = run_operon([OPERON, "run",
-                                               "--allow-env", "LOOP_MEM_SHAPE",
-                                               "--allow-env", "LOOP_MEM_N",
-                                               "--allow-env", "LOOP_MEM_OUTER",
-                                               os.path.join(HERE, "loop_mem.op")], env)
-            line = next((l for l in out.splitlines() if l.startswith("LOOP ")), None)
+            out, hwm, status, ru = run_operon(
+                [
+                    OPERON,
+                    "run",
+                    "--allow-env",
+                    "LOOP_MEM_SHAPE",
+                    "--allow-env",
+                    "LOOP_MEM_N",
+                    "--allow-env",
+                    "LOOP_MEM_OUTER",
+                    os.path.join(HERE, "loop_mem.op"),
+                ],
+                env,
+            )
+            line = next((ln for ln in out.splitlines() if ln.startswith("LOOP ")), None)
             if status != 0 or line is None:
-                print(f"LOOPRSS engine=operon shape={shape} n={eff_n} outer={outer} ERROR status={status} out={out[:200]}")
+                print(
+                    f"LOOPRSS engine=operon shape={shape} n={eff_n} outer={outer} ERROR status={status} out={out[:200]}"
+                )
             else:
                 print(f"LOOPRSS hwm_kb={hwm} ru_maxrss_kb={ru} {line.split(' ', 1)[1]}")
 
@@ -116,9 +129,11 @@ def main():
                 ("rust", [RS_BIN, shape, str(eff_n), str(outer)]),
             ):
                 out, status = run_child(cmd, env)
-                line = next((l for l in out.splitlines() if l.startswith("LOOP ")), None)
+                line = next((ln for ln in out.splitlines() if ln.startswith("LOOP ")), None)
                 if status != 0 or line is None:
-                    print(f"LOOPRSS engine={engine} shape={shape} n={eff_n} outer={outer} ERROR status={status}")
+                    print(
+                        f"LOOPRSS engine={engine} shape={shape} n={eff_n} outer={outer} ERROR status={status}"
+                    )
                 else:
                     print(f"LOOPRSS {line.split(' ', 1)[1]}")
 

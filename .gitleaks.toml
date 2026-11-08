@@ -1,0 +1,17 @@
+# gitleaks configuration — operon-lang-dev.
+# The full-history scan (master-ci secrets job, gitleaks 8.30.1) flags two
+# RETIRED paths whose matching lines are placeholders/env-var references,
+# not credentials. Verified 2026-11-08 by shape audit: every matched value
+# is 9-13 characters (real GitHub tokens are 36-255); both files were
+# deleted from the tree before v2.9.0. No rotation required; the commits
+# stay in history (force-push is forbidden by house law) and the paths are
+# allowlisted so the gate holds.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "retired e2e/android tooling with placeholder tokens only"
+paths = [
+    '''scripts/pkg_hosted_e2e\.sh''',
+    '''\.github/workflows/tubeforge-android\.yml''',
+]

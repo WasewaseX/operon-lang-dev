@@ -16,6 +16,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# least privilege: nothing in this workflow writes to the repo
+permissions:
+  contents: read
+
 jobs:
   sast:
     name: ast-grep + bandit + semgrep
@@ -23,11 +27,13 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0 (SHA-pinned, sec-r1)
+        with:
+          persist-credentials: false
 
       - name: Install tool set
         run: |
-          npm install -g @ast-grep/cli
-          pipx install semgrep bandit 2>/dev/null || pipx install bandit
+          npm install -g @ast-grep/cli@0.40.1
+          pipx install "semgrep==1.145.0" "bandit==1.9.2"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: ast-grep structural scan (Rust core)

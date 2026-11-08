@@ -34,7 +34,7 @@ PYTHON = shutil.which("python3") or sys.executable
 
 WORKLOADS = [
     # (name, argv-tail, runs) — argv passed after `--` to operon, verbatim to python
-    ("startup", None, 15),                     # usage() print, no file work
+    ("startup", None, 15),  # usage() print, no file work
     ("info_big", ["info", BIG], 7),
     ("stats_big", ["stats", BIG], 7),
     ("top_big", ["top", BIG, "product", "8"], 7),
@@ -46,9 +46,17 @@ RUNS_FILE = os.path.join(HERE, "results_v1.json")
 
 
 def operon_cmd(tail):
-    cmd = [OPERON, "run", os.path.join(APP, "csvstat.op"), "--cell",
-           os.path.join(APP, "csvstat.cell"), "--allow-read", ROOT,
-           "--fuel", "20000000000"]
+    cmd = [
+        OPERON,
+        "run",
+        os.path.join(APP, "csvstat.op"),
+        "--cell",
+        os.path.join(APP, "csvstat.cell"),
+        "--allow-read",
+        ROOT,
+        "--fuel",
+        "20000000000",
+    ]
     if tail:
         cmd += ["--"] + tail
     return cmd
@@ -99,10 +107,12 @@ def main():
         "fixture_big": BIG,
         "fixture_small": SMALL,
         "versions": {
-            "operon": subprocess.run([OPERON, "version"], capture_output=True,
-                                     text=True).stdout.splitlines()[0],
-            "python": subprocess.run([PYTHON, "--version"], capture_output=True,
-                                     text=True).stdout.strip(),
+            "operon": subprocess.run(
+                [OPERON, "version"], capture_output=True, text=True
+            ).stdout.splitlines()[0],
+            "python": subprocess.run(
+                [PYTHON, "--version"], capture_output=True, text=True
+            ).stdout.strip(),
         },
     }
     out = {"meta": meta, "workloads": {}}
@@ -114,13 +124,17 @@ def main():
         ok_p = row["python"].get("status") == "ok"
         if ok_o and ok_p:
             row["cs_identical"] = row["operon"]["cs"] == row["python"]["cs"]
-            row["ratio_py_over_op"] = round(row["python"]["median_ms"] /
-                                            row["operon"]["median_ms"], 2) \
-                if row["operon"]["median_ms"] > 0 else None
+            row["ratio_py_over_op"] = (
+                round(row["python"]["median_ms"] / row["operon"]["median_ms"], 2)
+                if row["operon"]["median_ms"] > 0
+                else None
+            )
         out["workloads"][wname] = row
-        print(f"{wname}: operon {row['operon'].get('median_ms')} ms | "
-              f"python {row['python'].get('median_ms')} ms | "
-              f"cs_identical={row.get('cs_identical')}")
+        print(
+            f"{wname}: operon {row['operon'].get('median_ms')} ms | "
+            f"python {row['python'].get('median_ms')} ms | "
+            f"cs_identical={row.get('cs_identical')}"
+        )
 
     with open(RUNS_FILE, "w") as f:
         json.dump(out, f, indent=1, sort_keys=True)

@@ -96,6 +96,8 @@ curl -s -XPOST "$B/api/tf/settings" -d '{"concurrentDownloads":3}' >/dev/null
 ck "$(curl -s "$B/api/tf/settings" | jsonget 'd["settings"]["concurrentDownloads"]')" "3" "settings persisted"
 
 echo "== files + raw serving"
+# shellcheck disable=SC2012  # lab: exactly one artifact lands in dl/
+# shellcheck disable=SC2012  # lab: exactly one artifact lands in dl/
 FN=$(ls "$DATA/dl" | head -1)
 FN_ENC=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$FN")
 ck "$(curl -s "$B/api/tf/files" | jsonget 'len(d["files"])')" "2" "files listed"
@@ -115,7 +117,7 @@ printf '{"toolPaths":{"ytdlp":"%s","ffmpeg":"%s"}}' "$MOCKS/yt-dlp" "$MOCKS/ffmp
 TUBEFORGE_DATA="$DATA2" "$BIN" \
   "https://example.com/watch?v=mock001" --out "$DATA2/dl" -q >"$DATA2/cli.log" 2>&1
 ck "$( [ -s "$DATA2/dl/Mock Video [mock001].mp4" ] && echo yes )" "yes" "CLI downloads file"
-grep -q "✓" "$DATA2/cli.log" && ck "yes" "yes" "CLI prints done line" || ck "no" "yes" "CLI prints done line"
+if grep -q "✓" "$DATA2/cli.log"; then ck "yes" "yes" "CLI prints done line"; else ck "no" "yes" "CLI prints done line"; fi
 
 echo "== doctor"
 DOC=$(TUBEFORGE_DATA="$DATA2" "$BIN" doctor)

@@ -11,12 +11,11 @@ drives `operon debug --protocol=json` end to end. Contract under test:
   stop), the set request (live rebind), and stack frames carrying real
   call-site lines for outer frames.
 """
+
 import json
-import subprocess
-import sys
-import tempfile
 import os
-import time
+import subprocess
+import tempfile
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OP = os.path.join(REPO, "bin", "operon")
@@ -39,9 +38,14 @@ class Session:
         args = [OP, "debug", path, "--protocol=json"]
         for b in breaks:
             args += ["--break", str(b)]
-        self.p = subprocess.Popen(args, stdin=subprocess.PIPE,
-                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                  text=True, bufsize=1)
+        self.p = subprocess.Popen(
+            args,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+        )
 
     def read_frame(self, timeout=10):
         # line-buffered pipe; blocking read is fine for the e2e
@@ -122,8 +126,9 @@ def main():
     assert [b["line"] for b in r["breakpoints"]] == [3, 7], r
     assert all(b["condition"] is None for b in r["breakpoints"]), r
     # W008 polish: a CONDITIONAL breakpoint — false condition never fires
-    r = s2.request(nid(), "breakpoints",
-                   {"add": [{"line": 4, "condition": "y > 100"}], "remove": []})
+    r = s2.request(
+        nid(), "breakpoints", {"add": [{"line": 4, "condition": "y > 100"}], "remove": []}
+    )
     assert r["ok"], r
     assert {"line": 4, "condition": "y > 100"} in r["breakpoints"], r
     r = s2.request(nid(), "continue")
@@ -163,8 +168,9 @@ def main():
     s5 = Session(path, [8])
     stop = s5.wait_stopped()
     assert stop["line"] == 8, stop
-    r = s5.request(nid(), "breakpoints",
-                   {"add": [{"line": 4, "condition": "y > 100"}], "remove": [8]})
+    r = s5.request(
+        nid(), "breakpoints", {"add": [{"line": 4, "condition": "y > 100"}], "remove": [8]}
+    )
     assert r["ok"] and [b["line"] for b in r["breakpoints"]] == [4], r
     r = s5.request(nid(), "continue")
     assert r["ok"], r
@@ -174,8 +180,11 @@ def main():
     s6 = Session(path, [8])
     stop = s6.wait_stopped()
     assert stop["line"] == 8, stop
-    r = s6.request(nid(), "breakpoints",
-                   {"add": [{"line": 4, "condition": "not_a_binding > 1"}], "remove": [8]})
+    r = s6.request(
+        nid(),
+        "breakpoints",
+        {"add": [{"line": 4, "condition": "not_a_binding > 1"}], "remove": [8]},
+    )
     assert r["ok"], r
     r = s6.request(nid(), "continue")
     assert r["ok"], r
@@ -196,12 +205,17 @@ def main():
     # EOF would also resume; we continued, so the program finished
 
     # --- EOF never wedges: no stdin at all
-    s4 = subprocess.run([OP, "debug", path, "--protocol=json", "--break", "7"],
-                        input="", capture_output=True, text=True, timeout=30)
+    s4 = subprocess.run(
+        [OP, "debug", path, "--protocol=json", "--break", "7"],
+        input="",
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
     assert "21" not in s4.stdout, "protocol leaked to stdout?"
-    out_frames = [l for l in s4.stdout.splitlines() if l.strip()]
-    for l in out_frames:
-        json.loads(l)  # every stdout line must be valid JSON
+    out_frames = [ln for ln in s4.stdout.splitlines() if ln.strip()]
+    for ln in out_frames:
+        json.loads(ln)  # every stdout line must be valid JSON
     assert "[out] 21" in s4.stderr, s4.stderr
 
     os.remove(path)

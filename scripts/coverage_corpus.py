@@ -55,12 +55,10 @@ DOC_PATH = os.path.join(ROOT, "docs", "coverage.md")
 
 # Copied strategy from scripts/gen_doc_stats.py std_modules() so the static
 # inventory here can be diffed against docs/stats.json line for line.
-STD_GENE_RE = re.compile(r'^\s*(?:pub\s+)?gene\s+(\w+)\s*\(', re.M)
-USE_RE = re.compile(
-    r'^\s*use\s+std[/::]([A-Za-z_]\w*)(?:\s+as\s+([A-Za-z_]\w*))?\s*;?\s*$')
-QUAL_CALL_RE = re.compile(
-    r'(?<![\w.])([A-Za-z_]\w*)\s*\.\s*([A-Za-z_]\w*)\s*\(')
-BARE_CALL_RE = re.compile(r'(?<![\w.])([A-Za-z_]\w*)\s*\(')
+STD_GENE_RE = re.compile(r"^\s*(?:pub\s+)?gene\s+(\w+)\s*\(", re.M)
+USE_RE = re.compile(r"^\s*use\s+std[/::]([A-Za-z_]\w*)(?:\s+as\s+([A-Za-z_]\w*))?\s*;?\s*$")
+QUAL_CALL_RE = re.compile(r"(?<![\w.])([A-Za-z_]\w*)\s*\.\s*([A-Za-z_]\w*)\s*\(")
+BARE_CALL_RE = re.compile(r"(?<![\w.])([A-Za-z_]\w*)\s*\(")
 
 CORPUS_GLOBS = ("tests/*.op", "tests/differential/*.op", "tests/granted/*.op")
 TOP_UNCOVERED = 20
@@ -149,8 +147,7 @@ def scan_file(rel, defs):
         if names is None:
             continue
         q_hits = {n for n in names if (ns, n) in qual}
-        b_hits = {n for n in names
-                  if n in bare and n not in local_defs} | q_hits
+        b_hits = {n for n in names if n in bare and n not in local_defs} | q_hits
         if b_hits:
             ref[mod] = b_hits
         if q_hits:
@@ -179,17 +176,31 @@ def compute():
         names = defs[mod]
         hit = sorted(referenced[mod])
         miss = sorted(set(names) - set(hit))
-        rows.append({"module": mod, "defined": len(names),
-                     "referenced": len(hit), "names": hit, "uncovered": miss})
+        rows.append(
+            {
+                "module": mod,
+                "defined": len(names),
+                "referenced": len(hit),
+                "names": hit,
+                "uncovered": miss,
+            }
+        )
     defined_total = sum(r["defined"] for r in rows)
     ref_total = sum(r["referenced"] for r in rows)
     pct = (100.0 * ref_total / defined_total) if defined_total else 0.0
     q_total = sum(len(qualified_only[m]) for m in qualified_only)
     q_pct = (100.0 * q_total / defined_total) if defined_total else 0.0
-    return {"rows": rows, "files": files, "files_with_imports": files_with_imports,
-            "modules": len(rows), "defined_total": defined_total,
-            "ref_total": ref_total, "pct": pct, "q_total": q_total,
-            "q_pct": q_pct}
+    return {
+        "rows": rows,
+        "files": files,
+        "files_with_imports": files_with_imports,
+        "modules": len(rows),
+        "defined_total": defined_total,
+        "ref_total": ref_total,
+        "pct": pct,
+        "q_total": q_total,
+        "q_pct": q_pct,
+    }
 
 
 def l1_summary_text():
@@ -209,36 +220,49 @@ def render_rows(rows, indent=""):
         names = ", ".join(r["names"]) if r["names"] else "(none)"
         if not r["defined"]:
             names = "(no top-level gene defs; sequence exports)"
-        L.append("%sstd/%-14s %3d  %4d  %s" % (indent, r["module"], r["defined"],
-                                               r["referenced"], names))
+        L.append(
+            "%sstd/%-14s %3d  %4d  %s" % (indent, r["module"], r["defined"], r["referenced"], names)
+        )
     return L
 
 
 def render_stdout(s):
     L = []
     L.append("== std call-site coverage of the .op proof corpus ==")
-    L.append("scope: %s (%d files, %d importing std)"
-             % (", ".join(CORPUS_GLOBS), len(s["files"]), s["files_with_imports"]))
+    L.append(
+        "scope: %s (%d files, %d importing std)"
+        % (", ".join(CORPUS_GLOBS), len(s["files"]), s["files_with_imports"])
+    )
     L.append("static set: top-level gene defs in std/*.op (gen_doc_stats pattern)")
     L.append("this is call-site coverage by static analysis, not execution coverage")
     L.append("")
     L.append("module             def   ref  referenced names")
     L.extend(render_rows(s["rows"]))
     L.append("")
-    L.append("TOTAL              %3d  %4d  %.1f%% call-site coverage over %d modules"
-             % (s["defined_total"], s["ref_total"], s["pct"], s["modules"]))
+    L.append(
+        "TOTAL              %3d  %4d  %.1f%% call-site coverage over %d modules"
+        % (s["defined_total"], s["ref_total"], s["pct"], s["modules"])
+    )
     uncovered = [(r["module"], n) for r in s["rows"] for n in r["uncovered"]]
     private = [(m, n) for (m, n) in uncovered if n.startswith("__")]
-    L.append("uncovered: %d std functions (%d public, %d std-internal __ helpers)"
-             % (len(uncovered), len(uncovered) - len(private), len(private)))
+    L.append(
+        "uncovered: %d std functions (%d public, %d std-internal __ helpers)"
+        % (len(uncovered), len(uncovered) - len(private), len(private))
+    )
     if s["q_total"] < s["ref_total"]:
-        L.append("qualified-namespace calls alone reach %d of %d (%.1f%%); the bare-name"
-                 % (s["q_total"], s["defined_total"], s["q_pct"]))
-        L.append("rule adds the other %d and is the disclosed over-count surface"
-                 % (s["ref_total"] - s["q_total"]))
+        L.append(
+            "qualified-namespace calls alone reach %d of %d (%.1f%%); the bare-name"
+            % (s["q_total"], s["defined_total"], s["q_pct"])
+        )
+        L.append(
+            "rule adds the other %d and is the disclosed over-count surface"
+            % (s["ref_total"] - s["q_total"])
+        )
     else:
-        L.append("qualified-namespace calls alone reach %d of %d (%.1f%%); the bare-name"
-                 % (s["q_total"], s["defined_total"], s["q_pct"]))
+        L.append(
+            "qualified-namespace calls alone reach %d of %d (%.1f%%); the bare-name"
+            % (s["q_total"], s["defined_total"], s["q_pct"])
+        )
         L.append("rule adds nothing today, it stays in as the disclosed over-count surface")
     return "\n".join(L)
 
@@ -279,9 +303,10 @@ def render_doc(s):
     L.append("")
     L.append("Status: measured. Static analysis of the corpus, not execution")
     L.append("coverage; the exact rules and limits are in the methodology below.")
-    L.append("Scope: %s (%d files scanned, %d of them import std)."
-             % (", ".join("`%s`" % g for g in CORPUS_GLOBS),
-                len(s["files"]), s["files_with_imports"]))
+    L.append(
+        "Scope: %s (%d files scanned, %d of them import std)."
+        % (", ".join("`%s`" % g for g in CORPUS_GLOBS), len(s["files"]), s["files_with_imports"])
+    )
     L.append("")
     L.append("| module | defined | referenced | referenced names |")
     L.append("|---|---|---|---|")
@@ -292,21 +317,32 @@ def render_doc(s):
             names = ", ".join("`%s`" % n for n in r["names"])
         else:
             names = "(none)"
-        L.append("| std/%s | %d | %d | %s |" % (r["module"], r["defined"],
-                                                r["referenced"], names))
+        L.append("| std/%s | %d | %d | %s |" % (r["module"], r["defined"], r["referenced"], names))
     L.append("")
     uncovered = [(r["module"], n) for r in s["rows"] for n in r["uncovered"]]
-    L.append("Total: **%d of %d** defined std functions referenced by the corpus "
-             "(**%.1f%%** call-site coverage) across %d modules; %d functions "
-             "uncovered. Qualified-namespace calls alone reach %d of %d "
-             "(%.1f%%)%s"
-             % (s["ref_total"], s["defined_total"], s["pct"], s["modules"],
-                len(uncovered), s["q_total"], s["defined_total"], s["q_pct"],
-                (", the bare-name rule adds the other %d and is the disclosed "
-                 "over-count surface." % (s["ref_total"] - s["q_total"]))
-                if s["q_total"] < s["ref_total"] else
-                "; the bare-name rule adds nothing today, it stays in as the "
-                "disclosed over-count surface."))
+    L.append(
+        "Total: **%d of %d** defined std functions referenced by the corpus "
+        "(**%.1f%%** call-site coverage) across %d modules; %d functions "
+        "uncovered. Qualified-namespace calls alone reach %d of %d "
+        "(%.1f%%)%s"
+        % (
+            s["ref_total"],
+            s["defined_total"],
+            s["pct"],
+            s["modules"],
+            len(uncovered),
+            s["q_total"],
+            s["defined_total"],
+            s["q_pct"],
+            (
+                ", the bare-name rule adds the other %d and is the disclosed "
+                "over-count surface." % (s["ref_total"] - s["q_total"])
+            )
+            if s["q_total"] < s["ref_total"]
+            else "; the bare-name rule adds nothing today, it stays in as the "
+            "disclosed over-count surface.",
+        )
+    )
     L.append("")
     L.append("### Methodology (call-site coverage, static analysis of the corpus)")
     L.append("")
@@ -338,8 +374,7 @@ def render_doc(s):
     L.append("  the combined total is the ceiling; the truth sits between them and")
     L.append("  this tool cannot narrow it further without executing the corpus.")
     L.append("")
-    L.append("## Top-%d uncovered std functions (next targets, pick from evidence)"
-             % TOP_UNCOVERED)
+    L.append("## Top-%d uncovered std functions (next targets, pick from evidence)" % TOP_UNCOVERED)
     L.append("")
     if not uncovered:
         L.append("Nothing is uncovered; the corpus reaches every measured std")
@@ -353,12 +388,16 @@ def render_doc(s):
             L.append("uncovered public surface to target.")
         else:
             if len(public) < TOP_UNCOVERED:
-                L.append("The uncovered public surface is smaller than %d; all %d "
-                         "are listed." % (TOP_UNCOVERED, len(public)))
+                L.append(
+                    "The uncovered public surface is smaller than %d; all %d "
+                    "are listed." % (TOP_UNCOVERED, len(public))
+                )
                 L.append("")
             shown = public[:TOP_UNCOVERED]
-            L.append("Public names only, ranked by module, then name; the full "
-                     "uncovered set is %d" % len(uncovered))
+            L.append(
+                "Public names only, ranked by module, then name; the full "
+                "uncovered set is %d" % len(uncovered)
+            )
             L.append("functions.")
             L.append("")
             L.append("| # | module | function |")
@@ -367,12 +406,15 @@ def render_doc(s):
                 L.append("| %d | std/%s | `%s` |" % (i, mod, name))
         if private:
             L.append("")
-            L.append("Std-internal helpers (the __ prefix) are %d further names the "
-                     "corpus never" % len(private))
-            L.append("reaches; the corpus cannot call them directly by design, so "
-                     "they are not")
-            L.append("targets, and this is not a dead-code claim: %s."
-                     % ", ".join("`%s`" % n for _m, n in private))
+            L.append(
+                "Std-internal helpers (the __ prefix) are %d further names the "
+                "corpus never" % len(private)
+            )
+            L.append("reaches; the corpus cannot call them directly by design, so they are not")
+            L.append(
+                "targets, and this is not a dead-code claim: %s."
+                % ", ".join("`%s`" % n for _m, n in private)
+            )
     return "\n".join(L) + "\n"
 
 
@@ -383,8 +425,10 @@ def main():
     with open(DOC_PATH, "w", encoding="utf-8") as f:
         f.write(render_doc(s))
     print("")
-    print("doc: docs/coverage.md (layer 1: %s)"
-          % ("measured" if l1_summary_text() is not None else "unavailable"))
+    print(
+        "doc: docs/coverage.md (layer 1: %s)"
+        % ("measured" if l1_summary_text() is not None else "unavailable")
+    )
     return 0
 
 
