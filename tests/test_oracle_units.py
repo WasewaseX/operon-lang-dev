@@ -9,7 +9,7 @@ Pinned here:
 - deep_eq: structural equality laws, including the two laws the
       corpus historically undercovered — bool/int distinctness and the
       >2^53 Int/Float exactness rule (no f64 rounding on the oracle).
-      """
+"""
 
 import importlib.util
 import os
