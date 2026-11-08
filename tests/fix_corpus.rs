@@ -118,16 +118,31 @@ fn law1_fix_never_changes_canonical_meaning_corpus_wide() {
             // at the default 2MB test-thread boundary (any compilation
             // variance flips it) and the pipeline's fix->re-parse half is
             // excluded, loudly.
-            let handle = std::thread::Builder::new()
-                .stack_size(64 * 1024 * 1024)
-                .spawn(move || {
-                    let canon_once = format_program(&parser::parse(&src));
-                    format_program(&parser::parse(&src));
-                    canon_once
-                })
-                .expect("spawn big-stack containment thread");
-            let canon_once = handle.join().expect("contained depth pin panicked");
-            let _ = canon_once;
+            //
+            // RELEASE-only: debug builds spend 3-5 physical frames of
+            // ~40-128 KiB per nesting level, so a full-budget (~4098-deep)
+            // descent cannot fit any practical stack at all — the pin runs
+            // where it can physically run (release = the house test
+            // profile, `cargo test --release`), and debug skips loudly.
+            #[cfg(debug_assertions)]
+            eprintln!(
+                "law1: containment skip (debug build): {} — full-budget \
+                 descent is release-profile-only",
+                rel
+            );
+            #[cfg(not(debug_assertions))]
+            {
+                let handle = std::thread::Builder::new()
+                    .stack_size(64 * 1024 * 1024)
+                    .spawn(move || {
+                        let canon_once = format_program(&parser::parse(&src));
+                        format_program(&parser::parse(&src));
+                        canon_once
+                    })
+                    .expect("spawn big-stack containment thread");
+                let canon_once = handle.join().expect("contained depth pin panicked");
+                let _ = canon_once;
+            }
             continue;
         }
         let (fixed, _rep) = fix_source(&src);
