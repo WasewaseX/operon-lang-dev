@@ -8735,12 +8735,12 @@ class Interp:
                     c = fmt[i + 1]
                     out.append(
                         {
-                            "Y": f"{st.tm_year:04d}",
-                            "m": f"{st.tm_mon:02d}",
-                            "d": f"{st.tm_mday:02d}",
-                            "H": f"{st.tm_hour:02d}",
-                            "M": f"{st.tm_min:02d}",
-                            "S": f"{st.tm_sec:02d}",
+                            "Y": f"{tm.tm_year:04d}",
+                            "m": f"{tm.tm_mon:02d}",
+                            "d": f"{tm.tm_mday:02d}",
+                            "H": f"{tm.tm_hour:02d}",
+                            "M": f"{tm.tm_min:02d}",
+                            "S": f"{tm.tm_sec:02d}",
                             "%": "%",
                         }.get(c, "%" + c)
                     )
