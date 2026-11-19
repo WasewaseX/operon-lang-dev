@@ -108,7 +108,7 @@ Source: Hill-Langmuir input function; EC50 = the half-max point (Alon, An Introd
 | `v1_2t` | `0.8` | absolute | `1e-12` | level = 2t = 0.6: 4/(4+1) = 0.8 |
 | `v1_3t` | `0.9` | absolute | `1e-12` | level = 3t = 0.9: 9/(9+1) = 0.9 (the 10-90 span complete) |
 
-Why this magnitude is defensible: The expectations are the closed form of the n=2 curve at the five canonical points (t/3, t/2, t, 2t, 3t with t = 0.3, strength 1.0), and the engine evaluates strength `* L*L` / (L*L + t*t) in exactly the op order the expectation is written in (repeated multiplication, no powi, W090). Live worst case is one ulp (the t/3 point reads 0.10000000000000002 against 0.1, a 1.4e-17 gap), so 1e-12 absolute is a refactor guard, not a jitter allowance. Fails-pre: any change to the influence formula, the gate semantics, or the level-latch behavior.
+Why this magnitude is defensible: The expectations are the closed form of the n=2 curve at the five canonical points (t/3, t/2, t, 2t, 3t with t = 0.3, strength 1.0), and the engine evaluates strength \* L\*L / (L\*L + t\*t) in exactly the op order the expectation is written in (repeated multiplication, no powi, W090). Live worst case is one ulp (the t/3 point reads 0.10000000000000002 against 0.1, a 1.4e-17 gap), so 1e-12 absolute is a refactor guard, not a jitter allowance. Fails-pre: any change to the influence formula, the gate semantics, or the level-latch behavior.
 
 Enforcing tests: `tests/sci_ec50_hill.op`. Measurement probes: `bootstrap/validation_probes/v1_hill.op`.
 
@@ -124,7 +124,7 @@ Source: Elowitz & Leibler (2000), Nature 403:335, a synthetic three-repressor ri
 | `v2_period_ticks_ok` | `true` | exact | bit-identical | every consecutive peak-index distance equals 6 ticks (structural period check, not just a count) |
 | `v2_stateless_fold` | `true` | exact | bit-identical | repressi_state() twice at the same tick: identical p, q, r (the W089 stateless-fold determinism contract) |
 
-Why this magnitude is defensible: The period is a DISCRETE structural quantity: 5 local maxima of node p in a fixed 30-tick window after a 3-tick warmup, consecutive peaks exactly 6 ticks apart (period 5 or 7 would give 6 or 4 peaks and fail). The Euler fold uses only +, -, *, / with a fixed op order, so the peak grid is bit-reproducible and no numerical slack is defensible: exact. Peak amplitudes are deliberately NOT pinned: they are still relaxing toward the limit cycle from the initial condition, a documented property, not a published-number claim (the enforcing test pins amplitudes only as stateless-fold identity, the W089 determinism contract). Fails-pre: a drifted period (integration changed), a hardcoded drive schedule, or a stateful fold.
+Why this magnitude is defensible: The period is a DISCRETE structural quantity: 5 local maxima of node p in a fixed 30-tick window after a 3-tick warmup, consecutive peaks exactly 6 ticks apart (period 5 or 7 would give 6 or 4 peaks and fail). The Euler fold uses only +, -, \*, / with a fixed op order, so the peak grid is bit-reproducible and no numerical slack is defensible: exact. Peak amplitudes are deliberately NOT pinned: they are still relaxing toward the limit cycle from the initial condition, a documented property, not a published-number claim (the enforcing test pins amplitudes only as stateless-fold identity, the W089 determinism contract). Fails-pre: a drifted period (integration changed), a hardcoded drive schedule, or a stateful fold.
 
 Enforcing tests: `tests/sci_repressi_period.op`. Measurement probes: `bootstrap/validation_probes/v2_period.op`.
 
@@ -201,7 +201,7 @@ Source: RNAi dose-response: per-site capture probability with multiplicative sit
 | `v6_immune_expresses` | `true` | exact | bit-identical | @acetylate immunity is checked BEFORE any draw: the immune transcript expresses |
 | `v6_no_draw_immune` | `true` | exact | bit-identical | random() before and after the immune call, same seed: identical value, no entropy spent |
 
-Why this magnitude is defensible: The capture count (16 of 20 calls at p = 1-(1-0.5)^2 = 0.75) is a PARITY PIN of the shared mirrored xorshift64* stream under randomize(42), not a statistic over random draws: the stream is pure integer arithmetic (DETERMINISM section 4), so the count is exact and no other tolerance is defensible. The stream value row (first draw after randomize(7)) pins the same property bit-identically. The no-draw rows pin entropy-stream discipline (binary capture and the @acetylate immune check must not consume a draw): exact booleans. Fails-pre: an entropy-stream change (a breaking change per DETERMINISM section 8), a lost immune pre-check, or a composition change.
+Why this magnitude is defensible: The capture count (16 of 20 calls at p = 1-(1-0.5)^2 = 0.75) is a PARITY PIN of the shared mirrored xorshift64\* stream under randomize(42), not a statistic over random draws: the stream is pure integer arithmetic (DETERMINISM section 4), so the count is exact and no other tolerance is defensible. The stream value row (first draw after randomize(7)) pins the same property bit-identically. The no-draw rows pin entropy-stream discipline (binary capture and the @acetylate immune check must not consume a draw): exact booleans. Fails-pre: an entropy-stream change (a breaking change per DETERMINISM section 8), a lost immune pre-check, or a composition change.
 
 Enforcing tests: `tests/silence_dose.op`. Measurement probes: `bootstrap/validation_probes/v6_silence.op`.
 
@@ -214,11 +214,11 @@ Source: Thermodynamic occupancy survival: repression composed multiplicatively (
 | Quantity | Expected | Comparison | Tolerance | Derivation |
 |---|---|---|---|---|
 | `v7_sub_partial` | `0.2` | absolute | `1e-12` | subtractive legacy: 1 - 0.4 - 0.4 = 0.2 (live reads 0.19999999999999996, one-ulp class) |
-| `v7_occ_partial` | `0.36` | absolute | `1e-12` | occupancy survival: 1 \* 0.6 \\* 0.6 = 0.36 |
+| `v7_occ_partial` | `0.36` | absolute | `1e-12` | occupancy survival: 1 \* 0.6 \* 0.6 = 0.36 |
 | `v7_sub_overshoot` | `0.0` | exact | bit-identical | two near-full subtractive repressors overshoot and clamp to a hard 0.0 (discrete clamp outcome) |
 | `v7_occ_survival` | `9.802960494069226e-05` | absolute | `1e-12` | occupancy near-full survival: (1 - 1/1.01)^2, approaches but never crosses zero |
 
-Why this magnitude is defensible: The expectations are closed forms: two partial repressors (level 1.0, strength 0.5, threshold 0.5, influence 0.4 each) give survival 1 \* 0.6 \\* 0.6 = 0.36 and the legacy subtractive form gives 1 - 0.4 - 0.4 = 0.2; two near-full repressors (influence 1/(1+0.01) each) give survival (1 - 1/1.01)^2 (hand-derived 9.802960494069213e-05, live 9.802960494069226e-05, a 1.3e-17 gap) and the subtractive form overshoots to a hard-clamped 0.0. The engine composes in the derivation's op order, so observed gaps are one-ulp class; 1e-12 absolute guards re-association only. The hard-zero row is exact (the subtractive overshoot is a clamp, not a small number). Fails-pre: a composition change (multiplicative to subtractive or back), an overshoot into negatives, or an influence-formula change.
+Why this magnitude is defensible: The expectations are closed forms: two partial repressors (level 1.0, strength 0.5, threshold 0.5, influence 0.4 each) give survival 1 \* 0.6 \* 0.6 = 0.36 and the legacy subtractive form gives 1 - 0.4 - 0.4 = 0.2; two near-full repressors (influence 1/(1+0.01) each) give survival (1 - 1/1.01)^2 (hand-derived 9.802960494069213e-05, live 9.802960494069226e-05, a 1.3e-17 gap) and the subtractive form overshoots to a hard-clamped 0.0. The engine composes in the derivation's op order, so observed gaps are one-ulp class; 1e-12 absolute guards re-association only. The hard-zero row is exact (the subtractive overshoot is a clamp, not a small number). Fails-pre: a composition change (multiplicative to subtractive or back), an overshoot into negatives, or an influence-formula change.
 
 Enforcing tests: `tests/grn_occupy.op`. Measurement probes: `bootstrap/validation_probes/v7_occupy.op`.
 

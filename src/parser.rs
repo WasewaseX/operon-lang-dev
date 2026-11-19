@@ -206,10 +206,11 @@ pub fn parse(src: &str) -> Program {
     // budget diagnostic always fires first, in every build profile, on
     // every host thread size. The reservation is virtual; RSS covers
     // only the pages actually touched. All
-    // parser state is owned (lex output + first_tok_line), so the whole
-    // descent moves into the thread with zero copying; the AST and the
-    // note trail cross back through the scope, and a parser panic still
-    // propagates to the caller via join -> resume_unwind.
+    // parser state is owned (lex output + first_tok_line + the lex-time
+    // notes), so the whole descent, the Program assembly and the
+    // collect_structure walk move into the thread with zero copying; the
+    // finished Program crosses back through the scope, and a parser panic
+    // still propagates to the caller via join -> resume_unwind.
     // Profile-conditional reservation: release needs ~14 MiB at full
     // budget depth (5 physical frames x ~0.7 KiB x 4096), so 64 MiB keeps
     // >4x headroom with a cheap mmap (the 1 GiB reservation measurably
@@ -222,7 +223,7 @@ pub fn parse(src: &str) -> Program {
     } else {
         64 * 1024 * 1024
     };
-    let (stmts, mut parser_notes, module_doc, pub_names) = std::thread::scope(|s| {
+    let prog = std::thread::scope(|s| {
         std::thread::Builder::new()
             .stack_size(stack_bytes)
             .name("operon-parser".to_string())
@@ -245,26 +246,33 @@ pub fn parse(src: &str) -> Program {
                     type_param_stack: Vec::new(),
                 };
                 let stmts = p.parse_program();
-                (stmts, p.notes, p.module_doc, p.pub_names)
+                // F3 (review): Program assembly AND collect_structure (a
+                // recursive clone walk over the whole tree) stay on the
+                // worker too. Running collect_structure on the caller
+                // re-introduced caller-stack depth proportional to the AST
+                // — deep calls/indexes could still exhaust a small host
+                // thread BEFORE parse() returned, the exact #111 embedder
+                // residual this dedicated thread exists to prevent.
+                notes.append(&mut p.notes);
+                let mut prog = Program {
+                    proofs: Vec::new(),
+                    named_frames: Vec::new(),
+                    anchor_exports: Vec::new(),
+                    tad_exports: Vec::new(),
+                    tad_members: Vec::new(),
+                    ires: Vec::new(),
+                    module_doc: p.module_doc,
+                    pub_exports: p.pub_names,
+                    notes,
+                    stmts,
+                };
+                collect_structure(&mut prog);
+                prog
             })
             .expect("spawn operon-parser thread")
             .join()
             .unwrap_or_else(|e| std::panic::resume_unwind(e))
     });
-    notes.append(&mut parser_notes);
-    let mut prog = Program {
-        proofs: Vec::new(),
-        named_frames: Vec::new(),
-        anchor_exports: Vec::new(),
-        tad_exports: Vec::new(),
-        tad_members: Vec::new(),
-        ires: Vec::new(),
-        module_doc,
-        pub_exports: pub_names,
-        notes,
-        stmts,
-    };
-    collect_structure(&mut prog);
     prog
 }
 

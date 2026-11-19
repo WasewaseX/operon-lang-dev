@@ -74,8 +74,29 @@ def test_deep_eq_laws(a, b, expected):
 
 
 def test_deep_eq_nested_container_key_roundtrip():
-    # Z-104/Z-214 family: container keys survive insert/lookup round-trips
+    # Z-104/Z-214 family: container keys survive insert/lookup round-trips.
+    # F7 (review): the round-trip goes through the oracle's map helpers and
+    # asserts the stored VALUE. The previous version wrote a plain Python
+    # dict directly (never touching the oracle's container-key store) and
+    # compared two fresh lists, so it passed even with container-key lookup
+    # completely broken.
     m = {}
     key = [1, "k"]
-    m[repr(key)] = "val"  # the oracle two-store repr path
+    oracle._map_insert_key(m, key, "val")  # the oracle two-store repr path
+    assert oracle._map_lookup(m, key) == "val"  # the very same key object
+    assert oracle._map_lookup(m, [1, "k"]) == "val"  # deep_eq-equal fresh key
+    assert oracle._map_has(m, [1, "k"]) is True
+    assert oracle._map_lookup(m, [1, "other"]) is oracle._MAP_MISS
     assert oracle.deep_eq([1, "k"], [1, "k"]) is True
+
+
+def test_binop_in_list_membership_uses_the_needle():
+    # F1 (review): the list arm of the `in` op compared each ITEM with
+    # itself (deep_eq(x, x) under a shadowing comprehension), so ANY
+    # non-empty list reported membership for any needle. The needle is the
+    # outer x; the comprehension variable must be distinct.
+    assert oracle.Interp().binop("in", 2, [1, 3]) is False  # missing item
+    assert oracle.Interp().binop("in", 2, [1, 2, 3]) is True
+    assert oracle.Interp().binop("in", 0, []) is False  # empty list never matches
+    assert oracle.Interp().binop("in", [1], [[1], [2]]) is True  # container needle
+    assert oracle.Interp().binop("in", [9], [[1], [2]]) is False

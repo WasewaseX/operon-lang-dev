@@ -13,13 +13,13 @@ fi
 
 N=${CALL_ARGS_N:-200000}
 REPS=${CALL_ARGS_REPS:-3}
-OPS="--allow-env CALL_ARGS_N --allow-env CALL_ARGS_REPS"
+OPS=(--allow-env CALL_ARGS_N --allow-env CALL_ARGS_REPS)
 
 for lanes in slot env; do
   if [ "$lanes" = "slot" ]; then VMSLOTS=""; else VMSLOTS="0"; fi
   for rep in $(seq 1 "$REPS"); do
     CALL_ARGS_N="$N" CALL_ARGS_REPS="1" OPERON_VM_SLOTS="$VMSLOTS" \
-      "$BIN" run scripts/bench/call_args.op "$OPS" 2>/dev/null \
+      "$BIN" run scripts/bench/call_args.op "${OPS[@]}" 2>/dev/null \
       | grep '^ARGS ' | sed "s/^/LANE=$lanes /"
   done
 done | awk -F'[= ]' '

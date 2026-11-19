@@ -222,6 +222,14 @@ jobs:
     # dry-run rehearsals attach nothing, so there is no release to manifest
     if: ${{ inputs.dry_run != true }}
     runs-on: ubuntu-latest
+    # F2 (review): the workflow default is contents: read, which leaves
+    # github.token read-only HERE — `gh release upload` needs write to
+    # publish SHA256SUMS (and its sidecars); without this the manifest
+    # step fails on every real tag and install.sh --verify then refuses
+    # the release. Only this job is elevated; the build matrix keeps its
+    # own explicit grant.
+    permissions:
+      contents: write
     steps:
       # compat-r2 (v2.8.0 run 37146021197): this job never had a checkout —
       # and `gh release upload` requires a git repository context, so the

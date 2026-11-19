@@ -6023,7 +6023,10 @@ class Interp:
             return x >= y
         if op == "in":
             if isinstance(y, list):
-                return any(deep_eq(x, x) for x in y)
+                # F1 (review): the needle is the outer x; the list item must
+                # not shadow it (deep_eq(x, x) compared every item with
+                # itself and reported ANY non-empty list as containing x).
+                return any(deep_eq(x, item) for item in y)
             if isinstance(y, str) and isinstance(x, str):
                 return x in y
             if isinstance(y, dict):
@@ -8878,7 +8881,7 @@ class Interp:
             return Variant("Err", f"num() failed: cannot parse {type_name(v)} as a number")
         if name == "try_index":
             if len(args) != 2:
-                raise Stress("unfolded", "try_index(xs, i) needs exactly 2 arguments")
+                raise Stress("unfolded", "try_index(l, i) needs exactly 2 arguments")
             xs, i = args[0], args[1]
             if not isinstance(xs, list):
                 return Variant("Err", f"try_index needs a list, got {type_name(xs)}")
@@ -8901,7 +8904,7 @@ class Interp:
             return Variant("Err", f"no key '{v_display(k)}'")
         if name == "try_pop":
             if len(args) != 1:
-                raise Stress("unfolded", "try_pop(xs) needs exactly 1 argument")
+                raise Stress("unfolded", "try_pop(l) needs exactly 1 argument")
             xs = args[0]
             if not isinstance(xs, list):
                 return Variant("Err", f"try_pop needs a list, got {type_name(xs)}")

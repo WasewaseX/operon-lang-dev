@@ -343,6 +343,15 @@ def tol_cell(q):
     return f"`{fmt(q['tolerance'])}`"
 
 
+def _md_escape(text):
+    """Markdown-safe prose for the generated block: pipes cannot break the
+    table shape and asterisks cannot spawn emphasis over raw math. F5
+    (review): the escaping lives HERE (the generator, like the registry,
+    is the single source of truth) — hand-escaping inside the generated
+    block drifts and fails --check-doc."""
+    return text.replace("|", "\\|").replace("*", "\\*")
+
+
 def emit_table(reg):
     lines = []
     for e in reg["entries"]:
@@ -354,10 +363,10 @@ def emit_table(reg):
         lines.append("|---|---|---|---|---|")
         for q in e["quantities"]:
             exp = f"`{fmt(q['expected'])}`"
-            der = q["derivation"].replace("|", "\\|")
+            der = _md_escape(q["derivation"])
             lines.append(f"| `{q['name']}` | {exp} | {q['comparison']} | {tol_cell(q)} | {der} |")
         lines.append("")
-        lines.append(f"Why this magnitude is defensible: {e['why']}")
+        lines.append(f"Why this magnitude is defensible: {_md_escape(e['why'])}")
         lines.append("")
         tests = ", ".join(f"`{t}`" for t in e["enforcing_tests"])
         probes = ", ".join(f"`{p}`" for p in e["probes"])

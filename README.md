@@ -27,8 +27,8 @@ The mandate: *"Rust, then C, then Python, then Operon, then C++, then HTML, then
 | rank | language | lines | share | role |
 |---|---|---|---|---|
 | 1 | **Operon** | 436,753 | ~84% | **self-hosted stdlib (35 modules, generated inventory in [docs/STATS.md](docs/STATS.md)), proof tests, red-team suite, differential corpus, GenomeLab + the ytdl app (incl. the cross-language bench surface)** (`std/ tests/ examples/ apps/`) |
-| 2 | **Rust** | 61,795 | ~12% | lexer, Total Grammar parser, evaluator, capability sandbox, symbol table, HTTP/JSON, toolchain CLI, REPL, `operon-ls` LSP (`src/`) |
-| 3 | **Python** | 11,739 | ~2.3% | bootstrap: reference oracle + differential harness (`bootstrap/`), test infrastructure only, nothing shipped depends on it |
+| 2 | **Rust** | 61,842 | ~12% | lexer, Total Grammar parser, evaluator, capability sandbox, symbol table, HTTP/JSON, toolchain CLI, REPL, `operon-ls` LSP (`src/`) |
+| 3 | **Python** | 11,751 | ~2.3% | bootstrap: reference oracle + differential harness (`bootstrap/`), test infrastructure only, nothing shipped depends on it |
 | 4 | **Shell** | 3,347 | <1% | build/test/bench/stack/install scripts (`scripts/`) |
 | 5 | **JavaScript** | 2,062 | ~0.4% | browser playground subset interpreter (`web/playground/app.js`) |
 | 6 | **HTML** | 1,347 | ~0.3% | documentation site (`docs/`) |

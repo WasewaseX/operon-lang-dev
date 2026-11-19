@@ -98,6 +98,27 @@ fn parse_caller_thread_stays_tiny_for_shallow_programs() {
 }
 
 #[test]
+fn embedder_thread_deep_parse_completes_on_tiny_caller() {
+    // F3 (review): Program assembly AND collect_structure (the recursive
+    // structure-extraction clone walk) run on the parser worker now.
+    // Pre-fix, a deep parse on this 2 MiB caller aborted the host: the
+    // worker survived the descent, but collect_structure's recursion on
+    // the CALLER's stack exhausted it before parse() returned. The AST is
+    // forgotten (not dropped): recursive Drop on a 2 MiB thread is
+    // outside parse()'s contract — the work-thread helper pins that
+    // pattern.
+    let mut src = String::from("let x = f(");
+    src.push_str(&"g(".repeat(2000));
+    src.push('1');
+    src.push_str(&")".repeat(2000));
+    src.push(')');
+    assert!(
+        parse_on_small_thread(src).expect("no abort"),
+        "deep parse must complete on a 2 MiB caller (collect_structure on the worker)"
+    );
+}
+
+#[test]
 #[cfg(not(debug_assertions))]
 fn over_budget_nesting_is_rejected_not_aborted() {
     // 5000 nested calls exceed the 4096-frame budget: the parser must
