@@ -29,7 +29,7 @@ on:
 
 jobs:
   master:
-    uses: WasewaseX/master-ci/.github/workflows/master-ci.yml@fc691546b0015d9b8e1c5885dc4ed08e59fba17e # v1.16.0 (SHA-pinned, D-6)
+    uses: WasewaseX/master-ci/.github/workflows/master-ci.yml@f60b9d3e7ae2d024aa1b080f6f4c09e42471b7f5 # v1.16.0 (SHA-pinned, D-6)
     with:
       profile: standard
       template_repo: WasewaseX/master-ci
@@ -48,7 +48,7 @@ jobs:
       id-token: write
 
   codeql:
-    uses: WasewaseX/master-ci/.github/workflows/codeql.yml@fc691546b0015d9b8e1c5885dc4ed08e59fba17e # v1.16.0 (SHA-pinned, D-6)
+    uses: WasewaseX/master-ci/.github/workflows/codeql.yml@f60b9d3e7ae2d024aa1b080f6f4c09e42471b7f5 # v1.16.0 (SHA-pinned, D-6)
     with:
       languages: rust,python
     permissions:
