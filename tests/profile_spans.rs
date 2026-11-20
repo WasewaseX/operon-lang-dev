@@ -215,11 +215,12 @@ impl Fixture {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .subsec_nanos();
+        let uniq = format!("{}_{}", nanos, seq);
         let dir = std::env::temp_dir().join(format!(
             "operon_w097a_{}_{}_{}",
             tag,
             std::process::id(),
-            format!("{}_{}", nanos, seq)
+            uniq
         ));
         std::fs::create_dir_all(&dir).unwrap();
         Fixture { dir }

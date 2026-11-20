@@ -37,6 +37,7 @@ Run:  python3 scripts/check_composition_pin.py            (exit 1 on drift)
       python3 scripts/check_composition_pin.py --print    (expected rows)
       python3 scripts/check_composition_pin.py --self-test
 """
+
 import argparse
 import os
 import re
@@ -95,13 +96,11 @@ def std_module_count():
 
 
 def git_sha_known(sha):
-    return run(["git", "cat-file", "-e", sha + "^{commit}"],
-               cwd=ROOT).returncode == 0
+    return run(["git", "cat-file", "-e", sha + "^{commit}"], cwd=ROOT).returncode == 0
 
 
 def git_sha_ancestor_of_head(sha):
-    return run(["git", "merge-base", "--is-ancestor", sha, "HEAD"],
-               cwd=ROOT).returncode == 0
+    return run(["git", "merge-base", "--is-ancestor", sha, "HEAD"], cwd=ROOT).returncode == 0
 
 
 def git_commits_behind(sha):
@@ -115,13 +114,15 @@ def parse_readme(readme_path):
     Returns None if the section is missing or structurally drifted.
     """
     text = open(readme_path, encoding="utf-8").read()
-    header = re.search(r"^### Measured composition \(main @ ([0-9a-f]{7,40}),",
-                       text, re.M)
+    header = re.search(r"^### Measured composition \(main @ ([0-9a-f]{7,40}),", text, re.M)
     if not header:
         return None
     tbl = re.search(
         r"^\| rank \| language \| lines \| share \| role \|\n"
-        r"\|[-| ]+\n((?:\|.*\n)+)", text, re.M)
+        r"\|[-| ]+\n((?:\|.*\n)+)",
+        text,
+        re.M,
+    )
     if not tbl:
         return None
     rows, modules = [], None
@@ -147,7 +148,7 @@ def share_matches(stated, actual_pct):
         return actual_pct < float(s[1:].rstrip("%"))
     if s.startswith("~"):
         body = s[1:].rstrip("%")
-        if "." in body:                    # one-decimal band, e.g. ~0.5%
+        if "." in body:  # one-decimal band, e.g. ~0.5%
             return round(actual_pct, len(body.split(".")[1])) == float(body)
         return round(actual_pct) == int(body)
     return False
@@ -161,13 +162,16 @@ def check(readme_path, out=sys.stderr):
     failures, warns = [], []
 
     if parsed is None:
-        print("composition-pin: FAIL — 'Measured composition' section not "
-              "found or structurally drifted in %s" % readme_path, file=out)
+        print(
+            "composition-pin: FAIL — 'Measured composition' section not "
+            "found or structurally drifted in %s" % readme_path,
+            file=out,
+        )
         return 1
     pin, rows, modules = parsed
 
     # Grand total: non-.op languages summed once + .op total (once).
-    grand = sum(n for l, n in counts.items() if l not in OP_KEYS) + total_op
+    grand = sum(n for lang, n in counts.items() if lang not in OP_KEYS) + total_op
 
     prev_lines = None
     for rank, lang, lines, share in rows:
@@ -177,55 +181,63 @@ def check(readme_path, out=sys.stderr):
             key = LANG_FOR_README_ROW.get(lang)
             expected = counts.get(key) if key else None
         if expected is None:
-            failures.append("row %d (%s): language not produced by "
-                            "stack_report.sh" % (rank, lang))
+            failures.append("row %d (%s): language not produced by stack_report.sh" % (rank, lang))
             continue
         if lines != expected:
-            failures.append("row %d (%s): README says %s lines, tree "
-                            "measures %d" % (rank, lang,
-                                             format(lines, ","), expected))
+            failures.append(
+                "row %d (%s): README says %s lines, tree "
+                "measures %d" % (rank, lang, format(lines, ","), expected)
+            )
         actual_share = 100.0 * expected / grand
         if not share_matches(share, actual_share):
-            failures.append("row %d (%s): share '%s' vs recomputed %.2f%%"
-                            % (rank, lang, share, actual_share))
+            failures.append(
+                "row %d (%s): share '%s' vs recomputed %.2f%%" % (rank, lang, share, actual_share)
+            )
         if prev_lines is not None and lines > prev_lines:
-            failures.append("rank order broken at row %d (%s): %s after %s"
-                            % (rank, lang, format(lines, ","),
-                               format(prev_lines, ",")))
+            failures.append(
+                "rank order broken at row %d (%s): %s after %s"
+                % (rank, lang, format(lines, ","), format(prev_lines, ","))
+            )
         prev_lines = lines
 
     if modules is None:
         failures.append("Operon role text: '(N modules' count not found")
     elif modules != std_mods:
-        failures.append("Operon role text says %d modules, std/ holds %d "
-                        ".op files" % (modules, std_mods))
+        failures.append(
+            "Operon role text says %d modules, std/ holds %d .op files" % (modules, std_mods)
+        )
 
     if not git_sha_known(pin):
         failures.append("header pin @ %s is not a commit known to git" % pin)
     elif not git_sha_ancestor_of_head(pin):
-        failures.append("header pin @ %s is not an ancestor of HEAD "
-                        "(rebased away?)" % pin)
+        failures.append("header pin @ %s is not an ancestor of HEAD (rebased away?)" % pin)
     else:
         behind = git_commits_behind(pin)
         if behind > 0:
-            warns.append("header pin @ %s trails HEAD by %d commit(s); all "
-                         "numbers were checked against the CURRENT tree — "
-                         "refresh the pin at the next merge step (W061-B/C "
-                         "lesson)" % (pin, behind))
+            warns.append(
+                "header pin @ %s trails HEAD by %d commit(s); all "
+                "numbers were checked against the CURRENT tree — "
+                "refresh the pin at the next merge step (W061-B/C "
+                "lesson)" % (pin, behind)
+            )
 
     for w in warns:
         print("composition-pin: WARN — " + w, file=out)
     if failures:
         for f in failures:
             print("composition-pin: FAIL — " + f, file=out)
-        print("composition-pin: %d finding(s). Re-pin with the header-named "
-              "tool (`bash scripts/stack_report.sh`) and update the README "
-              "table — `--print` emits the expected rows." % len(failures),
-              file=out)
+        print(
+            "composition-pin: %d finding(s). Re-pin with the header-named "
+            "tool (`bash scripts/stack_report.sh`) and update the README "
+            "table — `--print` emits the expected rows." % len(failures),
+            file=out,
+        )
         return 1
-    print("composition pin OK: %d rows true at the current tree (.op total "
-          "%s, %d std modules)" % (len(rows), format(total_op, ","),
-                                   std_mods), file=out)
+    print(
+        "composition pin OK: %d rows true at the current tree (.op total "
+        "%s, %d std modules)" % (len(rows), format(total_op, ","), std_mods),
+        file=out,
+    )
     return 0
 
 
@@ -233,11 +245,15 @@ def print_expected(out=sys.stdout):
     """Emit the rows the README table should carry at the current tree."""
     counts, total_op = stack_report()
     std_mods = std_module_count()
-    grand = sum(n for l, n in counts.items() if l not in OP_KEYS) + total_op
+    grand = sum(n for lang, n in counts.items() if lang not in OP_KEYS) + total_op
     entries = [("Operon", total_op)] + sorted(
-        ((README_ROW_FOR_LANG[l], n) for l, n in counts.items()
-         if l in README_ROW_FOR_LANG),
-        key=lambda e: -e[1])
+        (
+            (README_ROW_FOR_LANG[lang], n)
+            for lang, n in counts.items()
+            if lang in README_ROW_FOR_LANG
+        ),
+        key=lambda e: -e[1],
+    )
     for rank, (lang, lines) in enumerate(entries, 1):
         pct = 100.0 * lines / grand
         if pct < 1.0:
@@ -246,8 +262,7 @@ def print_expected(out=sys.stdout):
             share = "~%.1f%%" % round(pct, 1)
         else:
             share = "~%d%%" % round(pct)
-        print("| %d | **%s** | %s | %s |" %
-              (rank, lang, format(lines, ","), share))
+        print("| %d | **%s** | %s | %s |" % (rank, lang, format(lines, ","), share))
     print("# Operon role text modules count: %d" % std_mods, file=out)
 
 
@@ -261,12 +276,11 @@ def self_test(out=sys.stderr):
     text = open(real, encoding="utf-8").read()
     parsed = parse_readme(real)
     if parsed is None:
-        print("self-test FAIL: could not parse the live README table",
-              file=out)
+        print("self-test FAIL: could not parse the live README table", file=out)
         return 1
     pin, rows, modules = parsed
     counts, total_op = stack_report()
-    std_mods = std_module_count()
+    std_module_count()  # fail-fast probe: raises when the std tree is unreadable
     tmp = tempfile.mkdtemp()
 
     def write_variant(name, mutate):
@@ -275,16 +289,19 @@ def self_test(out=sys.stderr):
         return path
 
     rank1, lang1, lines1, share1 = rows[0]
-    row1_pat = re.compile(
-        r"^\| 1 \| \*\*%s\*\* \| [\d,]+ \| (?:~[\d.]+%%?|<1%%) \|" % lang1,
-        re.M)
+    row1_pat = re.compile(r"^\| 1 \| \*\*%s\*\* \| [\d,]+ \| (?:~[\d.]+%%?|<1%%) \|" % lang1, re.M)
 
     probes = []
 
     # 1. number drift: rank-1 line count +1 (also breaks the share + rank).
-    probes.append(("number drift", lambda t: row1_pat.sub(
-        "| 1 | **%s** | %s | %s |" %
-        (lang1, format(lines1 + 1, ","), share1), t, count=1)))
+    probes.append(
+        (
+            "number drift",
+            lambda t: row1_pat.sub(
+                "| 1 | **%s** | %s | %s |" % (lang1, format(lines1 + 1, ","), share1), t, count=1
+            ),
+        )
+    )
 
     # 2. share drift: stated band +1 when integer ~N%, else <1% -> ~5%.
     if share1.startswith("~") and "." not in share1:
@@ -294,18 +311,29 @@ def self_test(out=sys.stderr):
     else:
         wrong = None
     if wrong:
-        probes.append(("share drift", lambda t: t.replace(
-            "| %s |" % share1, "| %s |" % wrong, 1)))
+        probes.append(("share drift", lambda t: t.replace("| %s |" % share1, "| %s |" % wrong, 1)))
 
     # 3. module drift: role-text count +1 (the W061-B R2 class).
     if modules is not None:
-        probes.append(("module drift", lambda t: t.replace(
-            "(%d modules" % modules, "(%d modules" % (modules + 1), 1)))
+        probes.append(
+            (
+                "module drift",
+                lambda t: t.replace("(%d modules" % modules, "(%d modules" % (modules + 1), 1),
+            )
+        )
 
     # 4. garbage pin: a sha no git knows.
-    probes.append(("garbage pin", lambda t: re.sub(
-        r"### Measured composition \(main @ [0-9a-f]{7,40},",
-        "### Measured composition (main @ deadbeef00,", t, count=1)))
+    probes.append(
+        (
+            "garbage pin",
+            lambda t: re.sub(
+                r"### Measured composition \(main @ [0-9a-f]{7,40},",
+                "### Measured composition (main @ deadbeef00,",
+                t,
+                count=1,
+            ),
+        )
+    )
 
     passed = 0
     for name, mutate in probes:
@@ -314,24 +342,31 @@ def self_test(out=sys.stderr):
             passed += 1
             print("self-test ok: %s detected" % name, file=out)
         else:
-            print("self-test FAIL: %s NOT detected (exit %d)" % (name, rc),
-                  file=out)
+            print("self-test FAIL: %s NOT detected (exit %d)" % (name, rc), file=out)
             return 1
-    print("self-test: %d/%d negatives caught" % (passed, len(probes)),
-          file=out)
+    print("self-test: %d/%d negatives caught" % (passed, len(probes)), file=out)
     return 0
 
 
 def main():
     ap = argparse.ArgumentParser(
         description="Check the README measured-composition table against "
-                    "stack_report.sh at the current tree (W061-D).")
-    ap.add_argument("--readme", default=os.path.join(ROOT, "README.md"),
-                    help="README path to check (default: repo README.md)")
-    ap.add_argument("--print", dest="print_rows", action="store_true",
-                    help="print the expected table rows at the current tree")
-    ap.add_argument("--self-test", action="store_true",
-                    help="run the hermetic negative probes and exit")
+        "stack_report.sh at the current tree (W061-D)."
+    )
+    ap.add_argument(
+        "--readme",
+        default=os.path.join(ROOT, "README.md"),
+        help="README path to check (default: repo README.md)",
+    )
+    ap.add_argument(
+        "--print",
+        dest="print_rows",
+        action="store_true",
+        help="print the expected table rows at the current tree",
+    )
+    ap.add_argument(
+        "--self-test", action="store_true", help="run the hermetic negative probes and exit"
+    )
     args = ap.parse_args()
     if args.self_test:
         sys.exit(self_test())

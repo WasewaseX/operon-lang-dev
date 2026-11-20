@@ -1,0 +1,16 @@
+extends: default
+rules:
+  line-length:
+    max: 200
+  truthy:
+    check-keys: false
+  document-start: disable
+  comments:
+    min-spaces-from-content: 1
+  comments-indentation: disable
+  indentation:
+    indent-sequences: consistent
+  braces:
+    max-spaces-inside: 1
+ignore: |
+  **/fixtures/**

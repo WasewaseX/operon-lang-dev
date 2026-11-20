@@ -54,7 +54,7 @@ Native kernels back the hot parts and are builtins, not imports:
 capability-gated `re_*` regex family. Every stdlib gene is pure `.op`
 over those builtins, the library ships no native code of its own.
 
-### Core builtins: first-class Option/Result (W06, D-014, SPEC §9)
+## Core builtins: first-class Option/Result (W06, D-014, SPEC §9)
 
 Expected failures are values, not stress. The tag IS the contract, the
 Option family (`some`/`none`) and the Result family (`ok`/`err`) are

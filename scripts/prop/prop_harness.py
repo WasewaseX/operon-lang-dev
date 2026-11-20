@@ -47,6 +47,7 @@ Run:  python3 scripts/prop/prop_harness.py [--cases N] [--seed S] [--lanes ...]
       [--dump-corpus DIR] [--bin PATH]
 Exit: 0 all properties held, 1 findings (printed + saved), 2 harness error.
 """
+
 import argparse
 import hashlib
 import os
@@ -80,8 +81,7 @@ def find_binary(explicit):
 
 
 def run_rust(binpath, timeout):
-    p = subprocess.run([binpath, "run", TMP], cwd=ROOT,
-                       capture_output=True, timeout=timeout)
+    p = subprocess.run([binpath, "run", TMP], cwd=ROOT, capture_output=True, timeout=timeout)
     return p.returncode, p.stdout
 
 
@@ -89,8 +89,9 @@ def run_oracle(timeout):
     # bootstrap/harness.py's invocation pattern, byte capture for the
     # byte-for-byte law (harness itself decodes with errors="replace"; here we
     # compare the raw bytes, which is strictly stronger).
-    p = subprocess.run([sys.executable, ORACLE, "run", TMP], cwd=ROOT,
-                       capture_output=True, timeout=timeout)
+    p = subprocess.run(
+        [sys.executable, ORACLE, "run", TMP], cwd=ROOT, capture_output=True, timeout=timeout
+    )
     return p.returncode, p.stdout
 
 
@@ -98,8 +99,12 @@ def looks_panic(rc, out):
     if rc not in CONTAINED_RCS:
         return True
     head = out[:4096].decode("utf-8", errors="replace")
-    return ("panicked at" in head or "stack overflow" in head
-            or "fatal runtime error" in head or "[fatal]" in head)
+    return (
+        "panicked at" in head
+        or "stack overflow" in head
+        or "fatal runtime error" in head
+        or "[fatal]" in head
+    )
 
 
 class CaseRunner:
@@ -127,20 +132,24 @@ class CaseRunner:
             py_rc, py_out = run_oracle(self.oracle_timeout)
         except subprocess.TimeoutExpired:
             return True, rust_rc, rust_out, "TIMEOUT", b""
-        bad = ((rust_rc != py_rc) or (rust_out != py_out)
-               or looks_panic(rust_rc, rust_out))
+        bad = (rust_rc != py_rc) or (rust_out != py_out) or looks_panic(rust_rc, rust_out)
         return bad, rust_rc, rust_out, py_rc, py_out
 
     def check(self, lane, idx, src):
         bad, rust_rc, rust_out, py_rc, py_out = self.run_source(src)
         # digest input: lane, idx, source, both engines' rc + stdout hash
         h = hashlib.sha256()
-        h.update(lane.encode()); h.update(b"\x00")
-        h.update(str(idx).encode()); h.update(b"\x00")
-        h.update(src.encode("utf-8")); h.update(b"\x00")
-        h.update(str(rust_rc).encode()); h.update(b"\x00")
+        h.update(lane.encode())
+        h.update(b"\x00")
+        h.update(str(idx).encode())
+        h.update(b"\x00")
+        h.update(src.encode("utf-8"))
+        h.update(b"\x00")
+        h.update(str(rust_rc).encode())
+        h.update(b"\x00")
         h.update(hashlib.sha256(rust_out).digest())
-        h.update(str(py_rc).encode()); h.update(b"\x00")
+        h.update(str(py_rc).encode())
+        h.update(b"\x00")
         h.update(hashlib.sha256(py_out).digest())
         self.digest.update(h.digest())
         self.last_rust = (rust_rc, rust_out)
@@ -149,6 +158,7 @@ class CaseRunner:
 
 
 # ============================================================ shrinker
+
 
 def render_case(items, prelude):
     # top-level items (gene definitions) render before the entry gene;
@@ -170,6 +180,7 @@ def render_case(items, prelude):
 def shrink(runner, items, prelude, budget=400):
     """Greedy shrink: try deleting items, then simplifying each item.
     `bad` = still a finding. Returns the minimal item list found."""
+
     def is_bad(cand):
         if not cand:
             return False  # never shrink to an empty program
@@ -188,7 +199,7 @@ def shrink(runner, items, prelude, budget=400):
         # 1) delete whole items (fewer statements = smaller case)
         i = 0
         while i < len(cur) and note():
-            cand = cur[:i] + cur[i + 1:]
+            cand = cur[:i] + cur[i + 1 :]
             if is_bad(cand):
                 cur = cand
                 changed = True
@@ -200,7 +211,7 @@ def shrink(runner, items, prelude, budget=400):
             for simp in cur[i].shrinks():
                 if not note():
                     break
-                cand = cur[:i] + [simp] + cur[i + 1:]
+                cand = cur[:i] + [simp] + cur[i + 1 :]
                 if is_bad(cand):
                     cur = cand
                     changed = True
@@ -289,23 +300,62 @@ class ArithItem:
 
 
 def gen_arith_case(rnd):
-    return [ArithItem(gen_arith_expr(rnd, rnd.randint(1, 4)))
-            for _ in range(rnd.randint(1, 3))]
+    return [ArithItem(gen_arith_expr(rnd, rnd.randint(1, 4))) for _ in range(rnd.randint(1, 3))]
 
 
 # ============================================================ strings lane
 
 STR_PRELUDE = "use std/strings as st\nuse std/unicode as uni\n\n"
-ALPHABET = ["a", "b", "Z", " ", "-", "_", "\"", "'", "\\", "\n", "\t", "0", "9",
-            "é", "À", "σ", "Ω", "ж", "字", "🧬", "✓", "😀", "\u0301", "\u200d"]
-WORDS = ["", "gene", "wobble", "hello world", "  pad  ", "a-b-c", "myVarName",
-         "HTTPServer", "line1\nline2", "x\"y", "átomo", "🧬abc", "s"]
+ALPHABET = [
+    "a",
+    "b",
+    "Z",
+    " ",
+    "-",
+    "_",
+    '"',
+    "'",
+    "\\",
+    "\n",
+    "\t",
+    "0",
+    "9",
+    "é",
+    "À",
+    "σ",
+    "Ω",
+    "ж",
+    "字",
+    "🧬",
+    "✓",
+    "😀",
+    "\u0301",
+    "\u200d",
+]
+WORDS = [
+    "",
+    "gene",
+    "wobble",
+    "hello world",
+    "  pad  ",
+    "a-b-c",
+    "myVarName",
+    "HTTPServer",
+    "line1\nline2",
+    'x"y',
+    "átomo",
+    "🧬abc",
+    "s",
+]
 CASE_FOLD_METHODS = ["upper", "lower", "trim"]
 
 
 def quote(s):
-    return '"' + (s.replace("\\", "\\\\").replace('"', '\\"')
-                   .replace("\n", "\\n").replace("\t", "\\t")) + '"'
+    return (
+        '"'
+        + (s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\t", "\\t"))
+        + '"'
+    )
 
 
 def gen_str_expr(rnd, depth=0):
@@ -316,8 +366,11 @@ def gen_str_expr(rnd, depth=0):
     by gen_strings_case)."""
     t = rnd.random()
     if depth >= 2 or t < 0.45:
-        s = rnd.choice(WORDS) if rnd.random() < 0.6 else \
-            "".join(rnd.choice(ALPHABET) for _ in range(rnd.randint(0, 6)))
+        s = (
+            rnd.choice(WORDS)
+            if rnd.random() < 0.6
+            else "".join(rnd.choice(ALPHABET) for _ in range(rnd.randint(0, 6)))
+        )
         return quote(s), False, True
     if t < 0.55:  # char-indexed access: out-of-range is catchable `missing`
         b, _, _ = gen_str_expr(rnd, depth + 1)
@@ -350,28 +403,42 @@ def gen_strings_case(rnd):
         # (finding saved: tests/property/repro/strings_20260926_58.op). Keep
         # this surface covered until the semantic lane closes it.
         if rnd.random() < 0.02:
-            items.append(StrItem(
-                'promote("x" * 1.upper())',
-                [StrItem('promote("x" * 0.upper())', [], True)],
-                True))
+            items.append(
+                StrItem(
+                    'promote("x" * 1.upper())',
+                    [StrItem('promote("x" * 0.upper())', [], True)],
+                    True,
+                )
+            )
             continue
         e, risky, _atomic = gen_str_expr(rnd)
-        call = rnd.choice([
-            f"st.title_case({e})", f"st.to_snake({e})", f"st.unquote({e})",
-            f"st.ellipsis({e}, {rnd.randint(0, 6)})",
-            f"st.pad_left({e}, {rnd.randint(0, 5)}, \"-\")",
-            f"st.strip_prefix({e}, {quote(rnd.choice(['a', 'x-', '']))})",
-            f"uni.fold_case({e})", f"uni.byte_width({e})",
-            f"uni.grapheme_len({e})", f"uni.char_codes({e})",  # all take the STR
-            f"ord({e})",  # multi-char arg is a stress -> always wrapped below
-        ])
+        call = rnd.choice(
+            [
+                f"st.title_case({e})",
+                f"st.to_snake({e})",
+                f"st.unquote({e})",
+                f"st.ellipsis({e}, {rnd.randint(0, 6)})",
+                f'st.pad_left({e}, {rnd.randint(0, 5)}, "-")',
+                f"st.strip_prefix({e}, {quote(rnd.choice(['a', 'x-', '']))})",
+                f"uni.fold_case({e})",
+                f"uni.byte_width({e})",
+                f"uni.grapheme_len({e})",
+                f"uni.char_codes({e})",  # all take the STR
+                f"ord({e})",  # multi-char arg is a stress -> always wrapped below
+            ]
+        )
         stmt_risky = risky or call.startswith("ord(")
         stmt = "promote(" + call + ")"
         variants = []
         for e0 in ('""', '"x"'):
             if e0 != e and e in call:
-                variants.append(StrItem("promote(" + call.replace(e, e0, 1) + ")",
-                                        call.replace(e, e0, 1), stmt_risky))
+                variants.append(
+                    StrItem(
+                        "promote(" + call.replace(e, e0, 1) + ")",
+                        call.replace(e, e0, 1),
+                        stmt_risky,
+                    )
+                )
         items.append(StrItem(stmt, variants, stmt_risky))
     return items
 
@@ -383,11 +450,13 @@ class StrItem:
     def render(self, ind):
         pad = "    " * ind
         if self.risky:
-            return [pad + "stress {",
-                    pad + "    " + self.stmt,
-                    pad + "} rescue (e) {",
-                    pad + '    promote("st:" + e.kind)',
-                    pad + "}"]
+            return [
+                pad + "stress {",
+                pad + "    " + self.stmt,
+                pad + "} rescue (e) {",
+                pad + '    promote("st:" + e.kind)',
+                pad + "}",
+            ]
         return [pad + self.stmt]
 
     def shrinks(self):
@@ -395,6 +464,7 @@ class StrItem:
 
 
 # ============================================================ lists/maps lane
+
 
 def gen_list_lit(rnd):
     n = rnd.randint(0, 5)
@@ -406,8 +476,11 @@ def gen_list_lit(rnd):
 
 
 def wrap_stress(lines, kind_tag):
-    return (["stress {"] + ["    " + ln for ln in lines] +
-            ["} rescue (e) {", f"    promote(\"{kind_tag}:\" + e.kind)", "}"])
+    return (
+        ["stress {"]
+        + ["    " + ln for ln in lines]
+        + ["} rescue (e) {", f'    promote("{kind_tag}:" + e.kind)', "}"]
+    )
 
 
 class CollItem:
@@ -440,9 +513,21 @@ def gen_colls_case(rnd):
             # catchable) -> the whole op group rides inside one stress frame
             i = rnd.randint(-1, 6)
             ops = []
-            for op in rnd.sample(["push", "insert", "remove", "index", "slice",
-                                  "sortrev", "contains", "index_of", "len",
-                                  "agg"], rnd.randint(1, 3)):
+            for op in rnd.sample(
+                [
+                    "push",
+                    "insert",
+                    "remove",
+                    "index",
+                    "slice",
+                    "sortrev",
+                    "contains",
+                    "index_of",
+                    "len",
+                    "agg",
+                ],
+                rnd.randint(1, 3),
+            ):
                 if op == "push":
                     ops.append(f"push({v}, {rnd.randint(-9, 9)})")
                     ops.append(f"promote(len({v}))")
@@ -467,89 +552,125 @@ def gen_colls_case(rnd):
                     ops.append(f"promote(sum({v}))")
                     ops.append(f"promote(min({v}))")
                     ops.append(f"promote(max({v}))")
-            items.append(CollItem([f"let {v} = {lit}"] + wrap_stress(ops, "co"),
-                                  variants=[[f"let {v} = [5]"] + wrap_stress(ops, "co")]))
+            items.append(
+                CollItem(
+                    [f"let {v} = {lit}"] + wrap_stress(ops, "co"),
+                    variants=[[f"let {v} = [5]"] + wrap_stress(ops, "co")],
+                )
+            )
         elif pick < 0.55:
             # bounded pop loop; pop-on-empty is contained by the inner frame
             k = rnd.randint(0, 6)
-            items.append(CollItem([
-                f"let {v} = {lit}",
-                f"let got = 0",
-                f"while got < {k} {{",
-                f"    stress {{",
-                f"        pop({v})",
-                f"    }} rescue (e) {{",
-                f"        got = {k}",
-                f"    }}",
-                f"    got += 1",
-                f"}}",
-                f"promote(len({v}))",
-            ], variants=[[
-                f"let {v} = [5]",
-                f"let got = 0",
-                f"while got < {k} {{",
-                f"    stress {{",
-                f"        pop({v})",
-                f"    }} rescue (e) {{",
-                f"        got = {k}",
-                f"    }}",
-                f"    got += 1",
-                f"}}",
-                f"promote(len({v}))",
-            ]]))
+            items.append(
+                CollItem(
+                    [
+                        f"let {v} = {lit}",
+                        "let got = 0",
+                        f"while got < {k} {{",
+                        "    stress {",
+                        f"        pop({v})",
+                        "    } rescue (e) {",
+                        f"        got = {k}",
+                        "    }",
+                        "    got += 1",
+                        "}",
+                        f"promote(len({v}))",
+                    ],
+                    variants=[
+                        [
+                            f"let {v} = [5]",
+                            "let got = 0",
+                            f"while got < {k} {{",
+                            "    stress {",
+                            f"        pop({v})",
+                            "    } rescue (e) {",
+                            f"        got = {k}",
+                            "    }",
+                            "    got += 1",
+                            "}",
+                            f"promote(len({v}))",
+                        ]
+                    ],
+                )
+            )
         elif pick < 0.80:
             # map ops: get/del of a possibly-missing key is the risky core
             keys = rnd.sample(["a", "b", "c", "k1", "k2", "zz"], rnd.randint(1, 3))
             ents = ", ".join(f"{k}: {rnd.randint(-9, 9)}" for k in keys)
             m = newname()
             probe = rnd.choice(keys + ["missing"])
-            items.append(CollItem([
-                f"let {m} = {{{ents}}}",
-                f"{m}[{quote(probe)}] = {rnd.randint(-9, 9)}",
-            ] + wrap_stress([
-                f"promote({m}[{quote(probe)}])",
-                f"del({m}, {quote(rnd.choice(keys + ['ghost']))})",
-                f"promote({m}[{quote(rnd.choice(keys + ['ghost']))}])",
-            ], "co") + [
-                f"promote(has({m}, {quote(keys[0])}))",
-                f"promote(len(keys({m})))",
-                f"promote(sum(values({m})))",
-            ], variants=[[
-                f"let {m} = {{{keys[0]}: 1}}",
-                f"{m}[{quote(probe)}] = 1",
-            ] + wrap_stress([
-                f"promote({m}[{quote(probe)}])",
-                f"del({m}, {quote(rnd.choice(keys + ['ghost']))})",
-                f"promote({m}[{quote(rnd.choice(keys + ['ghost']))}])",
-            ], "co") + [
-                f"promote(has({m}, {quote(keys[0])}))",
-                f"promote(len(keys({m})))",
-                f"promote(sum(values({m})))",
-            ]]))
+            items.append(
+                CollItem(
+                    [
+                        f"let {m} = {{{ents}}}",
+                        f"{m}[{quote(probe)}] = {rnd.randint(-9, 9)}",
+                    ]
+                    + wrap_stress(
+                        [
+                            f"promote({m}[{quote(probe)}])",
+                            f"del({m}, {quote(rnd.choice(keys + ['ghost']))})",
+                            f"promote({m}[{quote(rnd.choice(keys + ['ghost']))}])",
+                        ],
+                        "co",
+                    )
+                    + [
+                        f"promote(has({m}, {quote(keys[0])}))",
+                        f"promote(len(keys({m})))",
+                        f"promote(sum(values({m})))",
+                    ],
+                    variants=[
+                        [
+                            f"let {m} = {{{keys[0]}: 1}}",
+                            f"{m}[{quote(probe)}] = 1",
+                        ]
+                        + wrap_stress(
+                            [
+                                f"promote({m}[{quote(probe)}])",
+                                f"del({m}, {quote(rnd.choice(keys + ['ghost']))})",
+                                f"promote({m}[{quote(rnd.choice(keys + ['ghost']))}])",
+                            ],
+                            "co",
+                        )
+                        + [
+                            f"promote(has({m}, {quote(keys[0])}))",
+                            f"promote(len(keys({m})))",
+                            f"promote(sum(values({m})))",
+                        ]
+                    ],
+                )
+            )
         else:
             # collect comprehension + order-insensitive aggregation
             a = rnd.randint(-5, 5)
             b = a + rnd.randint(0, 8)
             step = rnd.choice([1, 2, 3])
-            items.append(CollItem([
-                f"let acc = for x in range({a}, {b}, {step}) if x % 2 == 0 collect x * 2",
-                f"promote(acc)",
-                f"let t = 0",
-                f"for y in acc {{ t += y }}",
-                f"promote(t)",
-                f"promote(len(acc))",
-            ], variants=[[
-                f"let acc = for x in range(0, 1) if x % 2 == 0 collect x * 2",
-                f"promote(acc)",
-                f"let t = 0",
-                f"for y in acc {{ t += y }}",
-                f"promote(t)",
-                f"promote(len(acc))",
-            ]]))
+            items.append(
+                CollItem(
+                    [
+                        f"let acc = for x in range({a}, {b}, {step}) if x % 2 == 0 collect x * 2",
+                        "promote(acc)",
+                        "let t = 0",
+                        "for y in acc { t += y }",
+                        "promote(t)",
+                        "promote(len(acc))",
+                    ],
+                    variants=[
+                        [
+                            "let acc = for x in range(0, 1) if x % 2 == 0 collect x * 2",
+                            "promote(acc)",
+                            "let t = 0",
+                            "for y in acc { t += y }",
+                            "promote(t)",
+                            "promote(len(acc))",
+                        ]
+                    ],
+                )
+            )
     return items
 
 
 # ============================================================ programs lane
+
 
 class ProgItem:
     def __init__(self, lines, variants=None, toplevel=False):
@@ -574,107 +695,129 @@ def gen_programs_case(rnd):
         names.append(gname)
         kind = rnd.random()
         if kind < 0.40:
-            k = rnd.randint(0, 12)
-            body = [f"gene {gname}(n) {{",
-                    f"    let acc = 0",
-                    f"    let i = 0",
-                    f"    while i < n {{",
-                    f"        acc += i",
-                    f"        i += 1",
-                    f"    }}",
-                    f"    return acc",
-                    f"}}"]
-            variants = [[f"gene {gname}(n) {{", f"    return {k2}", f"}}"]
-                        for k2 in (0, 1, 2)]
+            rnd.randint(0, 12)  # deliberate draw: keeps the RNG stream aligned
+            body = [
+                f"gene {gname}(n) {{",
+                "    let acc = 0",
+                "    let i = 0",
+                "    while i < n {",
+                "        acc += i",
+                "        i += 1",
+                "    }",
+                "    return acc",
+                "}",
+            ]
+            variants = [[f"gene {gname}(n) {{", f"    return {k2}", "}"] for k2 in (0, 1, 2)]
             items.append(ProgItem(body, variants, toplevel=True))
         elif kind < 0.70:
-            body = [f"gene {gname}(s) {{",
-                    f"    let out = \"\"",
-                    f"    for c in s {{",
-                    f"        out = c + out",
-                    f"    }}",
-                    f"    if len(out) > 1 {{",
-                    f"        return out + \":\" + str(len(out))",
-                    f"    }} elif len(out) == 1 {{",
-                    f"        return \"one\"",
-                    f"    }} else {{",
-                    f"        return \"empty\"",
-                    f"    }}",
-                    f"}}"]
+            body = [
+                f"gene {gname}(s) {{",
+                '    let out = ""',
+                "    for c in s {",
+                "        out = c + out",
+                "    }",
+                "    if len(out) > 1 {",
+                '        return out + ":" + str(len(out))',
+                "    } elif len(out) == 1 {",
+                '        return "one"',
+                "    } else {",
+                '        return "empty"',
+                "    }",
+                "}",
+            ]
             items.append(ProgItem(body, toplevel=True))
         else:
             # bounded recursion (calls the sibling gene, or itself if alone)
             other = f"g{1 - gi}" if ngene > 1 else gname
-            body = [f"gene {gname}(n) {{",
-                    f"    if n <= 0 {{",
-                    f"        return \"base\"",
-                    f"    }}",
-                    f"    return {other}(n - 1) + str(n)",
-                    f"}}"]
+            body = [
+                f"gene {gname}(n) {{",
+                "    if n <= 0 {",
+                '        return "base"',
+                "    }",
+                f"    return {other}(n - 1) + str(n)",
+                "}",
+            ]
             items.append(ProgItem(body, toplevel=True))
     for _ in range(rnd.randint(1, 3)):
         g = rnd.choice(names)
         arg = rnd.randint(0, 12)
         pick = rnd.random()
         if pick < 0.35:
-            variants = [ProgItem([f"promote({g}({a}))"])
-                        for a in (0, 1, 2) if a != arg]
+            variants = [ProgItem([f"promote({g}({a}))"]) for a in (0, 1, 2) if a != arg]
             items.append(ProgItem([f"promote({g}({arg}))"], variants))
         elif pick < 0.60:
             arms = rnd.sample([-1, 0, 1, 7, 100], rnd.randint(1, 3))
             lines = [f"let mv = {rnd.randint(0, 999)}", "match mv {"]
             for arm in arms:
-                lines.append(f"    case {arm} {{ promote(\"hit {arm}\") }}")
-            lines.append("    case other { promote(\"rest {other}\") }")
+                lines.append(f'    case {arm} {{ promote("hit {arm}") }}')
+            lines.append('    case other { promote("rest {other}") }')
             lines.append("}")
             items.append(ProgItem(lines))
         elif pick < 0.80:
             a = rnd.randint(-3, 3)
             b = a + rnd.randint(0, 6)
-            lines = [f"let coll = for x in range({a}, {b}) collect \"{g}\" + str(x)",
-                     f"promote(coll.len())",
-                     f"promote(coll.join(\"|\"))"]
-            variants = [ProgItem([
-                f"let coll = for x in range(0, 2) collect \"{g}\" + str(x)",
-                f"promote(coll.len())",
-                f"promote(coll.join(\"|\"))"])]
+            lines = [
+                f'let coll = for x in range({a}, {b}) collect "{g}" + str(x)',
+                "promote(coll.len())",
+                'promote(coll.join("|"))',
+            ]
+            variants = [
+                ProgItem(
+                    [
+                        f'let coll = for x in range(0, 2) collect "{g}" + str(x)',
+                        "promote(coll.len())",
+                        'promote(coll.join("|"))',
+                    ]
+                )
+            ]
             items.append(ProgItem(lines, variants))
         else:
             s = rnd.choice(["gene", "wobble", "🧬x"])
             head = s[:2] if len(s) > 2 else s
-            items.append(ProgItem([
-                f"let s = {quote(s)}",
-                f"promote(s.replace({quote(head)}, \"GG\"))",
-                f"promote(s.contains(\"e\"))",
-            ]))
+            items.append(
+                ProgItem(
+                    [
+                        f"let s = {quote(s)}",
+                        f'promote(s.replace({quote(head)}, "GG"))',
+                        'promote(s.contains("e"))',
+                    ]
+                )
+            )
     return items
 
 
 # ============================================================ lanes table
 
 LANES = {
-    "arith":    dict(gen=gen_arith_case, prelude=""),
-    "strings":  dict(gen=gen_strings_case, prelude=STR_PRELUDE),
-    "colls":    dict(gen=gen_colls_case, prelude=""),
+    "arith": dict(gen=gen_arith_case, prelude=""),
+    "strings": dict(gen=gen_strings_case, prelude=STR_PRELUDE),
+    "colls": dict(gen=gen_colls_case, prelude=""),
     "programs": dict(gen=gen_programs_case, prelude=""),
 }
 
 
 # ============================================================ main
 
+
 def main():
     ap = argparse.ArgumentParser(description="W050 property-based differential harness")
-    ap.add_argument("--cases", type=int, default=200,
-                    help="cases per generator lane (default 200)")
+    ap.add_argument("--cases", type=int, default=200, help="cases per generator lane (default 200)")
     ap.add_argument("--seed", type=int, default=DEFAULT_SEED)
-    ap.add_argument("--lanes", default="arith,strings,colls,programs",
-                    help="comma list from: arith,strings,colls,programs")
-    ap.add_argument("--bin", default=None,
-                    help="operon binary (default: target/debug > bin > target/release)")
+    ap.add_argument(
+        "--lanes",
+        default="arith,strings,colls,programs",
+        help="comma list from: arith,strings,colls,programs",
+    )
+    ap.add_argument(
+        "--bin", default=None, help="operon binary (default: target/debug > bin > target/release)"
+    )
     ap.add_argument("--rust-timeout", type=float, default=20.0)
     ap.add_argument("--oracle-timeout", type=float, default=60.0)
-    ap.add_argument("--dump-corpus", default=None,
-                    help="write every generated program to DIR (diff-based determinism proof)")
+    ap.add_argument(
+        "--dump-corpus",
+        default=None,
+        help="write every generated program to DIR (diff-based determinism proof)",
+    )
     ap.add_argument("--no-shrink", action="store_true")
     args = ap.parse_args()
 
@@ -685,15 +828,13 @@ def main():
     if not os.path.isfile(ORACLE):
         print(f"missing oracle: {ORACLE}", file=sys.stderr)
         return 2
-    lanes = [l.strip() for l in args.lanes.split(",") if l.strip()]
-    for l in lanes:
-        if l not in LANES:
-            print(f"unknown lane {l!r} (choose from {', '.join(LANES)})",
-                  file=sys.stderr)
+    lanes = [ln.strip() for ln in args.lanes.split(",") if ln.strip()]
+    for ln in lanes:
+        if ln not in LANES:
+            print(f"unknown lane {ln!r} (choose from {', '.join(LANES)})", file=sys.stderr)
             return 2
 
-    print(f"prop harness — seed {args.seed}, {args.cases} case(s)/lane, "
-          f"lanes: {', '.join(lanes)}")
+    print(f"prop harness — seed {args.seed}, {args.cases} case(s)/lane, lanes: {', '.join(lanes)}")
     print(f"  rust  : {binpath}")
     print(f"  oracle: {ORACLE}")
 
@@ -714,8 +855,9 @@ def main():
             items = gen(rnd)
             src = render_case(items, prelude)
             if args.dump_corpus:
-                with open(os.path.join(args.dump_corpus, f"{lane}_{i:04d}.op"),
-                          "w", encoding="utf-8") as fh:
+                with open(
+                    os.path.join(args.dump_corpus, f"{lane}_{i:04d}.op"), "w", encoding="utf-8"
+                ) as fh:
                     fh.write(src)
             if runner.check(lane, i, src):
                 lane_bad += 1
@@ -737,20 +879,25 @@ def main():
                 findings.append((lane, i, rp))
                 print(f"    saved: {rp}")
             if (i + 1) % 50 == 0:
-                print(f"    [{lane}] {i + 1}/{args.cases} cases, {lane_bad} "
-                      f"finding(s) ({time.time() - t_lane:.1f}s)")
-        print(f"  lane {lane:9s}: {args.cases} cases, {lane_bad} finding(s), "
-              f"{time.time() - t_lane:.1f}s")
+                print(
+                    f"    [{lane}] {i + 1}/{args.cases} cases, {lane_bad} "
+                    f"finding(s) ({time.time() - t_lane:.1f}s)"
+                )
+        print(
+            f"  lane {lane:9s}: {args.cases} cases, {lane_bad} finding(s), "
+            f"{time.time() - t_lane:.1f}s"
+        )
 
     if os.path.exists(TMP):
         os.remove(TMP)
 
-    print(f"\ncases: {args.cases * len(lanes)}  findings: {len(findings)}  "
-          f"wall: {time.time() - t0:.1f}s")
+    print(
+        f"\ncases: {args.cases * len(lanes)}  findings: {len(findings)}  "
+        f"wall: {time.time() - t0:.1f}s"
+    )
     print(f"determinism digest: {runner.digest.hexdigest()}")
     if findings:
-        print("\nPROPERTY FINDINGS (the harness found and minimized them — "
-              "it never fixes):")
+        print("\nPROPERTY FINDINGS (the harness found and minimized them — it never fixes):")
         for lane, i, rp in findings:
             print(f"  ✗ {lane} case {i} -> {rp}")
         return 1

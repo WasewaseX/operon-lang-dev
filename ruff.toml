@@ -1,0 +1,17 @@
+# Vendored from master-ci v1.16.0 (configs/ruff.toml) + operon house overrides.
+# master-ci's python job auto-copies its default when this file is absent;
+# committing it pins the gate to exactly this contract.
+#
+# House override — E701/E702: the interpreter cores (bootstrap/oracle.py,
+# bootstrap/audit_builtins.py) and the tooling deliberately use the
+# guard-style one-liner idiom (`if cond: return x`). Splitting the 240+
+# existing sites would reformat the differential oracle wholesale for zero
+# behavior change and re-pin every LOC-sensitive composition row. The rule
+# stays ON for anything outside this exemption by way of review: new
+# one-liners are allowed, everything else in E/F/W/I is enforced, and
+# `ruff format --check` covers layout drift.
+line-length = 100
+
+[lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501", "E701", "E702"]

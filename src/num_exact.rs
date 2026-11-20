@@ -241,7 +241,10 @@ mod tests {
     #[test]
     fn div_issue_table() {
         assert_eq!(div_i64_i64_exact(9007199254740993, 3), 3002399751580331.0);
-        assert_eq!(div_i64_i64_exact(9007199254740993, 7), 1286742750677284.75);
+        assert_eq!(
+            div_i64_i64_exact(9007199254740993, 7),
+            1_286_742_750_677_284.8
+        );
         assert_eq!(
             div_i64_i64_exact(9007199254740993, 7).to_string(),
             "1286742750677284.8"
@@ -257,7 +260,7 @@ mod tests {
         assert_eq!(div_i64_i64_exact(1, 3), 1.0 / 3.0);
         assert_eq!(div_i64_i64_exact(-1, 3), -(1.0 / 3.0));
         assert_eq!(div_i64_i64_exact(0, 5), 0.0);
-        assert_eq!(div_i64_i64_exact(0, -5), 0.0 * -1.0); // -0.0
+        assert_eq!(div_i64_i64_exact(0, -5), -0.0);
         assert!(div_i64_i64_exact(0, -5).is_sign_negative());
         // powers of two stay exact through the whole range
         assert_eq!(

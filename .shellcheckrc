@@ -1,0 +1,11 @@
+# shellcheck policy — operon-lang-dev gate tooling.
+# The house shell scripts are CI gate drivers (bootstrap/harness.py callers,
+# release tooling, parity funnels) hardened by months of differential runs.
+# Four shellcheck classes fire systematically on the house idioms; each
+# disable is documented. Everything else — quoting (SC2086 included — the
+# remaining findings get fixed for real), short-circuit traps (SC2015),
+# glob pitfalls (SC2038) — stays ON.
+disable=SC2317  # trap callbacks look "unreachable" to the analyzer
+disable=SC2319  # deliberate invariants: (?:) ?= assignments document state
+disable=SC2164  # every gate script runs under set -e; cd failure aborts
+disable=SC2034  # sourced library vars are consumed by the sourcing script

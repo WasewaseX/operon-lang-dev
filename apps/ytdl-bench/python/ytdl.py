@@ -8,15 +8,17 @@
 # Engines from PATH: yt-dlp, ffmpeg, ffprobe (aria2c optional).
 # ============================================================
 import json
-import os
-import shutil
 import subprocess
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-TOOLS = [("yt-dlp", "--version"), ("ffmpeg", "-version"),
-         ("ffprobe", "-version"), ("aria2c", "--version")]
+TOOLS = [
+    ("yt-dlp", "--version"),
+    ("ffmpeg", "-version"),
+    ("ffprobe", "-version"),
+    ("aria2c", "--version"),
+]
 OUT_DEFAULT = "downloads"
 CLIP = 60
 
@@ -54,8 +56,9 @@ def cmd_doctor():
 def cmd_info(url):
     t0 = now_s()
     try:
-        r = subprocess.run(["yt-dlp", "-J", "--no-warnings", url],
-                           capture_output=True, text=True, timeout=300)
+        r = subprocess.run(
+            ["yt-dlp", "-J", "--no-warnings", url], capture_output=True, text=True, timeout=300
+        )
     except (OSError, subprocess.SubprocessError) as e:
         print(f"info: FAIL err={clip(e, 160)}")
         sys.exit(1)
@@ -93,10 +96,17 @@ def do_job(idx, url, mode, fmt="best", out=OUT_DEFAULT, resume=False):
     t0 = now_s()
     print(f"[get] start url={url} mode={mode} fmt={fmt}")
     try:
-        r = subprocess.run(["yt-dlp"] + build_args(url, mode, fmt, out, resume),
-                           capture_output=True, text=True, timeout=300)
+        r = subprocess.run(
+            ["yt-dlp"] + build_args(url, mode, fmt, out, resume),
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
     except (OSError, subprocess.SubprocessError) as e:
-        return 0, f"job {idx}: {mode} {url} -> FAIL(err={clip(e, 60)}) secs={round(now_s() - t0, 3)}"
+        return (
+            0,
+            f"job {idx}: {mode} {url} -> FAIL(err={clip(e, 60)}) secs={round(now_s() - t0, 3)}",
+        )
     wall = round(now_s() - t0, 3)
     if r.returncode != 0:
         return 0, f"job {idx}: {mode} {url} -> FAIL(code={r.returncode}) secs={wall}"
@@ -112,9 +122,12 @@ def cmd_get(url, fmt, out, mode, resume):
 
 def cmd_meta(path):
     try:
-        r = subprocess.run(["ffprobe", "-v", "quiet", "-print_format", "json",
-                            "-show_format", path],
-                           capture_output=True, text=True, timeout=60)
+        r = subprocess.run(
+            ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", path],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
     except (OSError, subprocess.SubprocessError) as e:
         print(f"meta: FAIL err={clip(e, 160)}")
         sys.exit(1)
@@ -182,9 +195,11 @@ def flag_of(a, name, dflt):
 
 
 def usage(code=2):
-    print("usage: ytdl doctor | info <url> | get <url> [options] | "
-          "meta <file> | queue <jobs> [--workers N] | startup | "
-          "spawnbench N | cpu N")
+    print(
+        "usage: ytdl doctor | info <url> | get <url> [options] | "
+        "meta <file> | queue <jobs> [--workers N] | startup | "
+        "spawnbench N | cpu N"
+    )
     sys.exit(code)
 
 
@@ -201,8 +216,13 @@ def main():
         if len(a) < 2:
             usage()
         mode = "audio" if "--audio" in a else ("subs" if "--subs" in a else "video")
-        cmd_get(a[1], flag_of(a, "--format", "bv*+ba/b"),
-                flag_of(a, "--out", OUT_DEFAULT), mode, "--resume" in a)
+        cmd_get(
+            a[1],
+            flag_of(a, "--format", "bv*+ba/b"),
+            flag_of(a, "--out", OUT_DEFAULT),
+            mode,
+            "--resume" in a,
+        )
     elif cmd == "meta":
         cmd_meta(a[1]) if len(a) >= 2 else usage()
     elif cmd == "queue":

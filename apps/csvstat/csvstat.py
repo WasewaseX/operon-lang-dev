@@ -181,7 +181,9 @@ def cmd_stats(text_rows, path):
         if col_kind(col) == "int":
             st = numeric_stats(col)
             n, total = st[0], st[3]
-            print(f"{head[i]},{n},{null_count(col)},{st[1]},{st[2]},{total},{render_ratio(total, n, 2)}")
+            print(
+                f"{head[i]},{n},{null_count(col)},{st[1]},{st[2]},{total},{render_ratio(total, n, 2)}"
+            )
         else:
             m = value_counts(col)
             print(f"{head[i]},{len(col) - null_count(col)},{null_count(col)},distinct={len(m)}")
@@ -217,7 +219,7 @@ def cmd_table(text_rows, path, n):
         print("(empty)")
         return
     head = rows[0]
-    shown = rows[1:n + 1]
+    shown = rows[1 : n + 1]
     for line in render_table(head, shown):
         print(line)
 

@@ -1,0 +1,36 @@
+# gitleaks configuration — operon-lang-dev.
+# The full-history scan (master-ci secrets job, gitleaks 8.30.1) flags
+# PLACEHOLDER values, not credentials:
+#   * scripts/pkg_hosted_e2e.sh — `hostedtoken` is the standing e2e auth
+#     token and `wrongtoken` is its deliberate negative case (the script
+#     asserts Bearer auth REJECTS it); both are live test fixtures.
+#   * .github/workflows/tubeforge-android.yml @80489a3f/@cc49ef62 —
+#     `TFkey-2026-permanent`, the pre-vault keystore pass; the hardened
+#     workflow routes signing through the vault secret instead and no
+#     longer contains it.
+# Verified 2026-11-08 by shape audit (real GitHub tokens are 36-255
+# characters); no rotation required; the commits stay in history
+# (force-push is forbidden by house law).
+#
+# F8 (review): exceptions are the exact placeholder VALUES scoped to their
+# file via conditional allowlists (conditions are ANDed). A path-level
+# allowlist on a file that still exists — the android workflow has active
+# push and workflow_dispatch triggers — would also suppress every future
+# secret gitleaks finds in it.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "e2e negative-test tokens (placeholders, not credentials)"
+path = '''^scripts/pkg_hosted_e2e\.sh$'''
+regexes = [
+    '''hostedtoken''',
+    '''wrongtoken''',
+]
+
+[[allowlists]]
+description = "pre-vault android keystore placeholder (retired value)"
+path = '''^\.github/workflows/tubeforge-android\.yml$'''
+regexes = [
+    '''TFkey-2026-permanent''',
+]

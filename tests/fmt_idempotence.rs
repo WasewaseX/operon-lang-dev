@@ -105,8 +105,8 @@ fn corpus() -> Vec<std::path::PathBuf> {
 }
 
 fn assert_stable(src: &str, cfg: &FmtConfig, path: &std::path::Path) {
-    let once = format_program_with(&parser::parse(src), &cfg);
-    let twice = format_program_with(&parser::parse(&once), &cfg);
+    let once = format_program_with(&parser::parse(src), cfg);
+    let twice = format_program_with(&parser::parse(&once), cfg);
     assert_eq!(
         once,
         twice,

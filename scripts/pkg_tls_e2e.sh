@@ -105,15 +105,18 @@ check "publish output confirms" $RC
 (cd tlsapp && \
   OPERON_REGISTRY="https://127.0.0.1:$PORT" OPERON_CA_FILE="$WORK/ca.pem" \
   OPERON_TOKEN="tlstoken" "$TLSOP" publish >/dev/null 2>&1)
-[ "$?" != "0" ]; check "republish is rejected (versions immutable)" $?
+RC=$?
+[ "$RC" != "0" ]; check "republish is rejected (versions immutable)" $?
 (cd tlsapp && \
   OPERON_REGISTRY="https://127.0.0.1:$PORT" OPERON_CA_FILE="$WORK/ca.pem" \
   "$TLSOP" publish >/dev/null 2>&1)
-[ "$?" != "0" ]; check "publish without a token is rejected" $?
+RC=$?
+[ "$RC" != "0" ]; check "publish without a token is rejected" $?
 (cd tlsapp && \
   OPERON_REGISTRY="https://127.0.0.1:$PORT" \
   OPERON_TOKEN="tlstoken" "$TLSOP" publish >/dev/null 2>&1)
-[ "$?" != "0" ]; check "self-signed registry is refused WITHOUT OPERON_CA_FILE (TLS verification is real)" $?
+RC=$?
+[ "$RC" != "0" ]; check "self-signed registry is refused WITHOUT OPERON_CA_FILE (TLS verification is real)" $?
 
 # --- 5. search + add + run over https -------------------------------------------
 echo "[5/8] search + add + run over https"
@@ -147,7 +150,8 @@ echo "[7/8] default (no-tls) build refuses https with the actionable message"
 if [ -n "$DEFAULTOP" ]; then
   OPERON_REGISTRY="https://127.0.0.1:$PORT" OPERON_CA_FILE="$WORK/ca.pem" \
     "$DEFAULTOP" search tls >"$WORK/refuse.out" 2>&1
-  [ "$?" != "0" ]; check "no-tls build fails on https" $?
+  RC=$?
+  [ "$RC" != "0" ]; check "no-tls build fails on https" $?
   grep -q "cargo build --features tls" "$WORK/refuse.out"
   check "refusal names the exact rebuild command" $?
 else
@@ -158,7 +162,8 @@ fi
 echo "[8/8] real-internet TLS sanity"
 if curl -fsS --max-time 8 https://example.com >/dev/null 2>&1; then
   OPERON_REGISTRY="https://example.com" "$TLSOP" search x >"$WORK/net.out" 2>&1
-  [ "$?" != "0" ]; check "https to a public host completes the TLS+HTTP roundtrip" $?
+  RC=$?
+  [ "$RC" != "0" ]; check "https to a public host completes the TLS+HTTP roundtrip" $?
   grep -q "HTTP 404" "$WORK/net.out"
   check "public host answered through the https client (404 on /api/search)" $?
 else

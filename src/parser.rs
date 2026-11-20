@@ -195,37 +195,84 @@ pub fn parse(src: &str) -> Program {
         .find(|(t, _)| !matches!(t, Tok::Newline | Tok::Semi))
         .map(|(_, l)| *l)
         .unwrap_or(1);
-    let mut p = Parser {
-        toks: lexed.toks,
-        pos: 0,
-        notes: Vec::new(),
-        depth: 0,
-        // W074: doc lines ride alongside the token stream; the parser
-        // attaches them to declarations by source order (see take_doc).
-        docs: lexed.docs,
-        doc_cursor: 0,
-        first_tok_line,
-        module_doc_assigned: false,
-        module_doc: Vec::new(),
-        pub_names: Vec::new(),
-        type_aliases: Vec::new(),
-        type_param_stack: Vec::new(),
+    // Z-111-PARSERTHREAD: the recursive descent runs on a dedicated
+    // thread with a profile-conditional reservation (64 MiB release /
+    // 512 MiB debug). The 4096-frame budget's worst case needs ~2.9 MiB
+    // of stack in release but 3-4 physical frames per level at ~40-64 KiB
+    // each in debug builds (up to ~1 GiB at full budget depth), and
+    // embedders call parse() on host threads as
+    // small as 2 MiB — below the budget the descent SIGABRTs the host
+    // process, which is never catchable (A6). With this headroom the
+    // budget diagnostic always fires first, in every build profile, on
+    // every host thread size. The reservation is virtual; RSS covers
+    // only the pages actually touched. All
+    // parser state is owned (lex output + first_tok_line + the lex-time
+    // notes), so the whole descent, the Program assembly and the
+    // collect_structure walk move into the thread with zero copying; the
+    // finished Program crosses back through the scope, and a parser panic
+    // still propagates to the caller via join -> resume_unwind.
+    // Profile-conditional reservation: release needs ~14 MiB at full
+    // budget depth (5 physical frames x ~0.7 KiB x 4096), so 64 MiB keeps
+    // >4x headroom with a cheap mmap (the 1 GiB reservation measurably
+    // cost ~5 ms end-to-end via THP setup on the perf-gate strings
+    // workload). Debug builds spend 3-5 frames x 40-128 KiB per level;
+    // the corpus pins that need deep debug descents are containment-skipped
+    // (tests/fix_corpus.rs), so 512 MiB carries everything debug runs.
+    let stack_bytes: usize = if cfg!(debug_assertions) {
+        512 * 1024 * 1024
+    } else {
+        64 * 1024 * 1024
     };
-    let stmts = p.parse_program();
-    notes.append(&mut p.notes);
-    let mut prog = Program {
-        proofs: Vec::new(),
-        named_frames: Vec::new(),
-        anchor_exports: Vec::new(),
-        tad_exports: Vec::new(),
-        tad_members: Vec::new(),
-        ires: Vec::new(),
-        module_doc: p.module_doc.clone(),
-        pub_exports: p.pub_names.clone(),
-        notes,
-        stmts,
-    };
-    collect_structure(&mut prog);
+    let prog = std::thread::scope(|s| {
+        std::thread::Builder::new()
+            .stack_size(stack_bytes)
+            .name("operon-parser".to_string())
+            .spawn_scoped(s, move || {
+                let mut p = Parser {
+                    toks: lexed.toks,
+                    pos: 0,
+                    notes: Vec::new(),
+                    depth: 0,
+                    // W074: doc lines ride alongside the token stream; the
+                    // parser attaches them to declarations by source order
+                    // (see take_doc).
+                    docs: lexed.docs,
+                    doc_cursor: 0,
+                    first_tok_line,
+                    module_doc_assigned: false,
+                    module_doc: Vec::new(),
+                    pub_names: Vec::new(),
+                    type_aliases: Vec::new(),
+                    type_param_stack: Vec::new(),
+                };
+                let stmts = p.parse_program();
+                // F3 (review): Program assembly AND collect_structure (a
+                // recursive clone walk over the whole tree) stay on the
+                // worker too. Running collect_structure on the caller
+                // re-introduced caller-stack depth proportional to the AST
+                // — deep calls/indexes could still exhaust a small host
+                // thread BEFORE parse() returned, the exact #111 embedder
+                // residual this dedicated thread exists to prevent.
+                notes.append(&mut p.notes);
+                let mut prog = Program {
+                    proofs: Vec::new(),
+                    named_frames: Vec::new(),
+                    anchor_exports: Vec::new(),
+                    tad_exports: Vec::new(),
+                    tad_members: Vec::new(),
+                    ires: Vec::new(),
+                    module_doc: p.module_doc,
+                    pub_exports: p.pub_names,
+                    notes,
+                    stmts,
+                };
+                collect_structure(&mut prog);
+                prog
+            })
+            .expect("spawn operon-parser thread")
+            .join()
+            .unwrap_or_else(|e| std::panic::resume_unwind(e))
+    });
     prog
 }
 

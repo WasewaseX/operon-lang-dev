@@ -15,8 +15,10 @@ BIN=bin/operon
 TMP=$(mktemp -d /tmp/operon_w072.XXXXXX)
 WATCH_PID=""
 cleanup() {
-  [ -n "$WATCH_PID" ] && kill "$WATCH_PID" 2>/dev/null || true
-  [ -n "$WATCH_PID" ] && wait "$WATCH_PID" 2>/dev/null || true
+  if [ -n "$WATCH_PID" ]; then
+    kill "$WATCH_PID" 2>/dev/null || true
+    wait "$WATCH_PID" 2>/dev/null || true
+  fi
   rm -rf "$TMP"
 }
 trap cleanup EXIT

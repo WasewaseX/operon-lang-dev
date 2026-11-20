@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """W04 traits oracle mirror: trait stmt + implements + default dispatch.
 Precise anchored replacements on bootstrap/oracle.py; run from repo root."""
+
 import sys
 
 P = "bootstrap/oracle.py"
 src = open(P, encoding="utf-8").read()
+
 
 def rep(old, new):
     global src
@@ -18,11 +20,13 @@ def rep(old, new):
         sys.exit(1)
     src = src.replace(old, new, 1)
 
+
 # 1. Trait/TraitM classes after Pheno
-rep('''class Pheno:
+rep(
+    """class Pheno:
     __slots__ = ("name", "parent", "fields", "methods")
     def __init__(self, name, parent, fields, methods):
-        self.name, self.parent, self.fields, self.methods = name, parent, fields, methods''',
+        self.name, self.parent, self.fields, self.methods = name, parent, fields, methods""",
     '''class Pheno:
     __slots__ = ("name", "parent", "fields", "methods", "implements")
     def __init__(self, name, parent, fields, methods, implements=None):
@@ -40,22 +44,26 @@ class TraitM:
 class Trait:
     __slots__ = ("name", "methods")
     def __init__(self, name, methods):
-        self.name, self.methods = name, methods''')
+        self.name, self.methods = name, methods''',
+)
 
 # 2. registry in __init__
-rep("        self.phenos = {}",
-    "        self.phenos = {}\n        # W04: trait registry (name -> Trait); last declaration wins\n        self.traits = {}")
+rep(
+    "        self.phenos = {}",
+    "        self.phenos = {}\n        # W04: trait registry (name -> Trait); last declaration wins\n        self.traits = {}",
+)
 
 # 3. phenotype header: implements clause
-rep('''        if word == "phenotype":
+rep(
+    """        if word == "phenotype":
             self.next()
             name = self.ident()
             parent = None
             if self.at_ident("from"):
                 self.next()
                 parent = self.ident()
-            fields, methods = [], []''',
-    '''        if word == "phenotype":
+            fields, methods = [], []""",
+    """        if word == "phenotype":
             self.next()
             name = self.ident()
             parent = None
@@ -75,17 +83,21 @@ rep('''        if word == "phenotype":
                         self.next()
                         continue
                     break
-            fields, methods = [], []''')
+            fields, methods = [], []""",
+)
 
 # 4. phenotype return: pass implements
-rep('            return ("pheno", Pheno(name, parent, fields, methods))',
-    '            return ("pheno", Pheno(name, parent, fields, methods, implements))')
+rep(
+    '            return ("pheno", Pheno(name, parent, fields, methods))',
+    '            return ("pheno", Pheno(name, parent, fields, methods, implements))',
+)
 
 # 5. trait statement parse (before the bare-name definition lookahead)
-rep('''        if word == "gene":
+rep(
+    """        if word == "gene":
             self.next()
-            return self.gene_def([])''',
-    '''        if word == "trait":
+            return self.gene_def([])""",
+    """        if word == "trait":
             # W04 (SPEC 8b): `trait Name { gene m(); gene n() { ... } }`,
             # mirror of the Rust parser. A method with a body is a DEFAULT
             # (parsed by the normal gene parser); one without is REQUIRED.
@@ -125,12 +137,14 @@ rep('''        if word == "gene":
             return ("trait", Trait(tname, methods))
         if word == "gene":
             self.next()
-            return self.gene_def([])''')
+            return self.gene_def([])""",
+)
 
 # 6. helper methods (peek-ahead + params), insert before `def stmt(self):`
-rep('''    def stmt(self):
-        t = self.peek()''',
-    '''    def _trait_method_has_body(self):
+rep(
+    """    def stmt(self):
+        t = self.peek()""",
+    """    def _trait_method_has_body(self):
         # W04: from the current 'gene' token, scan ahead past the matching
         # parameter parens; a '{' after the close paren means a default body.
         i = self.pos + 1
@@ -176,13 +190,15 @@ rep('''    def stmt(self):
         return names
 
     def stmt(self):
-        t = self.peek()''')
+        t = self.peek()""",
+)
 
 # 7. exec: trait registration (next to pheno)
-rep('''        elif k == "pheno":
+rep(
+    """        elif k == "pheno":
             p = s[1]
-            self.phenos[p.name] = p''',
-    '''        elif k == "pheno":
+            self.phenos[p.name] = p""",
+    """        elif k == "pheno":
             p = s[1]
             self.phenos[p.name] = p
         elif k == "trait":
@@ -190,10 +206,12 @@ rep('''        elif k == "pheno":
             t = s[1]
             if t.name in self.traits:
                 self.note(4, f"redefining trait '{t.name}'")
-            self.traits[t.name] = t''')
+            self.traits[t.name] = t""",
+)
 
 # 8. construct_obj: contract notes
-rep('''        obj = ObjInst(p, fields)
+rep(
+    """        obj = ObjInst(p, fields)
         for dd in reversed(chain):
             for g in dd.methods:
                 if g.name == "init":
@@ -202,8 +220,8 @@ rep('''        obj = ObjInst(p, fields)
             else:
                 continue
             break
-        return obj''',
-    '''        obj = ObjInst(p, fields)
+        return obj""",
+    """        obj = ObjInst(p, fields)
         # W04: trait contract check, required methods must be provided by
         # the lineage; a break is a NOTE (Total Grammar), never fatal.
         for tname in p.implements:
@@ -225,16 +243,18 @@ rep('''        obj = ObjInst(p, fields)
             else:
                 continue
             break
-        return obj''')
+        return obj""",
+)
 
 # 9. method dispatch: trait default fallback before field-callable fallback
-rep('''            for dd in chain:
+rep(
+    """            for dd in chain:
                 for g in dd.methods:
                     if g.name == name:
                         return self.call_method_gene(g, recv, args)
             if name in recv.fields:
-                return self.call_value(env, recv.fields[name], args)''',
-    '''            for dd in chain:
+                return self.call_value(env, recv.fields[name], args)""",
+    """            for dd in chain:
                 for g in dd.methods:
                     if g.name == name:
                         return self.call_method_gene(g, recv, args)
@@ -249,7 +269,8 @@ rep('''            for dd in chain:
                     if m.name == name and m.default is not None:
                         return self.call_method_gene(m.default, recv, args)
             if name in recv.fields:
-                return self.call_value(env, recv.fields[name], args)''')
+                return self.call_value(env, recv.fields[name], args)""",
+)
 
 open(P, "w", encoding="utf-8").write(src)
 print("W04 oracle mirror applied")

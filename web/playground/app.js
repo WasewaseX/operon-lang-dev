@@ -1,14 +1,14 @@
 /* ==========================================================================
-   Operon playground — browser subset interpreter (plain JS build)
-   --------------------------------------------------------------------------
-   Implements the SPEC.md v2.0 expression core with the 4-rung Total Grammar:
-     rung 1 canonical · rung 2 synonyms · rung 3 wobble repair (edit distance)
-     rung 4 semantic fallback (unbound wobble, stray skip, auto-close)
-   plus a Total-Grammar runtime: soft failures degrade to null + note.
+    Operon playground — browser subset interpreter (plain JS build)
+    --------------------------------------------------------------------------
+    Implements the SPEC.md v2.0 expression core with the 4-rung Total Grammar:
+      rung 1 canonical · rung 2 synonyms · rung 3 wobble repair (edit distance)
+      rung 4 semantic fallback (unbound wobble, stray skip, auto-close)
+    plus a Total-Grammar runtime: soft failures degrade to null + note.
 
-   This is the file the page loads. app.ts is its faithful typed twin — keep
-   the two logically identical.
-   ========================================================================== */
+    This is the file the page loads. app.ts is its faithful typed twin —
+    keep the two logically identical.
+    ========================================================================== */
 "use strict";
 
 /* ------------------------- language tables (SPEC §3, §4) ------------------ */

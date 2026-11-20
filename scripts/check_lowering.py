@@ -38,7 +38,6 @@ temporary directory.
 
 import argparse
 import re
-import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -178,6 +177,7 @@ def check(repo: Path):
     surface_tokens = set()
     for r in rows:
         surface_tokens |= ident_tokens(r[0])
+
     def classified(k):
         return k in surface_tokens or ("@" + k) in surface_tokens
 
@@ -277,8 +277,9 @@ def selftest(repo: Path):
             specdir = tmp / "docs/spec"
             specdir.mkdir(parents=True, exist_ok=True)
             (specdir / "LOWERING.md").write_text(mutate(original), encoding="utf-8")
-            import io
             import contextlib
+            import io
+
             buf = io.StringIO()
             try:
                 with contextlib.redirect_stdout(buf):
@@ -299,10 +300,17 @@ def selftest(repo: Path):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--repo", type=Path, default=Path(__file__).resolve().parent.parent,
-                    help="repo root (default: parent of scripts/)")
-    ap.add_argument("--selftest", action="store_true",
-                    help="run the negative suite on temp copies; never writes the tree")
+    ap.add_argument(
+        "--repo",
+        type=Path,
+        default=Path(__file__).resolve().parent.parent,
+        help="repo root (default: parent of scripts/)",
+    )
+    ap.add_argument(
+        "--selftest",
+        action="store_true",
+        help="run the negative suite on temp copies; never writes the tree",
+    )
     args = ap.parse_args()
     if args.selftest:
         sys.exit(0 if selftest(args.repo) else 1)

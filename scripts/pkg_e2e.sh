@@ -97,7 +97,7 @@ check $? "program runs again after install"
 # ---- 7. remove keeps manifest + lock in sync
 (cd "$WORK/proj/myapp" && "$BIN" remove web >/dev/null 2>&1)
 check $? "operon remove web"
-grep -q 'name = "web"' "$WORK/proj/myapp/operon.lock" && fail=1 || true
+if grep -q 'name = "web"' "$WORK/proj/myapp/operon.lock"; then fail=1; fi
 if grep -q 'name = "web"' "$WORK/proj/myapp/operon.lock"; then bad "remove purges the lock line" ; else ok "remove purges the lock line"; fi
 
 # ---- 8. registry init/serve + client + security refusal
@@ -240,16 +240,19 @@ check $? "program runs with the req-pinned dep"
 cp "$SEM/proj/reqapp/operon.lock" "$SEM/proj/reqapp/operon.lock.keep"
 sed -i 's/^version = "0.1.5"/version = "0.2.0"/' "$SEM/proj/reqapp/operon.lock"
 (cd "$SEM/proj/reqapp" && iso_env "$SEM/home" "$SEM/deps" "$BIN" run --locked src/main.op >/dev/null 2>"$SEM/vdrift.err")
-[ "$?" != "0" ] && grep -q "does not satisfy" "$SEM/vdrift.err"
+RC=$?
+[ "$RC" != "0" ] && grep -q "does not satisfy" "$SEM/vdrift.err"
 check $? "--locked fails when the lock version leaves the requirement"
 mv "$SEM/proj/reqapp/operon.lock.keep" "$SEM/proj/reqapp/operon.lock"
 # unsatisfiable requirement = honest error listing availability
 (cd "$SEM/proj/reqapp" && iso_env "$SEM/home" "$SEM/deps" "$BIN" add "json@^9.0" --registry "$SEM/reg/index.jsonl" >/dev/null 2>"$SEM/unsat.err")
-[ "$?" != "0" ] && grep -q "satisfies" "$SEM/unsat.err"
+RC=$?
+[ "$RC" != "0" ] && grep -q "satisfies" "$SEM/unsat.err"
 check $? "unsatisfiable requirement fails loudly (error names it)"
 # malformed requirement = loud parse error, never a silent URL add
 (cd "$SEM/proj/reqapp" && iso_env "$SEM/home" "$SEM/deps" "$BIN" add "beta@^abc" --registry "$SEM/reg/index.jsonl" >/dev/null 2>"$SEM/badreq.err")
-[ "$?" != "0" ] && grep -q "version requirement" "$SEM/badreq.err"
+RC=$?
+[ "$RC" != "0" ] && grep -q "version requirement" "$SEM/badreq.err"
 check $? "malformed requirement fails loudly"
 # no-req add keeps last-wins (zero behavior change for existing projects)
 (cd "$SEM/proj/reqapp" && iso_env "$SEM/home" "$SEM/deps" "$BIN" remove beta >/dev/null 2>&1)
@@ -260,4 +263,4 @@ check $? "add without @req keeps the last-wins rule (1.0.0)"
 echo "pkg_e2e: $pass passed, $fail failed"
 [ "$fail" = "0" ] && echo "PKG E2E GREEN"
 rm -rf "$WORK"
-exit $([ "$fail" = "0" ] && echo 0 || echo 1)
+if [ "$fail" = "0" ]; then exit 0; else exit 1; fi

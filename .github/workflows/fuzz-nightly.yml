@@ -13,6 +13,10 @@ on:
         description: "seconds per target"
         default: "300"
 
+# least privilege: nothing in this workflow writes to the repo
+permissions:
+  contents: read
+
 jobs:
   libfuzzer:
     runs-on: ubuntu-latest
@@ -33,16 +37,22 @@ jobs:
       - name: Build targets
         run: cargo +nightly fuzz build
       - name: fuzz_parse
+        env:
+          BUDGET: ${{ github.event.inputs.budget || 300 }}
         run: |
-          B="${{ github.event.inputs.budget || 300 }}"
+          B="$BUDGET"
           cargo +nightly fuzz run fuzz_parse -- -max_total_time="$B" -rss_limit_mb=4096 -timeout=25
       - name: fuzz_check
+        env:
+          BUDGET: ${{ github.event.inputs.budget || 300 }}
         run: |
-          B="${{ github.event.inputs.budget || 300 }}"
+          B="$BUDGET"
           cargo +nightly fuzz run fuzz_check -- -max_total_time="$B" -rss_limit_mb=4096 -timeout=25
       - name: fuzz_run (fuel-capped, leaks out of scope — process-lifetime Rc graph)
+        env:
+          BUDGET: ${{ github.event.inputs.budget || 300 }}
         run: |
-          B="${{ github.event.inputs.budget || 300 }}"
+          B="$BUDGET"
           ASAN_OPTIONS=detect_leaks=0 cargo +nightly fuzz run fuzz_run -- -max_total_time="$B" -rss_limit_mb=4096 -timeout=25 -detect_leaks=0
       - name: Upload artifacts on any finding
         if: failure()

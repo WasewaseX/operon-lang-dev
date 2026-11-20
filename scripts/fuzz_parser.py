@@ -23,6 +23,7 @@ seed and writes the offending input to /tmp on failure.
 
 Usage: python3 scripts/fuzz_parser.py [--n 2000] [--seed 0] [--exec]
 """
+
 import argparse
 import os
 import random
@@ -67,8 +68,11 @@ def write_input(data):
 def run_engine(args, data):
     try:
         p = subprocess.run(
-            [BIN] + args, input=data, capture_output=True,
-            timeout=TIMEOUT, text=False,
+            [BIN] + args,
+            input=data,
+            capture_output=True,
+            timeout=TIMEOUT,
+            text=False,
         )
         return p.returncode, p.stdout, p.stderr
     except subprocess.TimeoutExpired:
@@ -80,11 +84,7 @@ def gen_random_bytes(rng):
     return bytes(rng.randint(0, 255) for _ in range(n))
 
 
-UNICODE_POOL = (
-    "Σ ΣΩ 文字列 🧬🧪\U0001F600 ／＼ ﷽ ‮ ‭ "
-    "\x00\x01\x1b[31m \r\n \t \\\'\"` "
-    "𝕏⃝ ﬀﬁﬂ ½⅓ ∞≈≠"
-)
+UNICODE_POOL = "Σ ΣΩ 文字列 🧬🧪\U0001f600 ／＼ ﷽ ‮ ‭ \x00\x01\x1b[31m \r\n \t \\'\"` 𝕏⃝ ﬀﬁﬂ ½⅓ ∞≈≠"
 
 
 def gen_unicode_salad(rng):
@@ -93,13 +93,74 @@ def gen_unicode_salad(rng):
 
 
 TOKENS = [
-    "gene", "match", "case", "stress", "rescue", "if", "elif", "else",
-    "while", "loop", "for", "in", "return", "raise", "let", "frame",
-    "proof", "Some", "None", "Ok", "Err", "some", "none", "ok", "err",
-    "print", "{", "}", "(", ")", "[", "]", ",", ":", ";", "|", "*rest",
-    "?!", "?", ".", "=>", "->", "==", "!=", "<=", ">=", "&&", "||", "??",
-    "+", "-", "*", "/", "//", "%", "=", "+=", '"', "1", "2.5", "0x1f",
-    "name", "x", "_", "\n", " ", "@copies(2)", "@riboswitch(on)",
+    "gene",
+    "match",
+    "case",
+    "stress",
+    "rescue",
+    "if",
+    "elif",
+    "else",
+    "while",
+    "loop",
+    "for",
+    "in",
+    "return",
+    "raise",
+    "let",
+    "frame",
+    "proof",
+    "Some",
+    "None",
+    "Ok",
+    "Err",
+    "some",
+    "none",
+    "ok",
+    "err",
+    "print",
+    "{",
+    "}",
+    "(",
+    ")",
+    "[",
+    "]",
+    ",",
+    ":",
+    ";",
+    "|",
+    "*rest",
+    "?!",
+    "?",
+    ".",
+    "=>",
+    "->",
+    "==",
+    "!=",
+    "<=",
+    ">=",
+    "&&",
+    "||",
+    "??",
+    "+",
+    "-",
+    "*",
+    "/",
+    "//",
+    "%",
+    "=",
+    "+=",
+    '"',
+    "1",
+    "2.5",
+    "0x1f",
+    "name",
+    "x",
+    "_",
+    "\n",
+    " ",
+    "@copies(2)",
+    "@riboswitch(on)",
 ]
 
 
@@ -152,7 +213,7 @@ def gen_nest_bomb(rng):
     kind = rng.choice(["(", "[", "{", '"'])
     depth = rng.choice([1, 8, 64, 200, 900])
     if kind == '"':
-        return (b'print("' + b"a" * depth)  # unclosed string of depth bytes
+        return b'print("' + b"a" * depth  # unclosed string of depth bytes
     close = {"(": ")", "[": "]", "{": "}"}[kind]
     return (kind * depth + close * max(0, depth - 1)).encode()
 
@@ -190,8 +251,9 @@ def main():
     # the canonical 20260930 stream while an EXPLICIT --seed 0 is honored
     # as its own stream (the old `args.seed or 20260930` aliased them).
     ap.add_argument("--seed", type=int, default=None)
-    ap.add_argument("--exec", action="store_true",
-                    help="also run each input on the VM and require agreement")
+    ap.add_argument(
+        "--exec", action="store_true", help="also run each input on the VM and require agreement"
+    )
     args = ap.parse_args()
 
     # z-fuzz-infra (#138.2): `args.seed or DEFAULT` aliased --seed 0 to
@@ -220,15 +282,16 @@ def main():
         if finding:
             findings.append(f"seed={args.seed} i={i} class={cls} {finding}")
 
-    print(f"fuzz: {args.n} inputs "
-          f"(R={buckets['R']} U={buckets['U']} T={buckets['T']} "
-          f"D={buckets['D']} S={buckets['S']})")
+    print(
+        f"fuzz: {args.n} inputs "
+        f"(R={buckets['R']} U={buckets['U']} T={buckets['T']} "
+        f"D={buckets['D']} S={buckets['S']})"
+    )
     if findings:
         for f in findings[:20]:
             print(f"  FINDING: {f}")
         sys.exit(1)
-    print("FUZZ CLEAN: no panics, no hangs, no breaches"
-          + (", engines agree" if args.exec else ""))
+    print("FUZZ CLEAN: no panics, no hangs, no breaches" + (", engines agree" if args.exec else ""))
 
 
 if __name__ == "__main__":

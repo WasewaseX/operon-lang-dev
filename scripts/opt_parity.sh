@@ -39,7 +39,7 @@ for cfg in "${CONFIGS[@]}"; do
     # byte-exact via files + cmp (command substitution drops NULs — a
     # redteam payload prints them; cmp keeps the gate honest)
     "$BIN" run "$f" >/tmp/optp_a.out 2>/tmp/optp_a.err; a_rc=$?
-    "$BIN" run $cfg "$f" >/tmp/optp_b.out 2>/tmp/optp_b.err; b_rc=$?
+    "$BIN" run "$cfg" "$f" >/tmp/optp_b.out 2>/tmp/optp_b.err; b_rc=$?
     if is_timing_case "$f"; then
       if grep -q "\[contained\]" /tmp/optp_a.err && grep -q "\[contained\]" /tmp/optp_b.err && [ "$a_rc" -ne 0 ] && [ "$b_rc" -ne 0 ]; then
         pass=$((pass+1))

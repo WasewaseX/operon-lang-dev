@@ -11,6 +11,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# least privilege: nothing in this workflow writes to the repo
+permissions:
+  contents: read
+
 jobs:
   matrix:
     strategy:

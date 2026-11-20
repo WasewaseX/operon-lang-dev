@@ -22,9 +22,12 @@ check() {
     fi
     if [ "$sub" = "run" ]; then
         # fatal blocks print to stderr; stdout may carry program output
+        # deliberate split: the diagnostic flag set
+        # shellcheck disable=SC2086
         err=$(./bin/operon run "$fixture" $flag $extra 2>&1 >/dev/null); rc=$?
     else
         # lint/check print to stdout; keep stderr out of the golden
+        # shellcheck disable=SC2086
         err=$(./bin/operon "$sub" "$fixture" $flag $extra 2>/dev/null); rc=$?
     fi
     # notes flush AFTER the block; only the block lines are pinned here.

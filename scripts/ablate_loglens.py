@@ -7,11 +7,19 @@ import time
 
 ROOT = "/home/z/my-project/operon-lang-dev"
 OP = ROOT + "/target/release/operon"
-STAGES = ["read", "lines", "quote", "reqrest", "digits", "records",
-          "counts", "sorts"]
-CMD = [OP, "run", ROOT + "/scripts/ablate_loglens.op",
-       "--cell", ROOT + "/apps/loglens/loglens.cell",
-       "--allow-read", ROOT, "--fuel", "20000000000", "--"]
+STAGES = ["read", "lines", "quote", "reqrest", "digits", "records", "counts", "sorts"]
+CMD = [
+    OP,
+    "run",
+    ROOT + "/scripts/ablate_loglens.op",
+    "--cell",
+    ROOT + "/apps/loglens/loglens.cell",
+    "--allow-read",
+    ROOT,
+    "--fuel",
+    "20000000000",
+    "--",
+]
 
 
 def time_stage(stage, runs=3):

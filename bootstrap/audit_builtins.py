@@ -23,6 +23,7 @@ to spell `sqrt(` says nothing about golden coverage.
 Exit codes: 0 = every builtin covered; 1 = gap list (also printed);
 2 = self-check failed (registry not found / corpus walk failed).
 """
+
 import os
 import re
 import subprocess
@@ -31,12 +32,12 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 INTERP = os.path.join(ROOT, "src", "interp.rs")
 
-REGISTRY_RE = re.compile(
-    r"pub\s+const\s+BUILTIN_NAMES\s*:\s*&\[&str\]\s*=\s*&\[(.*?)\];", re.S)
+REGISTRY_RE = re.compile(r"pub\s+const\s+BUILTIN_NAMES\s*:\s*&\[&str\]\s*=\s*&\[(.*?)\];", re.S)
 SYNONYM_RE = re.compile(
-    r"pub\s+const\s+BUILTIN_SYNONYMS\s*:\s*&\[\(&str,\s*&str\)\]\s*=\s*&\[(.*?)\];", re.S)
+    r"pub\s+const\s+BUILTIN_SYNONYMS\s*:\s*&\[\(&str,\s*&str\)\]\s*=\s*&\[(.*?)\];", re.S
+)
 ENTRY_RE = re.compile(r'"((?:[^"\\]|\\.)*)"')
-RUST_COMMENT_RE = re.compile(r'//[^\n]*|/\*.*?\*/', re.S)
+RUST_COMMENT_RE = re.compile(r"//[^\n]*|/\*.*?\*/", re.S)
 
 
 def extract_table(src, regex, what):
@@ -56,9 +57,14 @@ def tracked_op_files():
     harness/fix_corpus walkers see, minus the adversarial-bytes lane)."""
     try:
         out = subprocess.run(
-            ["git", "ls-files", "tests", "apps"], cwd=ROOT,
-            capture_output=True, text=True, timeout=30, check=True).stdout
-        files = [l for l in out.splitlines() if l.endswith(".op")]
+            ["git", "ls-files", "tests", "apps"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=True,
+        ).stdout
+        files = [ln for ln in out.splitlines() if ln.endswith(".op")]
         if files:
             return sorted(f for f in files if os.sep + "redteam" + os.sep not in f)
     except Exception:
@@ -75,12 +81,13 @@ def tracked_op_files():
 
 
 STRIP_RE = re.compile(
-    r'"""(?:[^\\]|\\.)*?"""'      # triple-quoted
+    r'"""(?:[^\\]|\\.)*?"""'  # triple-quoted
     r"|'''(?:[^\\]|\\.)*?'''"
-    r'|"(?:[^"\\\n]|\\.)*"'       # single-line double-quoted
-    r"|'(?:[^'\\\n]|\\.)*'"       # single-quoted
-    r'|#[^\n]*'                   # comment to end of line
-    , re.S)
+    r'|"(?:[^"\\\n]|\\.)*"'  # single-line double-quoted
+    r"|'(?:[^'\\\n]|\\.)*'"  # single-quoted
+    r"|#[^\n]*",  # comment to end of line
+    re.S,
+)
 
 CALL_RE_TMPL = r"(?<![A-Za-z0-9_?.])(%s)\s*\("
 
@@ -137,20 +144,25 @@ def main():
     gaps = sorted(n for n, fs in coverage.items() if not fs)
     covered = sum(1 for fs in coverage.values() if fs)
 
-    print(f"audit_builtins: {len(builtins)} registry builtins "
-          f"({len(synonyms)//2} synonyms) · corpus {len(files)} tracked .op files")
+    print(
+        f"audit_builtins: {len(builtins)} registry builtins "
+        f"({len(synonyms) // 2} synonyms) · corpus {len(files)} tracked .op files"
+    )
     if dups:
         print(f"audit_builtins: REGISTRY DUPLICATES: {', '.join(dups)}")
     if gaps:
-        print(f"audit_builtins: FAIL — {len(gaps)} builtin(s) with NO differential "
-              f"golden ({covered}/{len(builtins)} covered):")
+        print(
+            f"audit_builtins: FAIL — {len(gaps)} builtin(s) with NO differential "
+            f"golden ({covered}/{len(builtins)} covered):"
+        )
         for n in gaps:
-            where = sorted(coverage.get(canon_of.get(n, n), []))[:3]
             hint = f"  (synonym '{n}' -> '{canon_of[n]}')" if n in canon_of else ""
             print(f"  - {n}{hint}")
         sys.exit(1)
-    print(f"audit_builtins: OK — every builtin has >=1 differential golden "
-          f"({covered}/{len(builtins)})")
+    print(
+        f"audit_builtins: OK — every builtin has >=1 differential golden "
+        f"({covered}/{len(builtins)})"
+    )
     sys.exit(0)
 
 

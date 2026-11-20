@@ -10,6 +10,7 @@ engines, ~2-3 MB bash) — identical noise for every implementation.
 
 On Linux ru_maxrss is in kilobytes.
 """
+
 import resource
 import subprocess
 import sys

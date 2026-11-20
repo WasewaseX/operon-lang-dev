@@ -119,7 +119,6 @@ if [ -n "$PY" ]; then
   [ "$rc" = 0 ]; check "python selfcheck runs" $?
   diff -u "$TMP/self.op" "$TMP/self.py" > "$TMP/diff.op-py" 2>&1
   check "operon == python (byte-identical decisions)" $?
-  if [ "$?" != 0 ] && false; then cat "$TMP/diff.op-py"; fi
 else
   bad "python3 not found (skipping python differential)"
 fi

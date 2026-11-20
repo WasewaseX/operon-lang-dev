@@ -99,6 +99,7 @@ def _validate_line(body):
 # storage adapter: Postgres (psycopg2) when DATABASE_URL is set, else SQLite
 # ---------------------------------------------------------------------------
 
+
 class Store:
     """Two backends, one interface. Index lines round-trip byte-exactly."""
 
@@ -122,9 +123,7 @@ class Store:
             " name TEXT NOT NULL, version TEXT NOT NULL,"
             " line TEXT NOT NULL, seq INTEGER PRIMARY KEY AUTOINCREMENT)"
         )
-        self.conn.execute(
-            "CREATE UNIQUE INDEX IF NOT EXISTS nv ON index_lines (name, version)"
-        )
+        self.conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS nv ON index_lines (name, version)")
         self.conn.commit()
 
     def _init_pg(self):
@@ -134,9 +133,7 @@ class Store:
             " name TEXT NOT NULL, version TEXT NOT NULL,"
             " line TEXT NOT NULL, seq BIGSERIAL PRIMARY KEY)"
         )
-        cur.execute(
-            "CREATE UNIQUE INDEX IF NOT EXISTS nv ON index_lines (name, version)"
-        )
+        cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS nv ON index_lines (name, version)")
         self.conn.commit()
 
     def publish(self, line_obj, line_text):
@@ -203,6 +200,7 @@ def store():
 # HTTP surface — the same rules for stdlib serving and gunicorn/WSGI
 # ---------------------------------------------------------------------------
 
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "operon-registry/2"
 
@@ -243,9 +241,7 @@ class Handler(BaseHTTPRequestHandler):
         token = auth[7:] if auth.startswith("Bearer ") else ""
         toks = _tokens()
         if not toks:
-            return self._send(
-                403, {"error": "publish is disabled (no OPERON_TOKENS configured)"}
-            )
+            return self._send(403, {"error": "publish is disabled (no OPERON_TOKENS configured)"})
         if token not in toks:
             return self._send(403, {"error": "publish requires a valid OPERON_TOKENS token"})
         try:
@@ -253,9 +249,7 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError:
             return self._send(400, {"error": "bad Content-Length"})
         if length <= 0 or length > MAX_BODY:
-            return self._send(
-                413, {"error": f"body must be 1..{MAX_BODY} bytes (one index line)"}
-            )
+            return self._send(413, {"error": f"body must be 1..{MAX_BODY} bytes (one index line)"})
         body = self.rfile.read(length)
         obj, err = _validate_line(body)
         if err:
@@ -278,8 +272,7 @@ def main():
         server.socket = ctx.wrap_socket(server.socket, server_side=True)
         scheme = "https"
     print(
-        f"operon-registry listening on :{PORT} ({scheme}, "
-        f"{'postgres' if _db_url() else 'sqlite'})",
+        f"operon-registry listening on :{PORT} ({scheme}, {'postgres' if _db_url() else 'sqlite'})",
         flush=True,
     )
     server.serve_forever()

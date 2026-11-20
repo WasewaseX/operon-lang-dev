@@ -13,6 +13,7 @@ def lcg_next(x):
 
 # ---------------- NUM ----------------
 
+
 def a_num_int_add():
     acc = 0
     for i in range(2000000):
@@ -93,6 +94,7 @@ def a_num_divmod():
 
 
 # ---------------- CTRL ----------------
+
 
 def a_ctl_while():
     i = 1200000
@@ -253,6 +255,7 @@ def a_ctl_closure():
 
 # ---------------- STR ----------------
 
+
 def a_str_cat():
     s = ""
     for _ in range(30000):
@@ -272,7 +275,7 @@ def a_str_slice():
     base = "The quick brown fox jumps over the lazy dog"
     acc = 0
     for i in range(200000):
-        p = base[i % 30:i % 30 + 10]
+        p = base[i % 30 : i % 30 + 10]
         acc = acc + len(p)
     return acc
 
@@ -303,8 +306,8 @@ def a_str_case():
     acc = 0
     for _ in range(60000):
         u = base.upper()
-        l = u.lower()
-        t = ("  " + l + "  ").strip()
+        ln = u.lower()
+        t = ("  " + ln + "  ").strip()
         acc = acc + len(t)
     return acc
 
@@ -354,6 +357,7 @@ def a_str_build():
 
 # ---------------- LIST ----------------
 
+
 def a_lst_push():
     xs = []
     for i in range(300000):
@@ -391,7 +395,7 @@ def a_lst_slice():
         xs.append(i)
     acc = 0
     for i in range(60000):
-        p = xs[i % 1500:i % 1500 + 100]
+        p = xs[i % 1500 : i % 1500 + 100]
         acc = acc + len(p)
     return acc
 
@@ -493,6 +497,7 @@ def a_lst_insert_del():
 
 # ---------------- MAP ----------------
 
+
 def a_map_set():
     m = {}
     for i in range(300000):
@@ -579,6 +584,7 @@ def a_map_mixed():
 
 # ---------------- SET ----------------
 
+
 def scan_in(xs, t):
     for v in xs:
         if v == t:
@@ -601,6 +607,7 @@ def a_set_algebra():
 
 
 # ---------------- ALGO ----------------
+
 
 def a_alg_sieve():
     n = 50000
@@ -695,9 +702,16 @@ def a_alg_wordfreq():
 
 def a_alg_json_rt():
     import json as _json
+
     doc = {}
     for i in range(120):
-        doc["row" + str(i)] = {"id": i, "name": "item-" + str(i), "tags": ["a", "b", "c"], "score": i * 3, "active": i % 2 == 0}
+        doc["row" + str(i)] = {
+            "id": i,
+            "name": "item-" + str(i),
+            "tags": ["a", "b", "c"],
+            "score": i * 3,
+            "active": i % 2 == 0,
+        }
     acc = 0
     for i in range(150):
         s = _json.dumps(doc)
@@ -708,12 +722,20 @@ def a_alg_json_rt():
 
 def a_alg_json_big():
     import json as _json
+
     doc = {}
     for i in range(800):
         tags = []
         for j in range(5):
             tags.append("t" + str((i + j) % 32))
-        doc["r" + str(i)] = {"id": i, "kind": "k" + str(i % 9), "tags": tags, "w": (i * 7) % 1000, "ok": i % 3 != 0, "note": "n" + str(i % 64)}
+        doc["r" + str(i)] = {
+            "id": i,
+            "kind": "k" + str(i % 9),
+            "tags": tags,
+            "w": (i * 7) % 1000,
+            "ok": i % 3 != 0,
+            "note": "n" + str(i % 64),
+        }
     s = _json.dumps(doc)
     acc = 0
     for _ in range(2):

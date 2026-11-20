@@ -36,6 +36,7 @@ input, seed file, mutation chain, argv, exit code, stderr head.
 Run:  python3 scripts/fuzz/fuzz.py [--time-budget 120] [--execs N] [--seed S]
 Exit: 0 no findings, 1 findings (they are SAVED — triage them, do not gloat).
 """
+
 import argparse
 import hashlib
 import json
@@ -70,13 +71,16 @@ def find_binary(explicit):
 
 # ------------------------------------------------------------ corpus
 
+
 def build_corpus(max_file_bytes):
     """tests/*.op (top level) + tests/redteam/*.op + examples/**/*.op + std/*.op,
     small files only, deduped, sorted (deterministic)."""
-    roots = [os.path.join(ROOT, "tests"),          # top level only
-             os.path.join(ROOT, "tests", "redteam"),
-             os.path.join(ROOT, "examples"),       # recursive (cookbook, ...)
-             os.path.join(ROOT, "std")]
+    roots = [
+        os.path.join(ROOT, "tests"),  # top level only
+        os.path.join(ROOT, "tests", "redteam"),
+        os.path.join(ROOT, "examples"),  # recursive (cookbook, ...)
+        os.path.join(ROOT, "std"),
+    ]
     files, skipped = {}, 0
     for i, r in enumerate(roots):
         if not os.path.isdir(r):
@@ -106,11 +110,44 @@ def build_corpus(max_file_bytes):
 
 # ------------------------------------------------------------ mutations
 
-TOKENS = [b'"', b"'", b"{", b"}", b"(", b")", b"[", b"]", b"\\", b"${", b"/*",
-          b"*/", b"//", b"#", b"\x00", b"\xff", b"gene", b"match", b"case",
-          b"frame", b"@methylate", b"-1", b"1e999", b"0x"]
-UNICODE_SPLICES = ["\u00e9", "\u03c3", "\u042f", "\u5b57", "\U0001f9ec",
-                   "\u0301", "\u200d", "\U0001f600", "\ufe0f", "\u2028"]
+TOKENS = [
+    b'"',
+    b"'",
+    b"{",
+    b"}",
+    b"(",
+    b")",
+    b"[",
+    b"]",
+    b"\\",
+    b"${",
+    b"/*",
+    b"*/",
+    b"//",
+    b"#",
+    b"\x00",
+    b"\xff",
+    b"gene",
+    b"match",
+    b"case",
+    b"frame",
+    b"@methylate",
+    b"-1",
+    b"1e999",
+    b"0x",
+]
+UNICODE_SPLICES = [
+    "\u00e9",
+    "\u03c3",
+    "\u042f",
+    "\u5b57",
+    "\U0001f9ec",
+    "\u0301",
+    "\u200d",
+    "\U0001f600",
+    "\ufe0f",
+    "\u2028",
+]
 
 
 def mutate(data, rnd):
@@ -123,8 +160,17 @@ def mutate(data, rnd):
         if len(b) > MAX_MUTATED_BYTES:
             op = rnd.choice(["flip", "truncate"])
         else:
-            op = rnd.choice(["flip", "truncate", "dup_chunk", "insert_bytes",
-                             "inject_token", "unicode_splice", "extend"])
+            op = rnd.choice(
+                [
+                    "flip",
+                    "truncate",
+                    "dup_chunk",
+                    "insert_bytes",
+                    "inject_token",
+                    "unicode_splice",
+                    "extend",
+                ]
+            )
         i = rnd.randrange(len(b))
         if op == "flip":
             b[i] ^= 1 << rnd.randrange(8)
@@ -136,7 +182,7 @@ def mutate(data, rnd):
         elif op == "dup_chunk":
             j = rnd.randrange(len(b))
             ln = rnd.randrange(1, 80)
-            b[i:i] = b[j:j + ln]
+            b[i:i] = b[j : j + ln]
             chain.append(f"dup_chunk@{i}<-{j}+{ln}")
         elif op == "insert_bytes":
             blob = bytes(rnd.randrange(256) for _ in range(rnd.randrange(1, 30)))
@@ -151,12 +197,13 @@ def mutate(data, rnd):
             b[i:i] = u
             chain.append(f"unicode_splice@{i}+{len(u)}")
         else:  # extend: clone the head (unbalanced-quote / depth storms)
-            b += b[:rnd.randrange(1, len(b) + 1)]
+            b += b[: rnd.randrange(1, len(b) + 1)]
             chain.append("extend_head")
     return bytes(b), chain
 
 
 # ------------------------------------------------------------ engine probing
+
 
 def probe(argv, timeout):
     try:
@@ -187,8 +234,7 @@ def classify(rc, stderr):
 # re-reported the same crash signatures and triage re-entered manually, and
 # a regression re-introducing an old crasher was not recognized as known.
 # The DB is stdlib JSON, deterministic (sorted keys), diffable, committed.
-CRASH_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                             "crash_signatures.json")
+CRASH_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "crash_signatures.json")
 
 
 def signature_of(kind, detail, stderr, payload):
@@ -237,17 +283,22 @@ def minimize(binpath, payload, argv, timeout, rounds=12):
 
 # ------------------------------------------------------------ main
 
+
 def main():
     ap = argparse.ArgumentParser(description="W51 mutation-based fuzzer")
-    ap.add_argument("--time-budget", type=float, default=120.0,
-                    help="wall-clock budget in seconds (default 120)")
-    ap.add_argument("--execs", type=int, default=200000,
-                    help="hard cap on exec count")
+    ap.add_argument(
+        "--time-budget",
+        type=float,
+        default=120.0,
+        help="wall-clock budget in seconds (default 120)",
+    )
+    ap.add_argument("--execs", type=int, default=200000, help="hard cap on exec count")
     ap.add_argument("--seed", type=int, default=20260926)
     ap.add_argument("--per-input-timeout", type=float, default=10.0)
     ap.add_argument("--corpus-dir", default=DEFAULT_CORPUS_DIR)
-    ap.add_argument("--max-file-bytes", type=int, default=65536,
-                    help="seed files larger than this are skipped")
+    ap.add_argument(
+        "--max-file-bytes", type=int, default=65536, help="seed files larger than this are skipped"
+    )
     ap.add_argument("--max-findings", type=int, default=20)
     ap.add_argument("--bin", default=None)
     ap.add_argument("--no-minimize", action="store_true")
@@ -271,14 +322,20 @@ def main():
     new_sigs = {}
     known_dedupe = 0
 
-    print(f"fuzz — seed {args.seed}, budget {args.time_budget:.0f}s, "
-          f"per-input timeout {args.per_input_timeout:.0f}s")
+    print(
+        f"fuzz — seed {args.seed}, budget {args.time_budget:.0f}s, "
+        f"per-input timeout {args.per_input_timeout:.0f}s"
+    )
     print(f"  binary: {binpath}")
-    print(f"  corpus: {len(seeds)} file(s) "
-          f"(tests + tests/redteam + examples/** + std; {skipped} skipped > "
-          f"{args.max_file_bytes // 1024} KiB)")
-    print(f"  targets: check / ast --json / fmt / explain [--json] (parse-only; contained rc "
-          f"1-3 is the EXPECTED redteam outcome, never a finding)")
+    print(
+        f"  corpus: {len(seeds)} file(s) "
+        f"(tests + tests/redteam + examples/** + std; {skipped} skipped > "
+        f"{args.max_file_bytes // 1024} KiB)"
+    )
+    print(
+        "  targets: check / ast --json / fmt / explain [--json] (parse-only; contained rc "
+        "1-3 is the EXPECTED redteam outcome, never a finding)"
+    )
 
     rnd = random.Random(args.seed)
     deadline = time.time() + args.time_budget
@@ -287,8 +344,7 @@ def main():
     unique_findings = 0
     execs = 0
 
-    while execs < args.execs and time.time() < deadline \
-            and unique_findings < args.max_findings:
+    while execs < args.execs and time.time() < deadline and unique_findings < args.max_findings:
         src = rnd.choice(seeds)
         try:
             with open(src, "rb") as fh:
@@ -310,8 +366,13 @@ def main():
         # because no writing surface was ever fuzzed with before/after
         # hashes.
         WRITETMP = TMP + ".fuzzwrite"
-        for argv in (["check", TMP], ["ast", TMP, "--json"], ["fmt", TMP],
-                     ["explain", TMP], ["explain", TMP, "--json"]):
+        for argv in (
+            ["check", TMP],
+            ["ast", TMP, "--json"],
+            ["fmt", TMP],
+            ["explain", TMP],
+            ["explain", TMP, "--json"],
+        ):
             rc, out, err = probe([binpath] + argv, args.per_input_timeout)
             kind, detail = classify(rc, err)
             stats[kind] += 1
@@ -321,19 +382,18 @@ def main():
             # leave the bytes identical (a zero exit may rewrite freely)
             if execs % 4 == 0:
                 try:
-                    import shutil
                     with open(WRITETMP, "wb") as wfh:
                         wfh.write(mut)
                     before = hashlib.sha256(mut).hexdigest()
-                    wrc, wout, werr = probe([binpath, "fmt", WRITETMP, "--write"],
-                                            args.per_input_timeout)
+                    wrc, wout, werr = probe(
+                        [binpath, "fmt", WRITETMP, "--write"], args.per_input_timeout
+                    )
                     after_bytes = open(WRITETMP, "rb").read()
                     after = hashlib.sha256(after_bytes).hexdigest()
                     if isinstance(wrc, int) and wrc != 0 and after != before:
                         kind2, _ = classify(wrc, werr)
                         stats[kind2] += 1
-                        sig = signature_of("write-integrity", "bytes changed on failure",
-                                           werr, mut)
+                        sig = signature_of("write-integrity", "bytes changed on failure", werr, mut)
                         if sig in known:
                             known_dedupe += 1
                             continue  # known signature: report at exit, not new
@@ -341,7 +401,8 @@ def main():
                         new_sigs[sig] = {
                             "kind": "write-integrity",
                             "detail": "bytes changed on failure",
-                            "first_seed": args.seed, "first_exec": execs,
+                            "first_seed": args.seed,
+                            "first_exec": execs,
                         }
                         unique_findings += 1
                         name = f"write_integrity_{args.seed}_{execs}.op"
@@ -349,16 +410,20 @@ def main():
                         with open(path2, "wb") as wfh:
                             wfh.write(mut)
                         with open(manifest, "a", encoding="utf-8") as wfh:
-                            wfh.write(json.dumps({
-                                "kind": "write-integrity",
-                                "input": os.path.relpath(path2, ROOT),
-                                "bytes": len(mut),
-                                "seed": args.seed,
-                                "exec": execs,
-                                "argv": ["fmt", "<copy>", "--write"],
-                                "exit_code": wrc,
-                                "detail": f"rc!=0 but bytes changed: {before[:12]} -> {after[:12]}",
-                            }))
+                            wfh.write(
+                                json.dumps(
+                                    {
+                                        "kind": "write-integrity",
+                                        "input": os.path.relpath(path2, ROOT),
+                                        "bytes": len(mut),
+                                        "seed": args.seed,
+                                        "exec": execs,
+                                        "argv": ["fmt", "<copy>", "--write"],
+                                        "exit_code": wrc,
+                                        "detail": f"rc!=0 but bytes changed: {before[:12]} -> {after[:12]}",
+                                    }
+                                )
+                            )
                 except OSError:
                     pass
             if kind in ("crash", "hang"):
@@ -375,51 +440,63 @@ def main():
                     continue
                 known.add(sig)
                 new_sigs[sig] = {
-                    "kind": kind, "detail": detail,
-                    "first_seed": args.seed, "first_exec": execs,
+                    "kind": kind,
+                    "detail": detail,
+                    "first_seed": args.seed,
+                    "first_exec": execs,
                 }
                 unique_findings += 1
                 saved = mut
                 min_note = "not minimized"
                 if not args.no_minimize:
-                    saved = minimize(binpath, mut, [argv[0]] + argv[1:],
-                                     args.per_input_timeout)
+                    saved = minimize(binpath, mut, [argv[0]] + argv[1:], args.per_input_timeout)
                     min_note = f"minimized {len(mut)} -> {len(saved)} bytes"
                 name = f"{kind}_{args.seed}_{execs}.op"
                 path = os.path.join(args.corpus_dir, name)
                 with open(path, "wb") as fh:
                     fh.write(saved)
                 with open(manifest, "a", encoding="utf-8") as fh:
-                    fh.write(json.dumps({
-                        "kind": kind,
-                        "input": os.path.relpath(path, ROOT),
-                        "bytes": len(saved),
-                        "seed": args.seed,
-                        "exec": execs,
-                        "seed_file": os.path.relpath(src, ROOT),
-                        "mutation_chain": chain,
-                        "argv": argv,
-                        "exit_code": rc if isinstance(rc, int) else "TIMEOUT",
-                        "stderr_head": err.decode("utf-8", errors="replace")[:500],
-                        "minimized": min_note,
-                    }) + "\n")
-                print(f"  FINDING #{unique_findings} [{kind}] {detail} | "
-                      f"{os.path.relpath(src, ROOT)} | {' '.join(argv[1:])} | "
-                      f"chain: {' > '.join(chain)} | saved {name} ({min_note})")
+                    fh.write(
+                        json.dumps(
+                            {
+                                "kind": kind,
+                                "input": os.path.relpath(path, ROOT),
+                                "bytes": len(saved),
+                                "seed": args.seed,
+                                "exec": execs,
+                                "seed_file": os.path.relpath(src, ROOT),
+                                "mutation_chain": chain,
+                                "argv": argv,
+                                "exit_code": rc if isinstance(rc, int) else "TIMEOUT",
+                                "stderr_head": err.decode("utf-8", errors="replace")[:500],
+                                "minimized": min_note,
+                            }
+                        )
+                        + "\n"
+                    )
+                print(
+                    f"  FINDING #{unique_findings} [{kind}] {detail} | "
+                    f"{os.path.relpath(src, ROOT)} | {' '.join(argv[1:])} | "
+                    f"chain: {' > '.join(chain)} | saved {name} ({min_note})"
+                )
                 if unique_findings >= args.max_findings:
                     break
         if execs % 100 < 3:
-            print(f"    ... {execs} execs, {time.time() - (deadline - args.time_budget):.0f}s, "
-                  f"clean={stats['clean']} contained={stats['contained']} "
-                  f"crash={stats['crash']} hang={stats['hang']}")
+            print(
+                f"    ... {execs} execs, {time.time() - (deadline - args.time_budget):.0f}s, "
+                f"clean={stats['clean']} contained={stats['contained']} "
+                f"crash={stats['crash']} hang={stats['hang']}"
+            )
 
     if os.path.exists(TMP):
         os.remove(TMP)
 
     elapsed = args.time_budget - (deadline - time.time())
     print(f"\nfuzz done: {execs} exec(s) in {elapsed:.0f}s, seed {args.seed}")
-    print(f"  clean={stats['clean']}  contained={stats['contained']}  "
-          f"crash={stats['crash']}  hang={stats['hang']}")
+    print(
+        f"  clean={stats['clean']}  contained={stats['contained']}  "
+        f"crash={stats['crash']}  hang={stats['hang']}"
+    )
     # z-fuzz-dedupe (#48): persist new signatures (deterministic JSON,
     # sorted keys) and report the dedupe counts.
     if new_sigs:
@@ -430,15 +507,20 @@ def main():
             json.dump(db_blob, dfh, indent=1, sort_keys=True)
             dfh.write("\n")
     if known_dedupe:
-        print(f"  known-dedupe: {known_dedupe} re-hit(s) of {len(known) - len(new_sigs)} known signature(s), not re-triaged")
+        print(
+            f"  known-dedupe: {known_dedupe} re-hit(s) of {len(known) - len(new_sigs)} known signature(s), not re-triaged"
+        )
     if new_sigs:
-        print(f"  new signatures appended to {os.path.relpath(CRASH_DB_PATH, ROOT)}: {len(new_sigs)}")
+        print(
+            f"  new signatures appended to {os.path.relpath(CRASH_DB_PATH, ROOT)}: {len(new_sigs)}"
+        )
     if unique_findings:
-        print(f"  unique findings saved: {unique_findings} "
-              f"({os.path.relpath(args.corpus_dir, ROOT)}/, manifest: "
-              f"{os.path.relpath(manifest, ROOT)})")
-        print("  findings are BUGS to triage (see scripts/fuzz/TRIAGE.md), "
-              "not a score.")
+        print(
+            f"  unique findings saved: {unique_findings} "
+            f"({os.path.relpath(args.corpus_dir, ROOT)}/, manifest: "
+            f"{os.path.relpath(manifest, ROOT)})"
+        )
+        print("  findings are BUGS to triage (see scripts/fuzz/TRIAGE.md), not a score.")
         return 1
     print("  no findings — manifest stays unwritten (nothing to triage)")
     return 0

@@ -20,7 +20,6 @@ and the pattern-wildcard message omitted the offending token text
      tools::flush_notes
 Run once from the repo root; idempotence is verified by the git diff.
 """
-import re
 
 PATH = "bootstrap/oracle.py"
 s = open(PATH).read()
@@ -28,39 +27,57 @@ orig = s
 
 # 1. Note carries a line (default 0 keeps all existing sites valid)
 s = s.replace(
-    '''class Note:
+    """class Note:
     __slots__ = ("rung", "message")
     def __init__(self, rung, message):
-        self.rung, self.message = rung, message''',
-    '''class Note:
+        self.rung, self.message = rung, message""",
+    """class Note:
     __slots__ = ("rung", "line", "message")
     def __init__(self, rung, message, line=0):
         # compat matrix fix: the Rust core stores the origin line on every
         # note (ast.rs Note{line, rung, message}) and tools::flush_notes
         # renders `[tag] file:line: msg`. The oracle now mirrors both.
-        self.rung, self.line, self.message = rung, line, message''',
+        self.rung, self.line, self.message = rung, line, message""",
 )
 
 # 2. lexer note sites — all inside lex() where `line` is in scope
 lexer_sites = [
-    ('notes.append(Note(4, "unclosed raw string consumed to end of input"))',
-     'notes.append(Note(4, "unclosed raw string consumed to end of input", line))'),
-    ('notes.append(Note(4, "unclosed multiline string consumed to end of input"))',
-     'notes.append(Note(4, "unclosed multiline string consumed to end of input", line))'),
-    ('notes.append(Note(4, "unclosed string consumed to end of line"))',
-     'notes.append(Note(4, "unclosed string consumed to end of line", line))'),
-    ('notes.append(Note(4, "single-quoted string repaired to double quotes"))',
-     'notes.append(Note(4, "single-quoted string repaired to double quotes", line))'),
-    ('notes.append(Note(4, "stray \'@\' skipped"))',
-     'notes.append(Note(4, "stray \'@\' skipped", line))'),
-    ('notes.append(Note(4, f"integer \'{raw}\' out of range treated as 0"))',
-     'notes.append(Note(4, f"integer \'{raw}\' out of range treated as 0", line))'),
-    ('notes.append(Note(4, f"malformed number \'{text}\' treated as 0"))',
-     'notes.append(Note(4, f"malformed number \'{text}\' treated as 0", line))'),
-    ('notes.append(Note(4, f"integer \'{text}\' out of range treated as 0"))',
-     'notes.append(Note(4, f"integer \'{text}\' out of range treated as 0", line))'),
-    ('notes.append(Note(4, f"unexpected character \'{c}\' skipped"))',
-     'notes.append(Note(4, f"unexpected character \'{c}\' skipped", line))'),
+    (
+        'notes.append(Note(4, "unclosed raw string consumed to end of input"))',
+        'notes.append(Note(4, "unclosed raw string consumed to end of input", line))',
+    ),
+    (
+        'notes.append(Note(4, "unclosed multiline string consumed to end of input"))',
+        'notes.append(Note(4, "unclosed multiline string consumed to end of input", line))',
+    ),
+    (
+        'notes.append(Note(4, "unclosed string consumed to end of line"))',
+        'notes.append(Note(4, "unclosed string consumed to end of line", line))',
+    ),
+    (
+        'notes.append(Note(4, "single-quoted string repaired to double quotes"))',
+        'notes.append(Note(4, "single-quoted string repaired to double quotes", line))',
+    ),
+    (
+        "notes.append(Note(4, \"stray '@' skipped\"))",
+        "notes.append(Note(4, \"stray '@' skipped\", line))",
+    ),
+    (
+        "notes.append(Note(4, f\"integer '{raw}' out of range treated as 0\"))",
+        "notes.append(Note(4, f\"integer '{raw}' out of range treated as 0\", line))",
+    ),
+    (
+        "notes.append(Note(4, f\"malformed number '{text}' treated as 0\"))",
+        "notes.append(Note(4, f\"malformed number '{text}' treated as 0\", line))",
+    ),
+    (
+        "notes.append(Note(4, f\"integer '{text}' out of range treated as 0\"))",
+        "notes.append(Note(4, f\"integer '{text}' out of range treated as 0\", line))",
+    ),
+    (
+        "notes.append(Note(4, f\"unexpected character '{c}' skipped\"))",
+        "notes.append(Note(4, f\"unexpected character '{c}' skipped\", line))",
+    ),
 ]
 for old, new in lexer_sites:
     if old in s:
@@ -76,20 +93,20 @@ s = s.replace(
 
 # 4. describe() mirror for the wildcard note
 s = s.replace(
-    '''        if neg:
+    """        if neg:
             self.note(t[2], 4, "dangling '-' in pattern treated as wildcard")
             self.next()
             return ("wild",)
         self.note(t[2], 4, "pattern treated as wildcard")
         self.next()
-        return ("wild",)''',
-    '''        if neg:
+        return ("wild",)""",
+    """        if neg:
             self.note(t[2], 4, "dangling '-' in pattern treated as wildcard")
             self.next()
             return ("wild",)
         self.note(t[2], 4, f"pattern '{describe_tok(t)}' treated as wildcard")
         self.next()
-        return ("wild",)''',
+        return ("wild",)""",
 )
 
 # describe_tok definition right before parse()
@@ -121,11 +138,11 @@ def parse(src):''',
 
 # 5. run-command renderer mirrors tools::flush_notes
 s = s.replace(
-    '''        it = run(pos[0], cell_dict, opts["variant"], opts["rna"], opts["entry"], opts["frame"], pos[1:], caps=opts.get("caps"))
+    """        it = run(pos[0], cell_dict, opts["variant"], opts["rna"], opts["entry"], opts["frame"], pos[1:], caps=opts.get("caps"))
         for nt in it.notes:
             tag = {1: "info", 2: "synonym", 3: "wobble"}.get(nt.rung, "fallback")
-            print(f"[{tag}] {nt.message}", file=sys.stderr)''',
-    '''        it = run(pos[0], cell_dict, opts["variant"], opts["rna"], opts["entry"], opts["frame"], pos[1:], caps=opts.get("caps"))
+            print(f"[{tag}] {nt.message}", file=sys.stderr)""",
+    """        it = run(pos[0], cell_dict, opts["variant"], opts["rna"], opts["entry"], opts["frame"], pos[1:], caps=opts.get("caps"))
         for nt in it.notes:
             tag = {1: "info", 2: "synonym", 3: "wobble"}.get(nt.rung, "fallback")
             # A13/dx-r2 mirror: notes carry real locations (compat matrix
@@ -133,7 +150,7 @@ s = s.replace(
             if getattr(nt, "line", 0) > 0:
                 print(f"[{tag}] {pos[0]}:{nt.line}: {nt.message}", file=sys.stderr)
             else:
-                print(f"[{tag}] {nt.message}", file=sys.stderr)''',
+                print(f"[{tag}] {nt.message}", file=sys.stderr)""",
 )
 
 if s == orig:

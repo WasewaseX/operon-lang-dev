@@ -15,7 +15,9 @@ import subprocess
 import sys
 
 spec = importlib.util.spec_from_file_location(
-    "harness", os.path.join(os.path.dirname(__file__), "..", "bootstrap", "harness.py"))
+    "harness", os.path.join(os.path.dirname(__file__), "..", "bootstrap", "harness.py")
+)
+assert spec is not None and spec.loader is not None, "bootstrap/harness.py not found"
 harness = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(harness)
 
@@ -81,8 +83,10 @@ def main():
             else:
                 print(f"  VM-DIVERGE  {rel}")
                 vm_fail += 1
-    print(f"shard {args.shard}/{args.of}: main lane {passed} match / {failed} diverge; "
-          f"tree-walk {vm_pass} match / {vm_fail} diverge")
+    print(
+        f"shard {args.shard}/{args.of}: main lane {passed} match / {failed} diverge; "
+        f"tree-walk {vm_pass} match / {vm_fail} diverge"
+    )
     sys.exit(1 if (failed or vm_fail) else 0)
 
 

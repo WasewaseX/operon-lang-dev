@@ -70,14 +70,14 @@ loc_sh=$(wc -l < "$REPO/apps/ytdl-compare/bash/ytdl.sh")
 
 echo "| runtime | size (MB) | cold start (ms, median) | doctor x$M mock (ms) | selfcheck x$M (ms) | app LOC |"
 echo "|---|---|---|---|---|---|"
-echo "| Operon | $(mb $op_sz) | $op_cold | $op_doc | $op_self | $loc_op |"
-echo "| Python 3 | $(mb $py_sz)† | $py_cold | $py_doc | $py_self | $loc_py |"
+echo "| Operon | $(mb "$op_sz") | $op_cold | $op_doc | $op_self | $loc_op |"
+echo "| Python 3 | $(mb "$py_sz")† | $py_cold | $py_doc | $py_self | $loc_py |"
 if [ -n "$deno_bin" ]; then
-  echo "| Deno | $(mb $deno_sz) | $deno_cold | $deno_doc | $deno_self | $loc_ts |"
+  echo "| Deno | $(mb "$deno_sz") | $deno_cold | $deno_doc | $deno_self | $loc_ts |"
 else
   echo "| Deno | n/a (not installed here; upstream ~80-100 MB) | n/a | n/a | n/a | $loc_ts |"
 fi
-echo "| Bash | $(mb $sh_sz)‡ | $sh_cold | $sh_doc | n/a (no JSON) | $loc_sh |"
+echo "| Bash | $(mb "$sh_sz")‡ | $sh_cold | $sh_doc | n/a (no JSON) | $loc_sh |"
 echo ""
 echo "† python3 binary only — a working python needs its stdlib tree (~10-30 MB extra)."
 echo "‡ bash alone is not a JSON-capable runtime; the bash build is a deliberate subset."

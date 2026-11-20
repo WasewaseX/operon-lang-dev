@@ -36,8 +36,8 @@ STATUS = {
     "W026": "partial: std/set (loop-10) + std/deque and std/heap on main 88d9b63 (deterministic, comparator-gene capable); REMAIN: Graph<T>, W003 annotation sugar over the containers",
     "W027": "partial: 22 modules / 226 functions on main f0527e5 era (adds path 09e81ba, deque/heap/time 88d9b63, serialize, unicode b0e12ba, bigint 1152851); REMAIN per audit list: process, env, logging, terminal, compression, hashing, url, http-high-level, walk, binary, db-stub",
     "W028": "partial: stage 1 on main b0e12ba (byte/char/grapheme semantics + case-fold subset + std/unicode); REMAIN: NFC/NFD normalization, full case folding, category queries",
-    "W029": "done: main 08386fa, bytes kind + b\"\" literals with full escape set + conversions + read_file_bytes/write_file_bytes + SendValue membrane + oracle native-bytes mirror + rt_p19a",
-    "W030": "done: main 563a331, r\"...\" + \"\"\"...\"\"\" oracle-mirrored; b\"...\" landed with W029 (08386fa)",
+    "W029": 'done: main 08386fa, bytes kind + b"" literals with full escape set + conversions + read_file_bytes/write_file_bytes + SendValue membrane + oracle native-bytes mirror + rt_p19a',
+    "W030": 'done: main 563a331, r"..." + """...""" oracle-mirrored; b"..." landed with W029 (08386fa)',
     "W031": "done: main 563a331, 0x/0b/0o + _ separators, oracle-mirrored, SPEC §3",
     "W032": "done: main 1152851, overflow contract pinned per-op both engines (i64::MIN%-1 oracle corner fixed) + std/bigint digit-list bignum (from_int/from_str/to_str/cmp/add/sub/mul/pow/fact/neg/abs) + SPEC decision note",
     "W033": "partial: L1d builtins + std/time.op duration/instant arithmetic on main 88d9b63 (UTC-only contract per W89); REMAIN: ISO-8601 parsing",
@@ -56,13 +56,22 @@ sync green · CodeQL **0 findings** (f0527e5) · CI success.
 txt = open(PATH, encoding="utf-8").read()
 
 # replace the gate header block (from the heading line to the blank line before the next ---)
-txt = re.sub(r"## CURRENT GATE NUMBERS.*?(?=\n\n---)", HEADER.replace("\\", "\\\\"), txt, flags=re.S)
+txt = re.sub(
+    r"## CURRENT GATE NUMBERS.*?(?=\n\n---)", HEADER.replace("\\", "\\\\"), txt, flags=re.S
+)
 
 changed = 0
 for wid, status in STATUS.items():
-    pat = re.compile(r"(^### " + wid + r"\b.*?)\s*\[(?:open|claimed|wip|done|partial|verify|deferred|wontfix|queued)[^\]]*\]+(.*)$", re.M)
+    pat = re.compile(
+        r"(^### "
+        + wid
+        + r"\b.*?)\s*\[(?:open|claimed|wip|done|partial|verify|deferred|wontfix|queued)[^\]]*\]+(.*)$",
+        re.M,
+    )
+
     def repl(m):
         return m.group(1) + " [" + status + "]" + m.group(2)
+
     txt2, n = pat.subn(repl, txt, count=1)
     if n:
         txt, changed = txt2, changed + n

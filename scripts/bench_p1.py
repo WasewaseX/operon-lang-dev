@@ -22,6 +22,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+args: argparse.Namespace  # bound by the __main__ flow before any call site runs
+
 ROOT = Path(__file__).resolve().parent.parent
 P1 = ROOT / "scripts" / "bench" / "p1"
 
@@ -49,7 +51,9 @@ def run_probe(binary: str, path: Path, iters: int, expect: re.Pattern) -> float:
     for _ in range(args.repeats):
         r = subprocess.run(
             [binary, "bench", str(path), "--iters", str(iters)],
-            capture_output=True, text=True, cwd=ROOT,
+            capture_output=True,
+            text=True,
+            cwd=ROOT,
         )
         if r.returncode != 0:
             sys.exit(f"FAIL {path.name}: rc={r.returncode}\n{r.stderr[-2000:]}")
@@ -60,12 +64,13 @@ def run_probe(binary: str, path: Path, iters: int, expect: re.Pattern) -> float:
         if not m:
             sys.exit(f"FAIL {path.name}: no min in {lines[-1]!r}")
         # every iter's promote output must match (output mismatch = hard fail)
-        promote = [l for l in lines[:-1] if l.strip()]
-        if len(promote) != iters or any(not expect.match(l) for l in promote):
+        promote = [ln for ln in lines[:-1] if ln.strip()]
+        if len(promote) != iters or any(not expect.match(ln) for ln in promote):
             sys.exit(f"FAIL {path.name}: output mismatch: {promote[:3]!r}...")
         v = float(m.group(1))
         best = v if best is None else min(best, v)
-    return best
+    # repeats >= 1 in every real invocation; 0 repeats measures nothing
+    return best if best is not None else float("nan")
 
 
 def main() -> None:
@@ -77,7 +82,7 @@ def main() -> None:
     ap.add_argument("--out", default="")
     args = ap.parse_args()
 
-    results = {}
+    results: dict = {}
     for probe, expect in PROBES.items():
         pat = re.compile(expect)
         ms = run_probe(args.bin, P1 / probe, args.iters, pat)
@@ -99,8 +104,10 @@ def main() -> None:
     results["build_scaling_ratio"] = ratios
 
     print(json.dumps(results, indent=2))
-    print("\n# build scaling t(2N)/t(N): " + ", ".join(
-        f"{k}={v}" for k, v in ratios.items()), file=sys.stderr)
+    print(
+        "\n# build scaling t(2N)/t(N): " + ", ".join(f"{k}={v}" for k, v in ratios.items()),
+        file=sys.stderr,
+    )
     if args.out:
         Path(args.out).write_text(json.dumps(results, indent=2))
 

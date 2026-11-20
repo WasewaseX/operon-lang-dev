@@ -7,14 +7,17 @@ min/median per side. This is the "check benchmarks every time" harness for
 the optimization loop. Baseline = git HEAD binary (built once into /tmp by
 build.sh -- the caller passes both paths explicitly).
 """
+
+import statistics
 import subprocess
 import sys
 import time
-import statistics
+
 
 def build(rev, out):
     subprocess.run(["git", "stash", "create", rev], check=False, capture_output=True)
     return out
+
 
 def timeit(cmd, n):
     ts = []
@@ -25,6 +28,7 @@ def timeit(cmd, n):
         ts.append((time.perf_counter() - t0) * 1000)
         out = r.stdout.strip()
     return ts, out
+
 
 def interleaved(cmd_a, cmd_b, n):
     a, b = [], []
@@ -40,14 +44,16 @@ def interleaved(cmd_a, cmd_b, n):
             sys.exit(2)
     return a, b
 
+
 def report(name, a, b, py=None):
     ma, mb = statistics.median(a), statistics.median(b)
-    line = f"{name:22s} base {ma:8.1f} ms  new {mb:8.1f} ms  speedup {ma/mb:5.2f}x"
+    line = f"{name:22s} base {ma:8.1f} ms  new {mb:8.1f} ms  speedup {ma / mb:5.2f}x"
     if py is not None:
         mp = statistics.median(py)
-        line += f"   (cpython {mp:.1f} ms, base {ma/mp:4.1f}x py, new {mb/mp:4.1f}x py)"
+        line += f"   (cpython {mp:.1f} ms, base {ma / mp:4.1f}x py, new {mb / mp:4.1f}x py)"
     print(line)
     return ma / mb
+
 
 def main():
     n = int(sys.argv[1]) if len(sys.argv) > 1 else 7
@@ -64,6 +70,7 @@ def main():
         a, b = interleaved(ca, cb, n)
         name = fx.split("/")[-1]
         report(name, a, b)
+
 
 if __name__ == "__main__":
     main()

@@ -21,6 +21,7 @@ PARTIAL_SUFFIXES = (".part", ".ytdl", ".aria2", ".tmp")
 
 # ---------------------------------------------------------- formatting
 
+
 def fmt_bytes(n):
     if n is None:
         return "?"
@@ -69,10 +70,10 @@ def tail_lines(s, n):
 
 # ---------------------------------------------------------- engines
 
+
 def run_prog(prog, args, timeout=300):
     try:
-        p = subprocess.run([prog] + args, capture_output=True, text=True,
-                           timeout=timeout)
+        p = subprocess.run([prog] + args, capture_output=True, text=True, timeout=timeout)
         return {"code": p.returncode, "stdout": p.stdout, "stderr": p.stderr}
     except FileNotFoundError:
         raise RuntimeError(f"run denied — '{prog}' not found or not granted")
@@ -101,6 +102,7 @@ def detect_tools():
 # ---------------------------------------------------------- selection logic
 # must stay IDENTICAL to apps/ytdl/ytdl.op (differential-pinned)
 
+
 def quality_expr(q):
     if q == "best":
         return "bestvideo*+bestaudio/best"
@@ -111,8 +113,7 @@ def selection_args(o):
     if o.get("fmt"):
         return ["-f", o["fmt"]]
     if o.get("audio"):
-        return ["-f", "bestaudio/best", "-x", "--audio-format", o["audio"],
-                "--audio-quality", "0"]
+        return ["-f", "bestaudio/best", "-x", "--audio-format", o["audio"], "--audio-quality", "0"]
     return ["-f", quality_expr(o["quality"])]
 
 
@@ -120,14 +121,16 @@ def build_get_args(url, o):
     a = []
     if not o["playlist"]:
         a.append("--no-playlist")
-    a += ["--continue", "--retries", "3", "--fragment-retries", "3",
-          "--no-overwrites"]
+    a += ["--continue", "--retries", "3", "--fragment-retries", "3", "--no-overwrites"]
     if o["aria2"] and o["aria2_ok"]:
-        a += ["--downloader", "aria2c",
-              "--downloader-args", "aria2c:-x16 -s16 -k1M --file-allocation=none"]
+        a += [
+            "--downloader",
+            "aria2c",
+            "--downloader-args",
+            "aria2c:-x16 -s16 -k1M --file-allocation=none",
+        ]
     if o["subs"]:
-        a += ["--write-subs", "--sub-langs", o["sub_langs"],
-              "--convert-subs", "srt"]
+        a += ["--write-subs", "--sub-langs", o["sub_langs"], "--convert-subs", "srt"]
     a += ["-P", o["out"], "-o", o["template"]]
     a += selection_args(o)
     a.append(url)
@@ -135,6 +138,7 @@ def build_get_args(url, o):
 
 
 # ---------------------------------------------------------- format table
+
 
 def h_of(f):
     h = f.get("height")
@@ -184,9 +188,11 @@ def fmt_row(f):
     ac = mget(f, "acodec") or "?"
     if ac == "none":
         ac = "-"
-    return (f"{clip(mget(f, 'format_id'), 9):<9}  {clip(mget(f, 'ext'), 4):<4}  "
-            f"{clip(res_of(f), 10):<10}  {clip(fps, 4):>4}  {clip(size_of(f), 9):>9}  "
-            f"{clip(vc + '/' + ac, 19):<19}  {mget(f, 'format_note')}")
+    return (
+        f"{clip(mget(f, 'format_id'), 9):<9}  {clip(mget(f, 'ext'), 4):<4}  "
+        f"{clip(res_of(f), 10):<10}  {clip(fps, 4):>4}  {clip(size_of(f), 9):>9}  "
+        f"{clip(vc + '/' + ac, 19):<19}  {mget(f, 'format_note')}"
+    )
 
 
 def table_rows(meta):
@@ -194,8 +200,10 @@ def table_rows(meta):
     workload the deep benchmark times in every language build."""
     out = []
     out.append(f"title: {mget(meta, 'title')}")
-    out.append(f"by: {mget(meta, 'uploader')}  |  duration: "
-               f"{fmt_dur(meta.get('duration'))}  |  views: {comma(meta.get('view_count'))}")
+    out.append(
+        f"by: {mget(meta, 'uploader')}  |  duration: "
+        f"{fmt_dur(meta.get('duration'))}  |  views: {comma(meta.get('view_count'))}"
+    )
     n = len(meta.get("formats", []))
     out.append("formats: %d  (res = WxH, size from yt-dlp, ~ = approximate)" % n)
     out.append("id        ext   res         fps      size  vcodec/acodec        note")
@@ -216,6 +224,7 @@ def info_lines(meta):
 
 # ---------------------------------------------------------- download
 
+
 def has_partial(d):
     try:
         return any(n.endswith(PARTIAL_SUFFIXES) for n in os.listdir(d))
@@ -227,11 +236,15 @@ def dest_lines(stdout, stderr):
     found = []
     for src in (stdout, stderr):
         for ln in src.split("\n"):
-            l = ln.strip()
-            if ("Destination:" in l or "has already been downloaded" in l
-                    or "[Merger]" in l or "Download complete:" in l
-                    or "ExtractAudio" in l):
-                found.append(l)
+            line = ln.strip()
+            if (
+                "Destination:" in line
+                or "has already been downloaded" in line
+                or "[Merger]" in line
+                or "Download complete:" in line
+                or "ExtractAudio" in line
+            ):
+                found.append(line)
     return found
 
 
@@ -264,6 +277,7 @@ def report(d):
 
 # ---------------------------------------------------------- option layer
 
+
 def get_opts(rest):
     def val(name, default):
         f = f"--{name}"
@@ -271,7 +285,7 @@ def get_opts(rest):
             if a == f:
                 return rest[i + 1] if i + 1 < len(rest) else default
             if a.startswith(f + "="):
-                return a[len(f) + 1:]
+                return a[len(f) + 1 :]
         return default
 
     def flag(name):
@@ -307,7 +321,10 @@ def get_opts(rest):
     if o["audio"] and o["audio"] not in AUDIO_KINDS:
         die(f"error: --audio must be one of mp3 m4a opus flac wav (got {o['audio']})")
     if o["quality"] != "best" and o["quality"] not in TIERS:
-        die("error: --quality must be a height tier (got %s); use --format for raw selectors" % o["quality"])
+        die(
+            "error: --quality must be a height tier (got %s); use --format for raw selectors"
+            % o["quality"]
+        )
     return o
 
 
@@ -321,6 +338,7 @@ def ensure_out(d):
 
 
 # ---------------------------------------------------------- commands
+
 
 def cmd_doctor():
     t = detect_tools()
@@ -398,8 +416,7 @@ def cmd_queue(rest):
             text = fh.read()
     except OSError as e:
         die(f"error: cannot read queue file {file} ({e})")
-    urls = [ln.strip() for ln in text.split("\n")
-            if ln.strip() and not ln.strip().startswith("#")]
+    urls = [ln.strip() for ln in text.split("\n") if ln.strip() and not ln.strip().startswith("#")]
     jobs = max(1, min(o["jobs"], len(urls)))
     if jobs == 1:
         rows = queue_worker(urls, o)
@@ -408,6 +425,7 @@ def cmd_queue(rest):
         for idx, u in enumerate(urls):
             chunks[idx % jobs].append(u)
         from concurrent.futures import ThreadPoolExecutor
+
         with ThreadPoolExecutor(max_workers=jobs) as ex:
             nested = list(ex.map(lambda c: queue_worker(c, o), chunks))
         rows = [r for chunk in nested for r in chunk]
@@ -445,13 +463,14 @@ def cmd_selfcheck(rest):
 # (docs/BENCHMARK-DEEP.md, harness: scripts/bench_deep.py). Each prints
 # ONE "bench-* cs=..." line; cs must be byte-identical in every build.
 
+
 def bench_arg(rest, name, default):
     f = f"--{name}"
     for i, a in enumerate(rest):
         if a == f and i + 1 < len(rest):
             return rest[i + 1]
         if a.startswith(f + "="):
-            return a[len(f) + 1:]
+            return a[len(f) + 1 :]
     return default
 
 
@@ -554,6 +573,7 @@ def cmd_bench_queue(rest):
         ok = bench_queue_worker(chunks[0])
     else:
         from concurrent.futures import ThreadPoolExecutor
+
         with ThreadPoolExecutor(max_workers=c) as ex:
             oks = list(ex.map(bench_queue_worker, chunks))
         ok = sum(oks)

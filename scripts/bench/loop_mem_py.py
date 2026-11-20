@@ -7,6 +7,7 @@ RSS (resource.ru_maxrss, KB), and the deterministic checksum (sum 0..N-1)
 so the cross-engine differential holds. The accumulate leg retains a list
 of Python ints — the closest CPython analog to operon's boxed numerics.
 """
+
 import os
 import resource
 import sys
@@ -63,7 +64,9 @@ def main():
     for line in open("/proc/self/status"):
         if line.startswith("VmHWM"):
             hwm = int(line.split()[1])
-    print(f"LOOP engine=cpython shape={shape} n={n} outer={outer} time_ms={dt:.3f} hwm_kb={hwm} rss0_kb={m0} rss1_kb={m1} cksum={s}")
+    print(
+        f"LOOP engine=cpython shape={shape} n={n} outer={outer} time_ms={dt:.3f} hwm_kb={hwm} rss0_kb={m0} rss1_kb={m1} cksum={s}"
+    )
     return 0
 
 

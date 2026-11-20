@@ -26,6 +26,7 @@ network anywhere. Usage:
 
   python3 scripts/bench_deep.py [--runs-scale 1.0] [--out apps/ytdl/bench/results.json]
 """
+
 import argparse
 import json
 import os
@@ -58,11 +59,19 @@ OP = os.path.join(REPO, "target", "release", "operon")
 
 def operon_base():
     return [
-        OP, "run", os.path.join(REPO, "apps/ytdl/ytdl.op"),
-        "--cell", os.path.join(REPO, "apps/ytdl/ytdl.cell"),
-        "--allow-read", REPO,
-        "--allow-run", "mockspawn", "--allow-run", "mocksleep",
-        "--fuel", "20000000000",
+        OP,
+        "run",
+        os.path.join(REPO, "apps/ytdl/ytdl.op"),
+        "--cell",
+        os.path.join(REPO, "apps/ytdl/ytdl.cell"),
+        "--allow-read",
+        REPO,
+        "--allow-run",
+        "mockspawn",
+        "--allow-run",
+        "mocksleep",
+        "--fuel",
+        "20000000000",
         "--",
     ]
 
@@ -84,8 +93,13 @@ IMPLS = {
     },
     "deno": {
         "kind": "flag",
-        "base": lambda: ["deno", "run", "--allow-read", "--allow-run",
-                          os.path.join(REPO, "apps/ytdl-compare/deno/ytdl.ts")],
+        "base": lambda: [
+            "deno",
+            "run",
+            "--allow-read",
+            "--allow-run",
+            os.path.join(REPO, "apps/ytdl-compare/deno/ytdl.ts"),
+        ],
         "runtime": shutil.which("deno"),
         "source": os.path.join(REPO, "apps/ytdl-compare/deno/ytdl.ts"),
         "label": "Deno 2.9 (TS)",
@@ -137,15 +151,24 @@ def workload_cmd(impl, name, params):
             return None
         sub, args = "bench-table", [FIXTURE, "--rounds", str(params["rounds"])]
     elif name.startswith("lines"):
-        sub, args = ("bench-lines", ["--k", str(params["k"])]) if kind == "flag" \
+        sub, args = (
+            ("bench-lines", ["--k", str(params["k"])])
+            if kind == "flag"
             else ("bench-lines", [str(params["k"])])
+        )
     elif name.startswith("spawn"):
-        sub, args = ("bench-spawn", ["--n", str(params["n"])]) if kind == "flag" \
+        sub, args = (
+            ("bench-spawn", ["--n", str(params["n"])])
+            if kind == "flag"
             else ("bench-spawn", [str(params["n"])])
+        )
     elif name in ("queue1", "queue8"):
         k, c = params["k"], params["c"]
-        sub, args = ("bench-queue", ["--k", str(k), "--c", str(c)]) if kind == "flag" \
+        sub, args = (
+            ("bench-queue", ["--k", str(k), "--c", str(c)])
+            if kind == "flag"
             else ("bench-queue", [str(k)])
+        )
     else:
         raise ValueError(name)
     return base + [sub] + args
@@ -204,6 +227,7 @@ def measure(impl, name, params, runs, rss=False):
 
 
 # ---------------------------------------------------------- static metrics
+
 
 def human(n):
     if n <= 0:
@@ -358,8 +382,10 @@ def main():
     print("|---|---|---|---|---|")
     for impl in active:
         s = st[impl]
-        print(f"| {IMPLS[impl]['label']} | {human(s['runtime_bytes'])} | {human(s['source_bytes'])} "
-              f"| {human(s['runtime_plus_source'])} | {s['loc']} |")
+        print(
+            f"| {IMPLS[impl]['label']} | {human(s['runtime_bytes'])} | {human(s['source_bytes'])} "
+            f"| {human(s['runtime_plus_source'])} | {s['loc']} |"
+        )
     print()
     print_cs(results, active)
 

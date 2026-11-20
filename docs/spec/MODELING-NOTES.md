@@ -268,7 +268,7 @@ numerical reference pins, `VALIDATION.md`.
 | Nonsense-mediated decay | NMD sweep (`--nmd`) |
 | miRNA → RISC silencing / transcript degradation | `silence old -> new;` (allele replacement) / `silence old;` (pure degradation) |
 | Two-tier expression (transcription → translation) | `a translates p rate r decay d;` — protein nodes lag & smooth transcript bursts |
-| Small-molecule allostery (lac inducer / trp corepressor) | `ligand x;` + `bind tf inducer|cofactor lg k v;` — affinity modulation, level untouched |
+| Small-molecule allostery (lac inducer / trp corepressor) | `ligand x;` + `bind tf inducer\|cofactor lg k v;` — affinity modulation, level untouched |
 | Riboswitches / protein-free metabolite gating | a ligand named as an edge source reads its pool directly |
 | Quorum sensing (LuxI/LuxR AHL, agr, AI-2) | `autoinducer ahl;` + `secrete`/`quorum`/`quench` — process-global integer molecule pool, signal species as an edge source |
 | Transcription attenuation (trp leader) | `x attenuates y threshold t;` — RNA-level veto with leader-termination report |

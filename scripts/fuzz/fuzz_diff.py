@@ -24,7 +24,7 @@ Contracts under fuzz, per generated program P:
       9a.1: section headers and the summary: line are the parse surface
       scripts rely on): `check --json` parses to an object with the
       documented key set {file, score, letter, notes, wobbles, fallbacks,
-      phantoms, nmd, findings}; the plain summary line's counters must
+      phantoms, nmd, findings}; the text summary line's counters must
       equal the JSON document (errors == error-severity findings;
       warnings == warning findings + phantoms; repair note(s) == notes);
       the repair section quotes notes/wobbles/fallbacks verbatim and
@@ -48,6 +48,7 @@ Usage:
       [--corpus-dir fuzz_corpus] [--max-findings 20]
 Exit: 0 no findings, 1 findings, 2 setup error.
 """
+
 import argparse
 import hashlib
 import json
@@ -66,8 +67,17 @@ ORACLE = os.path.join(ROOT, "bootstrap", "oracle.py")
 TMPDIR = os.path.join(ROOT, "target", "fuzz_diff")
 PANIC_TEXTS = ("panicked at", "stack overflow", "fatal runtime error", "[fatal]")
 CONTAINED_RCS = {0, 1, 2, 3}
-CHECK_KEYS = ["file", "score", "letter", "notes", "wobbles", "fallbacks",
-              "phantoms", "nmd", "findings"]
+CHECK_KEYS = [
+    "file",
+    "score",
+    "letter",
+    "notes",
+    "wobbles",
+    "fallbacks",
+    "phantoms",
+    "nmd",
+    "findings",
+]
 
 
 def find_binary(explicit):
@@ -141,8 +151,7 @@ def diff_finding(binpath, oracle, path, timeout):
         rc, out, err = probe(argv, timeout)
         bad = robustness(rc, err)
         if bad:
-            return ("hang" if bad.startswith("hang") else "crash",
-                    f"{name}: {bad}")
+            return ("hang" if bad.startswith("hang") else "crash", f"{name}: {bad}")
         res[name] = (rc, out, err)
 
     vm_rc, vm_out, _ = res["vm"]
@@ -169,16 +178,16 @@ def diff_finding(binpath, oracle, path, timeout):
     except (ValueError, UnicodeDecodeError) as e:
         return "json-shape", f"check --json does not parse: {e}"
     if not isinstance(doc, dict) or any(k not in doc for k in CHECK_KEYS):
-        missing = [k for k in CHECK_KEYS
-                   if not isinstance(doc, dict) or k not in doc]
+        missing = [k for k in CHECK_KEYS if not isinstance(doc, dict) or k not in doc]
         return "json-shape", f"missing key(s) {missing}"
-    err_findings = [f for f in doc["findings"]
-                    if isinstance(f, dict) and f.get("severity") == "error"]
+    err_findings = [
+        f for f in doc["findings"] if isinstance(f, dict) and f.get("severity") == "error"
+    ]
     expect_rc = 3 if err_findings else 0
     if plain_rc != expect_rc:
         return "check-rc-contract", (
-            f"rc {plain_rc} but {len(err_findings)} error finding(s), "
-            f"contract says {expect_rc}")
+            f"rc {plain_rc} but {len(err_findings)} error finding(s), contract says {expect_rc}"
+        )
 
     # D5: JSON-vs-plain shape parity. The plain diag output's summary line
     # is the parse surface scripts rely on (SPEC 9a.1); every counter in it
@@ -186,61 +195,63 @@ def diff_finding(binpath, oracle, path, timeout):
     # program, so plain stdout is exactly the diag rendering.
     plain_text = plain_out.decode("utf-8", errors="replace")
     lines = plain_text.splitlines()
-    summary = [l for l in lines if l.startswith("summary: ")]
+    summary = [ln for ln in lines if ln.startswith("summary: ")]
     if len(summary) != 1:
-        return "json-shape", (
-            f"expected exactly one summary: line, got {len(summary)}")
+        return "json-shape", (f"expected exactly one summary: line, got {len(summary)}")
     m = re.fullmatch(
         r"summary: (\d+) error\(s\), (\d+) warning\(s\), (\d+) style, "
         r"(\d+) repair note\(s\)",
-        summary[0])
+        summary[0],
+    )
     if not m:
         return "json-shape", f"summary line not in contract shape: {summary[0]!r}"
     s_err, s_warn, s_style, s_notes = (int(g) for g in m.groups())
     if s_err != len(err_findings):
-        return "json-shape", (
-            f"summary errors {s_err} vs json {len(err_findings)}")
-    warn_findings = [f for f in doc["findings"]
-                     if isinstance(f, dict) and f.get("severity") == "warning"]
+        return "json-shape", (f"summary errors {s_err} vs json {len(err_findings)}")
+    warn_findings = [
+        f for f in doc["findings"] if isinstance(f, dict) and f.get("severity") == "warning"
+    ]
     if s_warn != len(warn_findings) + len(doc["phantoms"]):
         return "json-shape", (
             f"summary warnings {s_warn} vs json {len(warn_findings)} "
-            f"warning finding(s) + {len(doc['phantoms'])} phantoms")
+            f"warning finding(s) + {len(doc['phantoms'])} phantoms"
+        )
     if s_notes != doc["notes"]:
-        return "json-shape", (
-            f"summary repair notes {s_notes} vs json notes {doc['notes']}")
-    rep_line = [l for l in lines if l.startswith("  ") and "wobble(s)" in l]
+        return "json-shape", (f"summary repair notes {s_notes} vs json notes {doc['notes']}")
+    rep_line = [ln for ln in lines if ln.startswith("  ") and "wobble(s)" in ln]
     if (doc["notes"] > 0) != bool(rep_line):
-        return "json-shape", (
-            "repair section presence disagrees with json notes")
+        return "json-shape", ("repair section presence disagrees with json notes")
     if rep_line:
-        m2 = re.search(r"(\d+) note\(s\), (\d+) wobble\(s\), (\d+) fallback\(s\)",
-                       rep_line[0])
-        if not m2 or (int(m2.group(1)), int(m2.group(2)), int(m2.group(3))) != \
-                (doc["notes"], doc["wobbles"], doc["fallbacks"]):
-            return "json-shape", (
-                f"repair line counters disagree with json: {rep_line[0]!r}")
+        m2 = re.search(r"(\d+) note\(s\), (\d+) wobble\(s\), (\d+) fallback\(s\)", rep_line[0])
+        if not m2 or (int(m2.group(1)), int(m2.group(2)), int(m2.group(3))) != (
+            doc["notes"],
+            doc["wobbles"],
+            doc["fallbacks"],
+        ):
+            return "json-shape", (f"repair line counters disagree with json: {rep_line[0]!r}")
     if (len(doc["phantoms"]) > 0) != ("phantom call" in plain_text):
-        return "json-shape", ("phantom rendering disagrees with phantoms "
-                              "array")
-    style_ptr = [l for l in lines
-                 if l.startswith("style (owned by") and "style finding(s)" in l]
+        return "json-shape", ("phantom rendering disagrees with phantoms array")
+    style_ptr = [
+        ln for ln in lines if ln.startswith("style (owned by") and "style finding(s)" in ln
+    ]
     if style_ptr:
         m3 = re.search(r": (\d+) style finding\(s\)", style_ptr[0])
         if not m3 or int(m3.group(1)) != s_style:
-            return "json-shape", (
-                "style pointer count disagrees with summary style count")
+            return "json-shape", ("style pointer count disagrees with summary style count")
     elif s_style != 0:
-        return "json-shape", (
-            f"summary claims {s_style} style finding(s) but no pointer line")
+        return "json-shape", (f"summary claims {s_style} style finding(s) but no pointer line")
     return None
 
 
 def main():
     ap = argparse.ArgumentParser(description="S7 stage 2 differential fuzzer")
-    ap.add_argument("--n", type=int, default=1200,
-                    help="generated programs (default 1200; round multiples "
-                         "of 12 to cover every bucket evenly)")
+    ap.add_argument(
+        "--n",
+        type=int,
+        default=1200,
+        help="generated programs (default 1200; round multiples "
+        "of 12 to cover every bucket evenly)",
+    )
     ap.add_argument("--seed", type=int, default=20260930)
     ap.add_argument("--time-budget", type=float, default=600.0)
     ap.add_argument("--per-input-timeout", type=float, default=10.0)
@@ -262,14 +273,18 @@ def main():
     manifest = os.path.join(args.corpus_dir, "MANIFEST.jsonl")
 
     n_buckets = len(gen_corpus.BUCKETS)
-    print(f"fuzz_diff — S7 stage 2: differential at scale")
+    print("fuzz_diff — S7 stage 2: differential at scale")
     print(f"  binary: {binpath}")
     print(f"  oracle: {args.oracle}")
-    print(f"  seed {args.seed}, {args.n} program(s) across {n_buckets} buckets, "
-          f"budget {args.time_budget:.0f}s")
-    print(f"  contracts: D1/D2 rust==oracle (rc+stdout), D3 vm==tree "
-          f"(rc+stdout+stderr), D4 check rc contract, D5 json-vs-plain "
-          f"parity, R1 no panic/hang")
+    print(
+        f"  seed {args.seed}, {args.n} program(s) across {n_buckets} buckets, "
+        f"budget {args.time_budget:.0f}s"
+    )
+    print(
+        "  contracts: D1/D2 rust==oracle (rc+stdout), D3 vm==tree "
+        "(rc+stdout+stderr), D4 check rc contract, D5 json-vs-plain "
+        "parity, R1 no panic/hang"
+    )
 
     deadline = time.time() + args.time_budget
     per_bucket = {}
@@ -285,8 +300,7 @@ def main():
         stat = per_bucket.setdefault(bucket, {"programs": 0, "findings": 0})
         stat["programs"] += 1
 
-        verdict = diff_finding(binpath, args.oracle, path,
-                               args.per_input_timeout)
+        verdict = diff_finding(binpath, args.oracle, path, args.per_input_timeout)
         if verdict:
             kind, detail = verdict
             h = hashlib.sha256(text.encode()).hexdigest()
@@ -299,25 +313,36 @@ def main():
                 with open(fpath, "w", encoding="utf-8") as fh:
                     fh.write(text)
                 with open(manifest, "a", encoding="utf-8") as fh:
-                    fh.write(json.dumps({
-                        "kind": kind,
-                        "tool": "fuzz_diff",
-                        "input": os.path.relpath(fpath, ROOT),
-                        "bucket": bucket,
-                        "seed": args.seed,
-                        "idx": i,
-                        "detail": detail,
-                        "repro": (f"python3 scripts/fuzz/fuzz_diff.py "
-                                  f"--seed {args.seed} --n {i + 1}"),
-                    }) + "\n")
-                print(f"  FINDING #{findings} [{kind}] {detail} | "
-                      f"bucket={bucket} seed={args.seed} idx={i} | "
-                      f"saved {name}")
+                    fh.write(
+                        json.dumps(
+                            {
+                                "kind": kind,
+                                "tool": "fuzz_diff",
+                                "input": os.path.relpath(fpath, ROOT),
+                                "bucket": bucket,
+                                "seed": args.seed,
+                                "idx": i,
+                                "detail": detail,
+                                "repro": (
+                                    f"python3 scripts/fuzz/fuzz_diff.py "
+                                    f"--seed {args.seed} --n {i + 1}"
+                                ),
+                            }
+                        )
+                        + "\n"
+                    )
+                print(
+                    f"  FINDING #{findings} [{kind}] {detail} | "
+                    f"bucket={bucket} seed={args.seed} idx={i} | "
+                    f"saved {name}"
+                )
         i += 1
         if i % 200 == 0:
-            print(f"    ... {i}/{args.n} programs, "
-                  f"{time.time() - (deadline - args.time_budget):.0f}s, "
-                  f"findings={findings}")
+            print(
+                f"    ... {i}/{args.n} programs, "
+                f"{time.time() - (deadline - args.time_budget):.0f}s, "
+                f"findings={findings}"
+            )
 
     if os.path.isfile(path) and findings == 0:
         os.remove(path)
@@ -327,21 +352,21 @@ def main():
         pass
 
     elapsed = args.time_budget - (deadline - time.time())
-    covered = ", ".join(f"{b}:{s['programs']}" + (
-        f"({s['findings']}f)" if s["findings"] else "")
-        for b, s in per_bucket.items())
-    print(f"\nfuzz_diff done: {i} program(s) x 5 surfaces in {elapsed:.0f}s, "
-          f"seed {args.seed}")
+    covered = ", ".join(
+        f"{b}:{s['programs']}" + (f"({s['findings']}f)" if s["findings"] else "")
+        for b, s in per_bucket.items()
+    )
+    print(f"\nfuzz_diff done: {i} program(s) x 5 surfaces in {elapsed:.0f}s, seed {args.seed}")
     print(f"  per bucket: {covered}")
     if findings:
-        print(f"  unique findings saved: {findings} "
-              f"({os.path.relpath(args.corpus_dir, ROOT)}/, manifest: "
-              f"MANIFEST.jsonl)")
-        print("  findings are BUGS to triage (see scripts/fuzz/TRIAGE.md), "
-              "not a score.")
+        print(
+            f"  unique findings saved: {findings} "
+            f"({os.path.relpath(args.corpus_dir, ROOT)}/, manifest: "
+            f"MANIFEST.jsonl)"
+        )
+        print("  findings are BUGS to triage (see scripts/fuzz/TRIAGE.md), not a score.")
         return 1
-    print("  no findings — engines and checker agree at generated-program "
-          "scale")
+    print("  no findings — engines and checker agree at generated-program scale")
     return 0
 
 

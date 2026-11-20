@@ -10,6 +10,7 @@ Usage:
   python3 scripts/bench/bench_chunk.py --named --names fib25,loops --json /tmp/p1.json
   python3 scripts/bench/bench_chunk.py --micro --names m_call,m_intadd --json /tmp/p2.json
 """
+
 import argparse
 import json
 import os
@@ -50,8 +51,11 @@ def main():
                 "oracle": {"min": rmin, "median": rmed, "iters": oiters},
                 "native": {"min": nmin, "median": nmed, "iters": iters},
             }
-            print(f"done {name}: op {omin*1000:.1f} ms, oracle {rmin*1000:.1f} ms, "
-                  f"native {nmin*1000:.1f} ms", flush=True)
+            print(
+                f"done {name}: op {omin * 1000:.1f} ms, oracle {rmin * 1000:.1f} ms, "
+                f"native {nmin * 1000:.1f} ms",
+                flush=True,
+            )
         out["suites"] = suites
 
     if args.micro:
@@ -71,8 +75,11 @@ def main():
                 "oracle": {"min": rmin, "median": rmed, "iters": oiters},
                 "native": {"min": nmin, "median": nmed, "iters": iters},
             }
-            print(f"done {name}: op {omin*1000:.1f} ms, oracle {rmin*1000:.1f} ms, "
-                  f"native {nmin*1000:.1f} ms", flush=True)
+            print(
+                f"done {name}: op {omin * 1000:.1f} ms, oracle {rmin * 1000:.1f} ms, "
+                f"native {nmin * 1000:.1f} ms",
+                flush=True,
+            )
         out["micros"] = micros
 
     with open(args.json, "w") as f:

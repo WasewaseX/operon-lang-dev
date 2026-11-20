@@ -9,6 +9,7 @@
   - program print output arrives as output events
   - terminated + exited close the session; evaluate in a called frame works
 """
+
 import json
 import os
 import subprocess
@@ -36,8 +37,12 @@ class DapClient:
         # multibyte UTF-8 (e.g. the em dash in scope names) — a text-mode
         # read(n) counts chars and deadlocks
         self.p = subprocess.Popen(
-            [OP, "dap", path], stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0)
+            [OP, "dap", path],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            bufsize=0,
+        )
         self.seq = 0
         self.events = []
 
@@ -65,9 +70,9 @@ class DapClient:
                 raise AssertionError("header storm")
         htxt = headers.decode()
         n = None
-        for l in htxt.splitlines():
-            if l.lower().startswith("content-length:"):
-                n = int(l.split(":", 1)[1].strip())
+        for ln in htxt.splitlines():
+            if ln.lower().startswith("content-length:"):
+                n = int(ln.split(":", 1)[1].strip())
         assert n is not None, htxt
         body = b""
         while len(body) < n:
@@ -118,10 +123,13 @@ def main():
 
     # --- configure: launch + breakpoints + configurationDone
     c.request("launch", {"program": path})
-    r = c.request("setBreakpoints", {
-        "source": {"path": path},
-        "breakpoints": [{"line": 8}, {"line": 3}],
-    })
+    r = c.request(
+        "setBreakpoints",
+        {
+            "source": {"path": path},
+            "breakpoints": [{"line": 8}, {"line": 3}],
+        },
+    )
     assert r["success"] and len(r["body"]["breakpoints"]) == 2, r
     assert all(b["verified"] for b in r["body"]["breakpoints"]), r
     c.request("configurationDone")
@@ -205,7 +213,10 @@ def main():
     assert ev["body"]["reason"] == "entry", ev
     r = c2.request("stackTrace", {"threadId": 1})
     f0 = r["body"]["stackFrames"][0]
-    assert f0["name"] == "main" and f0["line"] == 7, (f0, "entry stop should land on main's first statement")
+    assert f0["name"] == "main" and f0["line"] == 7, (
+        f0,
+        "entry stop should land on main's first statement",
+    )
     # setVariable on the entry frame's binding
     r = c2.request("scopes", {"frameId": 0})
     ref = r["body"]["scopes"][0]["variablesReference"]
@@ -238,10 +249,13 @@ def main():
     c3 = DapClient(path)
     c3.request("initialize", {"adapterID": "operon"})
     c3.request("launch", {"program": path})
-    r = c3.request("setBreakpoints", {
-        "source": {"path": path},
-        "breakpoints": [{"line": 3, "condition": "n > 100"}, {"line": 8}],
-    })
+    r = c3.request(
+        "setBreakpoints",
+        {
+            "source": {"path": path},
+            "breakpoints": [{"line": 3, "condition": "n > 100"}, {"line": 8}],
+        },
+    )
     assert r["success"], r
     rows = r["body"]["breakpoints"]
     assert any(b.get("condition") == "n > 100" for b in rows), rows
@@ -252,10 +266,13 @@ def main():
     f0 = r["body"]["stackFrames"][0]
     assert f0["name"] == "main" and f0["line"] == 8, (f0, "conditional bp (false) must be skipped")
     # a broken condition is also skipped (never a surprise stop)
-    c3.request("setBreakpoints", {
-        "source": {"path": path},
-        "breakpoints": [{"line": 3, "condition": "not_a_binding > 1"}],
-    })
+    c3.request(
+        "setBreakpoints",
+        {
+            "source": {"path": path},
+            "breakpoints": [{"line": 3, "condition": "not_a_binding > 1"}],
+        },
+    )
     c3.request("continue")
     # no bp at 3 fires; program completes
     m = c3.read_msg()

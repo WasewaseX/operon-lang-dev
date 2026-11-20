@@ -30,11 +30,7 @@ fn repl_fingerprint_sees_real_call_counts() {
     }
     let out = child.wait_with_output().expect("repl run");
     let s = String::from_utf8_lossy(&out.stdout).to_string();
-    let fp = s
-        .lines()
-        .filter(|l| l.contains("calls"))
-        .next_back()
-        .unwrap_or("");
+    let fp = s.lines().rev().find(|l| l.contains("calls")).unwrap_or("");
     assert!(
         fp.contains("work"),
         "REPL fingerprint must report real per-gene call counts, got: {fp}"

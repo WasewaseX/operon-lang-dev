@@ -20,6 +20,7 @@ Contract pinned here (pre-fix main fails every "no events between" row):
   4. The session still terminates cleanly (exited 0) with exactly the
      expected stop count.
 """
+
 import json
 import os
 import subprocess
@@ -51,8 +52,12 @@ main {
 class DapClient:
     def __init__(self, path):
         self.p = subprocess.Popen(
-            [OP, "dap", path], stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0)
+            [OP, "dap", path],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            bufsize=0,
+        )
         self.seq = 0
         self.events = []
         self.stopped_events = []
@@ -80,9 +85,9 @@ class DapClient:
             if headers.count(b"\n") >= 50:
                 raise AssertionError("header storm")
         n = None
-        for l in headers.decode().splitlines():
-            if l.lower().startswith("content-length:"):
-                n = int(l.split(":", 1)[1].strip())
+        for ln in headers.decode().splitlines():
+            if ln.lower().startswith("content-length:"):
+                n = int(ln.split(":", 1)[1].strip())
         assert n is not None, headers
         body = b""
         while len(body) < n:
@@ -149,10 +154,13 @@ def main():
     c.wait_event("initialized")
 
     c.request("launch", {"program": path})
-    r = c.request("setBreakpoints", {
-        "source": {"path": path},
-        "breakpoints": [{"line": 8}],
-    })
+    r = c.request(
+        "setBreakpoints",
+        {
+            "source": {"path": path},
+            "breakpoints": [{"line": 8}],
+        },
+    )
     assert r["success"], r
     c.request("configurationDone")
 
@@ -169,7 +177,8 @@ def main():
     ev = c.wait_event("stopped")
     assert ev["body"]["reason"] == "step", ev
     assert not between or all(
-        m.get("event") != "stopped" for m in between if m.get("type") == "event"), between
+        m.get("event") != "stopped" for m in between if m.get("type") == "event"
+    ), between
 
     # --- THE Z-121 ROW: evaluate a call that CROSSES statements while the
     # step request is still pending. Pre-fix main: bump's first statement
@@ -178,7 +187,9 @@ def main():
     # Post-fix: the response is the very next protocol message.
     r, between = c.request_strict("evaluate", {"expression": "bump()", "frameId": 0})
     assert r["success"], r
-    assert r["body"]["result"] == "201", r  # runs: 1 (work) + 100 (line 9's bump) + 100 (evaluated bump)
+    assert r["body"]["result"] == "201", (
+        r
+    )  # runs: 1 (work) + 100 (line 9's bump) + 100 (evaluated bump)
     assert between == [], ("events between evaluate request and response", between)
 
     # --- second row: a breakpoint INSIDE the evaluated call must not fire
@@ -222,8 +233,10 @@ def main():
 
     c.p.wait(timeout=10)
 
-    print("DAP RE-ENTRY E2E OK (Z-121: evaluate is re-entrancy safe — "
-          "no events between request and response, no hidden stops, no double execution)")
+    print(
+        "DAP RE-ENTRY E2E OK (Z-121: evaluate is re-entrancy safe — "
+        "no events between request and response, no hidden stops, no double execution)"
+    )
 
 
 if __name__ == "__main__":

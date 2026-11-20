@@ -33,11 +33,19 @@ D=apps/loglens/test/data
 
 for cmd in "stats $SMALL" "top $SMALL status 5" "top $SMALL host 8" \
            "top $SMALL url 8" "errors $SMALL 3" "errors $SMALL" "table $SMALL 4"; do
+  # deliberate word-split: one command string, four engines
+  # shellcheck disable=SC2086
+  # deliberate word-split: one command string, four engines
+  # shellcheck disable=SC2086
   ./apps/loglens/loglens.sh $cmd > /tmp/ll_op.out 2>/dev/null
   chk "operon rc [$cmd]" 0 $?
+  # shellcheck disable=SC2086
+  # shellcheck disable=SC2086
   python3 apps/loglens/loglens.py $cmd > /tmp/ll_py.out 2>/dev/null
   same "parity py [$cmd]" /tmp/ll_op.out /tmp/ll_py.out
   if command -v node >/dev/null 2>&1; then
+    # shellcheck disable=SC2086
+    # shellcheck disable=SC2086
     node apps/loglens/loglens.js $cmd > /tmp/ll_js.out 2>/dev/null
     same "parity node [$cmd]" /tmp/ll_op.out /tmp/ll_js.out
   fi
@@ -46,6 +54,8 @@ for cmd in "stats $SMALL" "top $SMALL status 5" "top $SMALL host 8" \
     "$HOME/.cargo/bin/rustc" -O apps/loglens/loglens.rs -o "$RS" 2>/dev/null
   fi
   if [ -x "$RS" ]; then
+    # shellcheck disable=SC2086
+    # shellcheck disable=SC2086
     "$RS" $cmd > /tmp/ll_rs.out 2>/dev/null
     same "parity rust [$cmd]" /tmp/ll_op.out /tmp/ll_rs.out
   fi
